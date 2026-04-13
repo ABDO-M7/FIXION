@@ -43,24 +43,9 @@ jobs:
           NEXT_PUBLIC_BACKEND_PRIMARY: ${{ secrets.BACKEND_URL }}
           NEXT_PUBLIC_BACKEND_FALLBACK: ${{ secrets.BACKEND_FALLBACK_URL }}
 
-  deploy-backend:
-    name: Deploy Backend to Railway
-    needs: [backend-test]
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli
-      - name: Deploy to Railway
-        run: railway up --service backend
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        working-directory: backend
-
   deploy-frontend:
     name: Deploy Frontend to Vercel
-    needs: [frontend-build]
+    needs: [frontend-build, backend-test] # Ensure tests pass before deploying frontend
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
