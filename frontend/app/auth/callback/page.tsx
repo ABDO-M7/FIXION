@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store';
 import { authApi } from '@/lib/api';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
 import Link from 'next/link';
 
-export default function AuthCallbackPage() {
+function AuthCallbackInner() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,5 +70,23 @@ export default function AuthCallbackPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="auth-container">
+        <div className="auth-card" style={{ textAlign: 'center', padding: '60px 40px' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <Loader size={28} style={{ color: 'var(--primary-light)', animation: 'spin 1s linear infinite' }} />
+          </div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Signing you in...</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Setting up your account, please wait.</p>
+        </div>
+      </div>
+    }>
+      <AuthCallbackInner />
+    </Suspense>
   );
 }
