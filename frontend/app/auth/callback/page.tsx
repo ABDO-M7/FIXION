@@ -9,10 +9,18 @@ import Link from 'next/link';
 export default function AuthCallbackPage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setUser } = useAuthStore();
 
   useEffect(() => {
-    // After Google OAuth redirect, fetch the current user
+    // Read the access token passed in the redirect URL from the backend
+    const token = searchParams.get('token');
+    if (token) {
+      // Store in localStorage so api.ts request interceptor attaches it as Bearer
+      localStorage.setItem('accessToken', token);
+    }
+
+    // Fetch current user — api.ts will attach the token from localStorage automatically
     authApi.me()
       .then(res => {
         setUser(res.data);

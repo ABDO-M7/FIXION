@@ -140,6 +140,7 @@ export class AuthService {
     res.cookie('refreshToken', refreshToken, { ...cookieOpts, maxAge: 7 * 24 * 60 * 60 * 1000 });
 
     return {
+      accessToken,
       user: {
         id: user.id,
         name: user.name,
