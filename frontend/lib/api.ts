@@ -38,7 +38,7 @@ api.interceptors.response.use(
     }
 
     // Auto-refresh on 401
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh') {
       originalRequest._retry = true;
       try {
         await api.post('/auth/refresh');

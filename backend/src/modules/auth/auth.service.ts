@@ -95,8 +95,14 @@ export class AuthService {
 
   async logout(userId: string, res: any) {
     await this.usersService.clearRefreshToken(userId);
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
+    const isProd = this.configService.get('app.nodeEnv') === 'production';
+    const cookieOpts = {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'none' as const : 'lax' as const,
+    };
+    res.clearCookie('accessToken', cookieOpts);
+    res.clearCookie('refreshToken', cookieOpts);
     return { message: 'Logged out successfully' };
   }
 
@@ -123,10 +129,11 @@ export class AuthService {
     const refreshHash = await bcrypt.hash(refreshToken, 10);
     await this.usersService.saveRefreshTokenHash(user.id, refreshHash);
 
+    const isProd = this.configService.get('app.nodeEnv') === 'production';
     const cookieOpts = {
       httpOnly: true,
-      secure: this.configService.get('app.nodeEnv') === 'production',
-      sameSite: 'lax' as const,
+      secure: isProd,
+      sameSite: isProd ? 'none' as const : 'lax' as const,
     };
 
     res.cookie('accessToken', accessToken, { ...cookieOpts, maxAge: 15 * 60 * 1000 });
