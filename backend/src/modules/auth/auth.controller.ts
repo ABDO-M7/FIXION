@@ -58,11 +58,10 @@ export class AuthController {
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
-  async googleCallback(@Req() req: any, @Res({ passthrough: true }) res: any) {
-    const result = await this.authService.googleLogin(req.user, res);
+  async googleCallback(@Req() req: any, @Res() res: Response) {
+    await this.authService.googleLogin(req.user, res);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     res.redirect(`${frontendUrl}/auth/callback?success=true`);
-    return result;
   }
 
   @Post('verify-email')
