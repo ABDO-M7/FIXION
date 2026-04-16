@@ -20,7 +20,17 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: [frontendUrl],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        origin === frontendUrl ||
+        origin.endsWith('.vercel.app') ||
+        origin.startsWith('http://localhost:')
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, false); // Block other origins gracefully
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
