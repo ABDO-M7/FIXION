@@ -5,7 +5,7 @@ frontend/node_modules/
 
 # Build outputs
 dist/
-backend/dist/
+# backend/dist/ — kept in git so Render can deploy without a build step
 .next/
 frontend/.next/
 out/

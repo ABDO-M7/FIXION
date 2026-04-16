@@ -1,14 +1,11 @@
 services:
   - type: web
     name: fixion-backend
-    runtime: node
+    env: node
+    region: oregon
     rootDir: backend
-    buildCommand: npm install && npm run build
-    startCommand: npm run start:prod
+    buildCommand: yarn && yarn build
+    startCommand: node dist/main
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 3001
-      - key: FRONTEND_URL
-        sync: false # Manually set this in Render to your Vercel URL
