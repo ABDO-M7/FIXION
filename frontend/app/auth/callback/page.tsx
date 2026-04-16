@@ -15,24 +15,35 @@ function AuthCallbackInner() {
   useEffect(() => {
     // Read the access token passed in the redirect URL from the backend
     const token = searchParams.get('token');
-    if (token) {
-      // Store in localStorage so api.ts request interceptor attaches it as Bearer
-      localStorage.setItem('accessToken', token);
-    }
 
-    // Fetch current user — api.ts will attach the token from localStorage automatically
-    authApi.me()
-      .then(res => {
+    const initialize = async () => {
+      if (token) {
+        // Store in localStorage for api.ts Bearer header
+        localStorage.setItem('accessToken', token);
+
+        // Set cookie on Vercel's own domain so middleware can authenticate requests
+        await fetch('/api/auth/set-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+      }
+
+      // Fetch current user — api.ts will attach token from localStorage as Bearer
+      try {
+        const res = await authApi.me();
         setUser(res.data);
         setStatus('success');
         const role = res.data.role;
         setTimeout(() => {
           router.push(role === 'admin' ? '/admin' : role === 'teacher' ? '/teacher' : '/student');
         }, 1500);
-      })
-      .catch(() => {
+      } catch {
         setStatus('error');
-      });
+      }
+    };
+
+    initialize();
   }, []);
 
   return (

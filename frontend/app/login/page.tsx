@@ -32,10 +32,24 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       const res = await authApi.login(data);
-      setUser(res.data.user);
-      toast.success(`Welcome back, ${res.data.user.name}!`);
+      const { user, accessToken } = res.data;
 
-      const role = res.data.user.role;
+      // Store token in localStorage for api.ts Bearer header
+      if (accessToken) localStorage.setItem('accessToken', accessToken);
+
+      // Set token as cookie on Vercel's domain so middleware can read it
+      if (accessToken) {
+        await fetch('/api/auth/set-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: accessToken }),
+        });
+      }
+
+      setUser(user);
+      toast.success(`Welcome back, ${user.name}!`);
+
+      const role = user.role;
       if (role === 'admin') router.push('/admin');
       else if (role === 'teacher') router.push('/teacher');
       else router.push('/student');
