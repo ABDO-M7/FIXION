@@ -54,7 +54,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`🚀 EduQ&A backend running at http://localhost:${port}/api/v1`);
+  console.log(`🚀 Fixion backend running at http://localhost:${port}/api/v1`);
   console.log(`🔌 WebSocket: ws://localhost:${port}/notifications`);
 }
 

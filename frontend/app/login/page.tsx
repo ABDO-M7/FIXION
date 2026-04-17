@@ -64,9 +64,9 @@ export default function LoginPage() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-logo">
-          <div className="auth-logo-icon">E</div>
+          <div className="auth-logo-icon">F</div>
           <span style={{ fontSize: 22, fontWeight: 800, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            EduQ&amp;A
+            Fixion
           </span>
         </div>
 

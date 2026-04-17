@@ -43,7 +43,7 @@ export default function SubscriptionPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Subscription</h1>
-          <p className="page-subtitle">Manage your access to EduQ&A</p>
+          <p className="page-subtitle">Manage your access to Fixion</p>
         </div>
       </div>
 

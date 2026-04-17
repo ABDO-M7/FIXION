@@ -39,7 +39,7 @@ export default function HomePage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 36, height: 36, background: 'var(--gradient-primary)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18, color: 'white' }}>E</div>
-          <span style={{ fontWeight: 800, fontSize: 18, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>EduQ&A</span>
+          <span style={{ fontWeight: 800, fontSize: 18, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Fixion</span>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <Link href="/login" className="btn btn-ghost">Sign In</Link>
@@ -129,7 +129,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer style={{ padding: '32px 40px', borderTop: '1px solid var(--border)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-        © {new Date().getFullYear()} EduQ&A. All rights reserved. Built with ❤️ for education.
+        © {new Date().getFullYear()} Fixion. All rights reserved. Built with ❤️ for education.
       </footer>
     </div>
   );

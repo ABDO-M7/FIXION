@@ -29,7 +29,7 @@ export const useAuthStore = create<AuthStore>()(
       logout: () => set({ user: null }),
     }),
     {
-      name: 'eduqa-auth',
+      name: 'fixion-auth',
       partialize: (state) => ({ user: state.user }),
     },
   ),
@@ -62,7 +62,7 @@ export const useUIStore = create<UIStore>()(
       toggleNotifications: () => set((s) => ({ notificationsOpen: !s.notificationsOpen })),
       setNotificationsOpen: (open) => set({ notificationsOpen: open }),
     }),
-    { name: 'eduqa-ui', partialize: (s) => ({ locale: s.locale }) },
+    { name: 'fixion-ui', partialize: (s) => ({ locale: s.locale }) },
   ),
 );
 

@@ -19,7 +19,7 @@ export class EmailService {
   ) {
     this.resend = new Resend(configService.get<string>('resend.apiKey'));
     this.fromEmail = configService.get<string>('resend.fromEmail') || 'noreply@example.com';
-    this.appName = configService.get<string>('app.appName') || 'EduQ&A';
+    this.appName = configService.get<string>('app.appName') || 'Fixion';
   }
 
   async sendVerificationEmail(email: string, name: string, token: string) {

@@ -30,7 +30,7 @@ export class UploadsService {
 
   constructor(private configService: ConfigService) {
     const accountId = configService.get<string>('r2.accountId') ?? '';
-    this.bucket = configService.get<string>('r2.bucketName') ?? 'eduqa-uploads';
+    this.bucket = configService.get<string>('r2.bucketName') ?? 'fixion-uploads';
     this.publicUrl = configService.get<string>('r2.publicUrl') ?? '';
 
     const accessKeyId = configService.get<string>('r2.accessKeyId') ?? '';

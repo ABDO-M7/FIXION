@@ -66,8 +66,8 @@ export default function AppShell({ children }: AppShellProps) {
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
         <div className="sidebar-logo">
-          <div className="logo-icon">E</div>
-          {sidebarOpen && <span className="logo-text">EduQ&amp;A</span>}
+          <div className="logo-icon">F</div>
+          {sidebarOpen && <span className="logo-text">Fixion</span>}
         </div>
 
         <nav className="sidebar-nav">

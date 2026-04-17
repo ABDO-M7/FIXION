@@ -3,12 +3,12 @@ import './globals.css';
 import { Toaster } from 'react-hot-toast';
 
 export const metadata: Metadata = {
-  title: { default: 'EduQ&A — Educational Q&A Platform', template: '%s | EduQ&A' },
-  description: 'Connect students with teachers. Submit academic questions and get expert answers.',
-  keywords: ['education', 'Q&A', 'students', 'teachers', 'academic help'],
-  authors: [{ name: 'EduQ&A' }],
+  title: { default: 'Fixion — Educational Q&A Platform', template: '%s | Fixion' },
+  description: 'AI-powered question answering platform with real teacher support',
+  keywords: ['education', 'Q&A', 'learning', 'AI tutor', 'students'],
+  authors: [{ name: 'Fixion' }],
   openGraph: {
-    title: 'EduQ&A — Educational Q&A Platform',
+    title: 'Fixion — Educational Q&A Platform',
     description: 'Submit questions, get expert answers from qualified teachers.',
     type: 'website',
   },

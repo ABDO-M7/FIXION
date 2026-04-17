@@ -1,4 +1,4 @@
-# EduQ&A — Educational Q&A Platform
+# Fixion — Educational Q&A Platform
 
 A full-stack, production-ready educational Q&A platform connecting students with teachers.
 
