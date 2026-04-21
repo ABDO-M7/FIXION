@@ -32,7 +32,7 @@ let EmailService = EmailService_1 = class EmailService {
         this.usersRepo = usersRepo;
         this.resend = new resend_1.Resend(configService.get('resend.apiKey'));
         this.fromEmail = configService.get('resend.fromEmail') || 'noreply@example.com';
-        this.appName = configService.get('app.appName') || 'EduQ&A';
+        this.appName = configService.get('app.appName') || 'Fixion';
     }
     async sendVerificationEmail(email, name, token) {
         const frontendUrl = this.configService.get('app.frontendUrl');

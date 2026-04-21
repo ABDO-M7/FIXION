@@ -7,13 +7,15 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store';
-import { Eye, EyeOff, BookOpen, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 
 const schema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
+  phone: z.string().regex(/^\+?[0-9\s\-().]{7,20}$/, 'Invalid phone number').optional().or(z.literal('')),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -44,7 +46,7 @@ export default function RegisterPage() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-logo">
-          <div className="auth-logo-icon">F</div>
+          <Image src="/logo.png" alt="Fixion" width={40} height={40} style={{ borderRadius: 10 }} />
           <span style={{ fontSize: 22, fontWeight: 800, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             Fixion
           </span>
@@ -103,6 +105,21 @@ export default function RegisterPage() {
               </button>
             </div>
             {errors.password && <span className="form-error">{errors.password.message}</span>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Phone Number <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(optional)</span></label>
+            <div style={{ position: 'relative' }}>
+              <Phone size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input
+                {...register('phone')}
+                type="tel"
+                className={`form-input ${errors.phone ? 'error' : ''}`}
+                placeholder="+20 1XX XXX XXXX"
+                style={{ paddingLeft: 36 }}
+              />
+            </div>
+            {errors.phone && <span className="form-error">{errors.phone.message}</span>}
           </div>
 
           <button type="submit" className="btn btn-primary btn-full btn-lg" disabled={isLoading} style={{ marginTop: 8 }}>

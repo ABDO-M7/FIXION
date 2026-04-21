@@ -9,6 +9,7 @@ export declare class User {
     passwordHash: string;
     name: string;
     avatarUrl: string;
+    phone: string;
     role: UserRole;
     oauthProvider: string;
     oauthId: string;

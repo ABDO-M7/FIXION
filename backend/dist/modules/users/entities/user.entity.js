@@ -24,6 +24,7 @@ let User = class User {
     passwordHash;
     name;
     avatarUrl;
+    phone;
     role;
     oauthProvider;
     oauthId;
@@ -56,6 +57,10 @@ __decorate([
     (0, typeorm_1.Column)({ nullable: true }),
     __metadata("design:type", String)
 ], User.prototype, "avatarUrl", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true, length: 30 }),
+    __metadata("design:type", String)
+], User.prototype, "phone", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'enum', enum: UserRole, default: UserRole.STUDENT }),
     __metadata("design:type", String)

@@ -15,6 +15,7 @@ class RegisterDto {
     email;
     password;
     name;
+    phone;
 }
 exports.RegisterDto = RegisterDto;
 __decorate([
@@ -33,6 +34,12 @@ __decorate([
     (0, class_validator_1.MaxLength)(100),
     __metadata("design:type", String)
 ], RegisterDto.prototype, "name", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(/^\+?[0-9\s\-().]{7,20}$/, { message: 'Invalid phone number' }),
+    __metadata("design:type", String)
+], RegisterDto.prototype, "phone", void 0);
 class LoginDto {
     email;
     password;

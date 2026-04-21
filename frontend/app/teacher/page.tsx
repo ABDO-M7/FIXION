@@ -1,11 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
-import { questionsApi, answersApi, categoriesApi } from '@/lib/api';
-import { useAuthStore } from '@/store';
-import { HelpCircle, CheckCircle, Clock, MessageSquare, Search, Filter, X, Send, BookOpen } from 'lucide-react';
+import { HelpCircle, CheckCircle, Clock, MessageSquare, Search, Filter, X, Send, BookOpen, Image as ImageIcon, Paperclip } from 'lucide-react';
+import { questionsApi, answersApi, categoriesApi, uploadsApi } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '@/store';
 
 const STATUS_FILTERS = ['all', 'pending', 'answered', 'closed'] as const;
 
@@ -19,6 +19,8 @@ export default function TeacherDashboard() {
   const [selectedQ, setSelectedQ] = useState<any>(null);
   const [answerText, setAnswerText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [assigningCategory, setAssigningCategory] = useState(false);
@@ -44,14 +46,31 @@ export default function TeacherDashboard() {
     if (!answerText.trim() || !selectedQ) return;
     setSubmitting(true);
     try {
-      await answersApi.create(selectedQ.id, { content: answerText });
+      await answersApi.create(selectedQ.id, { content: answerText, attachments: uploadedImages });
       toast.success('Answer submitted!');
       setAnswerText('');
+      setUploadedImages([]);
       setSelectedQ(null);
       fetchQuestions();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to submit answer');
     } finally { setSubmitting(false); }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await uploadsApi.upload(file);
+      setUploadedImages(prev => [...prev, res.data.url]);
+      toast.success('Image attached!');
+    } catch {
+      toast.error('Failed to upload image');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
   };
 
   const createAndAssignCategory = async () => {
@@ -226,15 +245,42 @@ export default function TeacherDashboard() {
                 placeholder="Write a clear, detailed answer. Use examples where helpful..."
                 style={{ minHeight: 180, marginBottom: 12 }}
               />
-              <button
-                onClick={submitAnswer}
-                disabled={submitting || !answerText.trim()}
-                className="btn btn-primary btn-full"
-              >
-                {submitting
-                  ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Submitting...</>
-                  : <><Send size={15} /> Submit Answer</>}
-              </button>
+
+              {/* Uploaded image previews */}
+              {uploadedImages.length > 0 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {uploadedImages.map((url, i) => (
+                    <div key={i} style={{ position: 'relative' }}>
+                      <img src={url} alt={`attachment-${i}`} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
+                      <button
+                        onClick={() => setUploadedImages(prev => prev.filter((_, idx) => idx !== i))}
+                        style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: 'var(--danger)', border: 'none', color: '#fff', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      ><X size={10} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                {/* Image upload button */}
+                <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-elevated)', fontSize: 13, color: 'var(--text-secondary)', height: 40, flexShrink: 0 }}>
+                  {uploading
+                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                    : <><Paperclip size={14} /> Attach</>}
+                  <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} disabled={uploading} />
+                </label>
+
+                <button
+                  onClick={submitAnswer}
+                  disabled={submitting || !answerText.trim()}
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                >
+                  {submitting
+                    ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Submitting...</>
+                    : <><Send size={15} /> Submit Answer</>}
+                </button>
+              </div>
             </div>
           </div>
         )}

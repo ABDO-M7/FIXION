@@ -21,11 +21,23 @@ const questions_service_1 = require("../questions/questions.service");
 const notifications_service_1 = require("../notifications/notifications.service");
 const user_entity_1 = require("../users/entities/user.entity");
 const question_entity_1 = require("../questions/entities/question.entity");
+const class_validator_1 = require("class-validator");
 class CreateAnswerDto {
     content;
     attachments;
 }
 exports.CreateAnswerDto = CreateAnswerDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(1),
+    __metadata("design:type", String)
+], CreateAnswerDto.prototype, "content", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsUrl)({}, { each: true }),
+    __metadata("design:type", Array)
+], CreateAnswerDto.prototype, "attachments", void 0);
 let AnswersService = class AnswersService {
     answersRepo;
     questionsService;

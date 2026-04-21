@@ -7,8 +7,16 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { User, UserRole } from '../users/entities/user.entity';
 import { QuestionStatus } from '../questions/entities/question.entity';
 
+import { IsString, IsOptional, IsArray, IsUrl, MinLength } from 'class-validator';
+
 export class CreateAnswerDto {
+  @IsString()
+  @MinLength(1)
   content: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUrl({}, { each: true })
   attachments?: string[];
 }
 

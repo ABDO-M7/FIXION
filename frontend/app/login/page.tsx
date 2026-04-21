@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
@@ -64,7 +65,7 @@ export default function LoginPage() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-logo">
-          <div className="auth-logo-icon">F</div>
+          <Image src="/logo.png" alt="Fixion" width={40} height={40} style={{ borderRadius: 10 }} />
           <span style={{ fontSize: 22, fontWeight: 800, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             Fixion
           </span>

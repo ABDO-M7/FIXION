@@ -4,6 +4,7 @@ import {
   MinLength,
   MaxLength,
   IsOptional,
+  Matches,
 } from 'class-validator';
 
 export class RegisterDto {
@@ -19,6 +20,11 @@ export class RegisterDto {
   @MinLength(2)
   @MaxLength(100)
   name: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+?[0-9\s\-().]{7,20}$/, { message: 'Invalid phone number' })
+  phone?: string;
 }
 
 export class LoginDto {

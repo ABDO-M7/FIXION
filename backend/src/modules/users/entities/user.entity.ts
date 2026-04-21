@@ -34,6 +34,9 @@ export class User {
   @Column({ nullable: true })
   avatarUrl: string;
 
+  @Column({ nullable: true, length: 30 })
+  phone: string;
+
   @Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })
   role: UserRole;
 

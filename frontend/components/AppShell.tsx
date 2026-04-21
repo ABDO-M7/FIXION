@@ -8,6 +8,7 @@ import {
   Users, BarChart2, Key, MessageSquare
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { authApi, notificationsApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useWebSocket } from '@/hooks/useWebSocket';
@@ -66,7 +67,7 @@ export default function AppShell({ children }: AppShellProps) {
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
         <div className="sidebar-logo">
-          <div className="logo-icon">F</div>
+          <Image src="/logo.png" alt="Fixion" width={34} height={34} style={{ borderRadius: 8, flexShrink: 0 }} />
           {sidebarOpen && <span className="logo-text">Fixion</span>}
         </div>
 
