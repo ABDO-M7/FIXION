@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import { questionsApi } from '@/lib/api';
+import { questionsApi, answersApi } from '@/lib/api';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ArrowLeft, Paperclip, GraduationCap, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
@@ -12,14 +12,23 @@ export default function QuestionDetailPage() {
   const [question, setQuestion] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const [answers, setAnswers] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const r = await questionsApi.one(id);
-      setQuestion(r.data);
+      const [qRes, aRes] = await Promise.all([
+        questionsApi.one(id),
+        answersApi.byQuestion(id),
+      ]);
+      setQuestion(qRes.data);
+      // Normalize: use dedicated answers endpoint as source of truth
+      const fetchedAnswers = Array.isArray(aRes.data) ? aRes.data
+        : Array.isArray(qRes.data?.answers) ? qRes.data.answers
+        : [];
+      setAnswers(fetchedAnswers);
     } catch {}
     finally {
       setLoading(false);
@@ -115,10 +124,10 @@ export default function QuestionDetailPage() {
         {/* Answers */}
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
-            {question.answers?.length > 0 ? `${question.answers.length} Answer${question.answers.length > 1 ? 's' : ''}` : 'No answers yet'}
+            {answers.length > 0 ? `${answers.length} Answer${answers.length > 1 ? 's' : ''}` : 'No answers yet'}
           </h2>
 
-          {question.answers?.length === 0 ? (
+          {answers.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>⏳</div>
               <div style={{ fontWeight: 600, marginBottom: 6 }}>Waiting for a teacher to answer...</div>
@@ -126,7 +135,7 @@ export default function QuestionDetailPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {question.answers.map((answer: any) => (
+              {answers.map((answer: any) => (
                 <div key={answer.id} className="card" style={{ borderLeft: '3px solid var(--success)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                     <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--gradient-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'white' }}>
