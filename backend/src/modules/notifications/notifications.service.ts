@@ -50,17 +50,26 @@ export class NotificationsService {
     const message = `New question from ${studentName}${courseText}`;
 
     // Find all teachers
-    const teachers = await this.usersRepo.find({ where: { role: UserRole.TEACHER } });
+    const allTeachers = await this.usersRepo.find({ where: { role: UserRole.TEACHER } });
+    if (!allTeachers.length) return;
+
+    // Filter teachers who specialize in this course, or who have no specializations (all subjects)
+    const teachers = allTeachers.filter(t => {
+      if (!t.subjects || t.subjects.length === 0) return true;
+      if (!courseName) return true;
+      return t.subjects.includes(courseName);
+    });
+
     if (!teachers.length) return;
 
-    // Create notifications for all teachers
+    // Create notifications for matching teachers
     const notifications = teachers.map(t =>
       this.notificationsRepo.create({
         userId: t.id,
         type: 'NEW_QUESTION',
         message,
         metadata: { questionId },
-      })
+      }),
     );
 
     const saved = await this.notificationsRepo.save(notifications);
