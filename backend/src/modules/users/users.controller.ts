@@ -20,8 +20,14 @@ export class UsersController {
 
   @Patch('me')
   updateMe(@CurrentUser('id') id: string, @Body() body: any) {
-    const { role, isActive, isVerified, ...safe } = body;
+    const { role, isActive, isVerified, subjects, ...safe } = body;
     return this.usersService.update(id, safe);
+  }
+
+  @Patch('me/subjects')
+  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  updateMySubjects(@CurrentUser('id') id: string, @Body('subjects') subjects: string[]) {
+    return this.usersService.update(id, { subjects });
   }
 
   @Get()

@@ -58,6 +58,10 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   refreshTokenHash: string | null;
 
+  // Teacher specialization: list of course names they can answer
+  @Column({ type: 'jsonb', nullable: true, default: [] })
+  subjects: string[];
+
   @CreateDateColumn()
   createdAt: Date;
 

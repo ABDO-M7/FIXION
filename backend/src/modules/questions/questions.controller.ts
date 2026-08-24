@@ -34,8 +34,8 @@ export class QuestionsController {
 
   @Get()
   @Roles(UserRole.TEACHER, UserRole.ADMIN)
-  findAll(@Query() query: SearchQuestionsDto) {
-    return this.questionsService.findAll(query);
+  findAll(@Query() query: SearchQuestionsDto, @CurrentUser() user: any) {
+    return this.questionsService.findAll(query, user);
   }
 
   @Get(':id')

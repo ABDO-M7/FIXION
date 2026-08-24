@@ -11,13 +11,15 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, X, FileText, Image, ArrowLeft, Send } from 'lucide-react';
 import Link from 'next/link';
 
+const COURSES = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
+
 const schema = z.object({
-  courseName: z.string().min(1, 'Course name is required'),
+  courseName: z.string().min(1, 'Please select a course'),
   bookName: z.string().optional(),
   chapter: z.string().optional(),
   lesson: z.string().optional(),
   questionNumber: z.string().optional(),
-  content: z.string().min(20, 'Question must be at least 20 characters').max(5000),
+  content: z.string().min(1, 'Question cannot be empty').max(5000),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -102,11 +104,16 @@ export default function NewQuestionPage() {
               <label className="form-label" style={{ fontSize: 14, fontWeight: 500 }}>
                 Course Name <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
-              <input
+              <select
                 {...register('courseName')}
                 className={`form-input ${errors.courseName ? 'error' : ''}`}
-                placeholder="e.g. Biology 101"
-              />
+                style={{ cursor: 'pointer' }}
+              >
+                <option value="">— Select a course —</option>
+                {COURSES.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
               {errors.courseName && <span className="form-error">{errors.courseName.message}</span>}
             </div>
 

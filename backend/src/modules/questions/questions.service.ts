@@ -38,7 +38,7 @@ export class QuestionsService {
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findAll(dto: SearchQuestionsDto) {
+  async findAll(dto: SearchQuestionsDto, user?: any) {
     const page = parseInt(dto.page || '1');
     const limit = parseInt(dto.limit || '20');
 
@@ -50,6 +50,11 @@ export class QuestionsService {
       .orderBy('q.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
+
+    // If teacher has specialization subjects set, only show matching questions
+    if (user?.role === 'teacher' && Array.isArray(user.subjects) && user.subjects.length > 0) {
+      qb.andWhere('q.courseName IN (:...teacherSubjects)', { teacherSubjects: user.subjects });
+    }
 
     if (dto.status) qb.andWhere('q.status = :status', { status: dto.status });
 
