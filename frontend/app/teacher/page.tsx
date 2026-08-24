@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
-import { HelpCircle, CheckCircle, Clock, X, Send, BookOpen, Paperclip } from 'lucide-react';
+import { HelpCircle, CheckCircle, Clock, X, Send, BookOpen, Paperclip, Search } from 'lucide-react';
 import { questionsApi, answersApi, categoriesApi, uploadsApi } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
