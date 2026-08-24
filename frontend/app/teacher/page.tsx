@@ -1,14 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
-import { HelpCircle, CheckCircle, Clock, MessageSquare, Search, Filter, X, Send, BookOpen, Image as ImageIcon, Paperclip, Settings, ChevronDown } from 'lucide-react';
+import { HelpCircle, CheckCircle, Clock, X, Send, BookOpen, Paperclip } from 'lucide-react';
 import { questionsApi, answersApi, categoriesApi, uploadsApi } from '@/lib/api';
-import api from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store';
-
-const COURSES = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
 
 const STATUS_FILTERS = ['all', 'pending', 'answered', 'closed'] as const;
 
@@ -28,9 +25,6 @@ export default function TeacherDashboard() {
   const [page, setPage] = useState(1);
   const [assigningCategory, setAssigningCategory] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ subject: '', bookName: '', chapter: '', lesson: '', questionNumber: '' });
-  const [mySubjects, setMySubjects] = useState<string[]>(user?.subjects || []);
-  const [savingSubjects, setSavingSubjects] = useState(false);
-  const [showSubjectsPanel, setShowSubjectsPanel] = useState(false);
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -42,21 +36,6 @@ export default function TeacherDashboard() {
       setQuestions(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch {} finally { setLoading(false); }
-  };
-
-  const saveSubjects = async () => {
-    setSavingSubjects(true);
-    try {
-      await api.patch('/users/me/subjects', { subjects: mySubjects });
-      toast.success('Your subject specializations saved!');
-      fetchQuestions(); // re-fetch so filter applies
-    } catch {
-      toast.error('Failed to save subjects');
-    } finally { setSavingSubjects(false); }
-  };
-
-  const toggleSubject = (course: string) => {
-    setMySubjects(prev => prev.includes(course) ? prev.filter(s => s !== course) : [...prev, course]);
   };
 
   useEffect(() => { fetchQuestions(); }, [status, page]);
@@ -126,40 +105,7 @@ export default function TeacherDashboard() {
           <h1 className="page-title">Teacher Panel</h1>
           <p className="page-subtitle">Welcome, {user?.name} — answer student questions</p>
         </div>
-        <button
-          onClick={() => setShowSubjectsPanel(p => !p)}
-          className="btn btn-secondary btn-sm"
-          style={{ gap: 6, alignSelf: 'flex-start' }}
-        >
-          <Settings size={14} /> My Subjects <ChevronDown size={12} style={{ transform: showSubjectsPanel ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-        </button>
       </div>
-
-      {/* My Subjects Panel */}
-      {showSubjectsPanel && (
-        <div className="card" style={{ marginBottom: 24, padding: '18px 20px' }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>My Subject Specializations</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14 }}>
-            Select the courses you teach. You will only see questions from those subjects.
-            Leave all unselected to see every question.
-          </p>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-            {COURSES.map(c => (
-              <button
-                key={c}
-                onClick={() => toggleSubject(c)}
-                className={`btn btn-sm ${mySubjects.includes(c) ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ fontFamily: 'inherit' }}
-              >
-                {mySubjects.includes(c) ? '✓ ' : ''}{c}
-              </button>
-            ))}
-          </div>
-          <button onClick={saveSubjects} disabled={savingSubjects} className="btn btn-primary btn-sm">
-            {savingSubjects ? <><span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} /> Saving...</> : 'Save Specializations'}
-          </button>
-        </div>
-      )}
 
       {/* Stats */}
       <div className="grid-3" style={{ marginBottom: 24 }}>

@@ -2,11 +2,12 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { adminApi } from '@/lib/api';
-import { Search, Shield, UserX, UserCheck, Trash2 } from 'lucide-react';
+import { Search, Shield, UserX, UserCheck, Trash2, BookOpen, X, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
 const ROLE_FILTERS = ['all', 'student', 'teacher', 'admin'] as const;
+const COURSES = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -15,6 +16,9 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  // Subjects modal state
+  const [subjectsModal, setSubjectsModal] = useState<{ user: any; selected: string[] } | null>(null);
+  const [savingSubjects, setSavingSubjects] = useState(false);
   const LIMIT = 20;
 
   const fetchUsers = async () => {
@@ -45,6 +49,33 @@ export default function AdminUsersPage() {
       setUsers(prev => prev.filter(u => u.id !== id));
       toast.success('User deleted');
     } catch { toast.error('Failed to delete user'); }
+  };
+
+  const openSubjectsModal = (u: any) => {
+    setSubjectsModal({ user: u, selected: Array.isArray(u.subjects) ? [...u.subjects] : [] });
+  };
+
+  const toggleCourse = (course: string) => {
+    if (!subjectsModal) return;
+    setSubjectsModal(prev => {
+      if (!prev) return prev;
+      const sel = prev.selected.includes(course)
+        ? prev.selected.filter(s => s !== course)
+        : [...prev.selected, course];
+      return { ...prev, selected: sel };
+    });
+  };
+
+  const saveSubjects = async () => {
+    if (!subjectsModal) return;
+    setSavingSubjects(true);
+    try {
+      await adminApi.updateUserSubjects(subjectsModal.user.id, subjectsModal.selected);
+      setUsers(prev => prev.map(u => u.id === subjectsModal.user.id ? { ...u, subjects: subjectsModal.selected } : u));
+      toast.success(`Specializations saved for ${subjectsModal.user.name}`);
+      setSubjectsModal(null);
+    } catch { toast.error('Failed to save specializations'); }
+    finally { setSavingSubjects(false); }
   };
 
   const filtered = users.filter(u => !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()));
@@ -85,6 +116,7 @@ export default function AdminUsersPage() {
             <tr>
               <th>User</th>
               <th>Role</th>
+              <th>Specializations</th>
               <th>Status</th>
               <th>Joined</th>
               <th>Actions</th>
@@ -92,9 +124,9 @@ export default function AdminUsersPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></td></tr>
+              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No users found</td></tr>
+              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No users found</td></tr>
             ) : filtered.map(u => (
               <tr key={u.id}>
                 <td>
@@ -109,6 +141,30 @@ export default function AdminUsersPage() {
                   </div>
                 </td>
                 <td>{roleBadge(u.role)}</td>
+                <td>
+                  {u.role === 'teacher' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {Array.isArray(u.subjects) && u.subjects.length > 0
+                        ? u.subjects.map((s: string) => (
+                            <span key={s} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(99,102,241,0.12)', color: 'var(--primary-light)', fontWeight: 600 }}>
+                              {s}
+                            </span>
+                          ))
+                        : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>All subjects</span>
+                      }
+                      <button
+                        onClick={() => openSubjectsModal(u)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '2px 8px', fontSize: 11, height: 'auto' }}
+                        title="Edit specializations"
+                      >
+                        <BookOpen size={11} /> Edit
+                      </button>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+                  )}
+                </td>
                 <td>
                   {u.isActive
                     ? <span className="badge badge-active">Active</span>
@@ -141,6 +197,46 @@ export default function AdminUsersPage() {
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="btn btn-secondary btn-sm">← Prev</button>
           <span style={{ padding: '6px 14px', fontSize: 13, color: 'var(--text-muted)' }}>Page {page} of {Math.ceil(total / LIMIT)}</span>
           <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / LIMIT)} className="btn btn-secondary btn-sm">Next →</button>
+        </div>
+      )}
+
+      {/* Specializations Modal */}
+      {subjectsModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div className="card" style={{ width: 420, padding: 28 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <h3 style={{ fontWeight: 700, fontSize: 16 }}>Set Specializations</h3>
+              <button onClick={() => setSubjectsModal(null)} className="icon-btn" style={{ width: 30, height: 30 }}><X size={15} /></button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+              Teacher: <strong>{subjectsModal.user.name}</strong><br />
+              Select which courses this teacher can see and answer. Leave all unselected to allow all subjects.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
+              {COURSES.map(c => {
+                const active = subjectsModal.selected.includes(c);
+                return (
+                  <button
+                    key={c}
+                    onClick={() => toggleCourse(c)}
+                    className={`btn btn-sm ${active ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ fontFamily: 'inherit', fontSize: 15, padding: '8px 16px' }}
+                  >
+                    {active && <Check size={12} />} {c}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setSubjectsModal(null)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+              <button onClick={saveSubjects} disabled={savingSubjects} className="btn btn-primary" style={{ flex: 1 }}>
+                {savingSubjects ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Saving...</> : 'Save'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </AppShell>

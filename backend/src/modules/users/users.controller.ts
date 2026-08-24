@@ -24,12 +24,6 @@ export class UsersController {
     return this.usersService.update(id, safe);
   }
 
-  @Patch('me/subjects')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
-  updateMySubjects(@CurrentUser('id') id: string, @Body('subjects') subjects: string[]) {
-    return this.usersService.update(id, { subjects });
-  }
-
   @Get()
   @Roles(UserRole.ADMIN)
   findAll(
@@ -50,6 +44,12 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   updateRole(@Param('id') id: string, @Body('role') role: UserRole) {
     return this.usersService.update(id, { role });
+  }
+
+  @Patch(':id/subjects')
+  @Roles(UserRole.ADMIN)
+  updateSubjects(@Param('id') id: string, @Body('subjects') subjects: string[]) {
+    return this.usersService.update(id, { subjects });
   }
 
   @Delete(':id')
