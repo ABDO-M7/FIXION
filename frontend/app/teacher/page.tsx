@@ -157,13 +157,33 @@ export default function TeacherDashboard() {
               {questions.map(q => (
                 <div
                   key={q.id}
-                  onClick={() => { setSelectedQ(q); setAnswerText(''); setCategoryForm({ subject: q.category?.subject || '', bookName: q.category?.bookName || q.bookName || '', chapter: q.category?.chapter || q.chapter || '', lesson: q.category?.lesson || q.lesson || '', questionNumber: q.category?.questionNumber || q.questionNumber || '' }); }}
+                  onClick={() => { 
+                    setSelectedQ(q); 
+                    setAnswerText(''); 
+                    setCategoryForm({ 
+                      subject: q.category?.subject || q.courseName || '', 
+                      bookName: q.category?.bookName || q.bookName || '', 
+                      chapter: q.category?.chapter || q.chapter || '', 
+                      lesson: q.category?.lesson || q.lesson || '', 
+                      questionNumber: q.category?.questionNumber || q.questionNumber || '' 
+                    }); 
+                  }}
                   className={`question-card ${q.status}`}
                   style={{ borderColor: selectedQ?.id === q.id ? 'var(--primary)' : undefined, boxShadow: selectedQ?.id === q.id ? 'var(--shadow-glow)' : undefined }}
                 >
-                  <div className="question-meta">
+                  <div className="question-meta" style={{ flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
                     {q.status === 'pending' ? <span className="badge badge-pending">⏳ Pending</span> : <span className="badge badge-answered">✓ Answered</span>}
-                    {q.category && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>📚 {q.category.subject}</span>}
+                    
+                    {/* If assigned to a category, show that. Otherwise show the raw student submission */}
+                    {q.category ? (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>📚 {q.category.subject} {q.category.questionNumber ? `(Q.${q.category.questionNumber})` : ''}</span>
+                    ) : (
+                      <>
+                        {q.courseName && <span style={{ fontSize: 11, color: 'var(--primary-light)', fontWeight: 600 }}>📘 {q.courseName}</span>}
+                        {q.questionNumber && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Q.{q.questionNumber}</span>}
+                      </>
+                    )}
+                    
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
                       {formatDistanceToNow(new Date(q.createdAt), { addSuffix: true })}
                     </span>
