@@ -19,12 +19,15 @@ const typeorm_2 = require("typeorm");
 const notification_entity_1 = require("./entities/notification.entity");
 const notifications_gateway_1 = require("./notifications.gateway");
 const email_service_1 = require("./email.service");
+const user_entity_1 = require("../users/entities/user.entity");
 let NotificationsService = class NotificationsService {
     notificationsRepo;
+    usersRepo;
     gateway;
     emailService;
-    constructor(notificationsRepo, gateway, emailService) {
+    constructor(notificationsRepo, usersRepo, gateway, emailService) {
         this.notificationsRepo = notificationsRepo;
+        this.usersRepo = usersRepo;
         this.gateway = gateway;
         this.emailService = emailService;
     }
@@ -45,6 +48,29 @@ let NotificationsService = class NotificationsService {
         });
         this.emailService.sendAnswerNotification(studentId, questionId, message).catch(() => { });
         return notification;
+    }
+    async notifyNewQuestion(questionId, studentName, courseName) {
+        const courseText = courseName ? ` in ${courseName}` : '';
+        const message = `New question from ${studentName}${courseText}`;
+        const teachers = await this.usersRepo.find({ where: { role: user_entity_1.UserRole.TEACHER } });
+        if (!teachers.length)
+            return;
+        const notifications = teachers.map(t => this.notificationsRepo.create({
+            userId: t.id,
+            type: 'NEW_QUESTION',
+            message,
+            metadata: { questionId },
+        }));
+        const saved = await this.notificationsRepo.save(notifications);
+        for (const n of saved) {
+            this.gateway.sendToUser(n.userId, 'notification', {
+                id: n.id,
+                type: 'NEW_QUESTION',
+                message,
+                questionId,
+                createdAt: n.createdAt,
+            });
+        }
     }
     async getMyNotifications(userId, page = 1, limit = 20) {
         const [data, total] = await this.notificationsRepo.findAndCount({
@@ -69,7 +95,9 @@ exports.NotificationsService = NotificationsService;
 exports.NotificationsService = NotificationsService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(notification_entity_1.Notification)),
+    __param(1, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
         notifications_gateway_1.NotificationsGateway,
         email_service_1.EmailService])
 ], NotificationsService);

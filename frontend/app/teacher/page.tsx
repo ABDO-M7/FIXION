@@ -197,6 +197,17 @@ export default function TeacherDashboard() {
                 <button onClick={() => setSelectedQ(null)} className="icon-btn" style={{ width: 28, height: 28 }}><X size={14} /></button>
               </div>
               <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', marginBottom: 12 }}>{selectedQ.content}</p>
+              
+              {/* Student Attachments */}
+              {selectedQ.attachments && selectedQ.attachments.length > 0 && (
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+                  {selectedQ.attachments.map((url: string, i: number) => (
+                    <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: 'block', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                      <img src={url} alt={`attachment-${i}`} style={{ height: 120, objectFit: 'cover' }} />
+                    </a>
+                  ))}
+                </div>
+              )}
 
               {/* Category Assignment */}
               <div style={{ padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginTop: 8 }}>

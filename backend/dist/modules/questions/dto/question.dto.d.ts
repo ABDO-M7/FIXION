@@ -1,6 +1,11 @@
 import { QuestionStatus } from '../entities/question.entity';
 export declare class CreateQuestionDto {
     content: string;
+    courseName: string;
+    bookName?: string;
+    chapter?: string;
+    lesson?: string;
+    questionNumber?: string;
     attachments?: string[];
 }
 export declare class UpdateQuestionStatusDto {

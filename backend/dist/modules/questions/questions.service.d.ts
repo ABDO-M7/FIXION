@@ -2,9 +2,11 @@ import { Repository } from 'typeorm';
 import { Question, QuestionStatus } from './entities/question.entity';
 import { CreateQuestionDto, SearchQuestionsDto } from './dto/question.dto';
 import { User } from '../users/entities/user.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 export declare class QuestionsService {
     private questionsRepo;
-    constructor(questionsRepo: Repository<Question>);
+    private notificationsService;
+    constructor(questionsRepo: Repository<Question>, notificationsService: NotificationsService);
     create(dto: CreateQuestionDto, student: User): Promise<Question>;
     findMyQuestions(studentId: string, page?: number, limit?: number): Promise<{
         data: Question[];

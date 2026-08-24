@@ -4,12 +4,14 @@ import { Repository, ILike, FindOptionsWhere } from 'typeorm';
 import { Question, QuestionStatus } from './entities/question.entity';
 import { CreateQuestionDto, SearchQuestionsDto } from './dto/question.dto';
 import { User, UserRole } from '../users/entities/user.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class QuestionsService {
   constructor(
     @InjectRepository(Question)
     private questionsRepo: Repository<Question>,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateQuestionDto, student: User): Promise<Question> {
@@ -17,7 +19,12 @@ export class QuestionsService {
       ...dto,
       studentId: student.id,
     });
-    return this.questionsRepo.save(question);
+    const saved = await this.questionsRepo.save(question);
+    
+    // Notify teachers asynchronously
+    this.notificationsService.notifyNewQuestion(saved.id, student.name, saved.courseName).catch(console.error);
+    
+    return saved;
   }
 
   async findMyQuestions(studentId: string, page = 1, limit = 10) {

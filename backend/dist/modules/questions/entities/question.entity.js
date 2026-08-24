@@ -25,6 +25,11 @@ let Question = class Question {
     student;
     studentId;
     content;
+    courseName;
+    bookName;
+    chapter;
+    lesson;
+    questionNumber;
     attachments;
     status;
     category;
@@ -53,6 +58,26 @@ __decorate([
     (0, typeorm_1.Column)({ type: 'text' }),
     __metadata("design:type", String)
 ], Question.prototype, "content", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Question.prototype, "courseName", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Question.prototype, "bookName", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Question.prototype, "chapter", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Question.prototype, "lesson", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ nullable: true }),
+    __metadata("design:type", String)
+], Question.prototype, "questionNumber", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'jsonb', nullable: true, default: [] }),
     __metadata("design:type", Array)

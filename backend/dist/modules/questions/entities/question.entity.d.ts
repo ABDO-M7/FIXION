@@ -11,6 +11,11 @@ export declare class Question {
     student: User;
     studentId: string;
     content: string;
+    courseName: string;
+    bookName: string;
+    chapter: string;
+    lesson: string;
+    questionNumber: string;
     attachments: string[];
     status: QuestionStatus;
     category: Category;

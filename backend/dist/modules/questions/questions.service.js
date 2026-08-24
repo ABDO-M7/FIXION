@@ -18,17 +18,22 @@ const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const question_entity_1 = require("./entities/question.entity");
 const user_entity_1 = require("../users/entities/user.entity");
+const notifications_service_1 = require("../notifications/notifications.service");
 let QuestionsService = class QuestionsService {
     questionsRepo;
-    constructor(questionsRepo) {
+    notificationsService;
+    constructor(questionsRepo, notificationsService) {
         this.questionsRepo = questionsRepo;
+        this.notificationsService = notificationsService;
     }
     async create(dto, student) {
         const question = this.questionsRepo.create({
             ...dto,
             studentId: student.id,
         });
-        return this.questionsRepo.save(question);
+        const saved = await this.questionsRepo.save(question);
+        this.notificationsService.notifyNewQuestion(saved.id, student.name, saved.courseName).catch(console.error);
+        return saved;
     }
     async findMyQuestions(studentId, page = 1, limit = 10) {
         const [data, total] = await this.questionsRepo.findAndCount({
@@ -97,6 +102,7 @@ exports.QuestionsService = QuestionsService;
 exports.QuestionsService = QuestionsService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(question_entity_1.Question)),
-    __metadata("design:paramtypes", [typeorm_2.Repository])
+    __metadata("design:paramtypes", [typeorm_2.Repository,
+        notifications_service_1.NotificationsService])
 ], QuestionsService);
 //# sourceMappingURL=questions.service.js.map

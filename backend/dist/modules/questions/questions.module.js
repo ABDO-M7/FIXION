@@ -13,12 +13,13 @@ const questions_service_1 = require("./questions.service");
 const questions_controller_1 = require("./questions.controller");
 const question_entity_1 = require("./entities/question.entity");
 const subscription_entity_1 = require("../subscriptions/entities/subscription.entity");
+const notifications_module_1 = require("../notifications/notifications.module");
 let QuestionsModule = class QuestionsModule {
 };
 exports.QuestionsModule = QuestionsModule;
 exports.QuestionsModule = QuestionsModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([question_entity_1.Question, subscription_entity_1.Subscription])],
+        imports: [typeorm_1.TypeOrmModule.forFeature([question_entity_1.Question, subscription_entity_1.Subscription]), notifications_module_1.NotificationsModule],
         controllers: [questions_controller_1.QuestionsController],
         providers: [questions_service_1.QuestionsService],
         exports: [questions_service_1.QuestionsService],
