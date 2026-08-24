@@ -157,7 +157,7 @@ export default function TeacherDashboard() {
               {questions.map(q => (
                 <div
                   key={q.id}
-                  onClick={() => { setSelectedQ(q); setAnswerText(''); setCategoryForm({ subject: q.category?.subject || '', bookName: q.category?.bookName || '', chapter: q.category?.chapter || '', lesson: q.category?.lesson || '', questionNumber: q.category?.questionNumber || '' }); }}
+                  onClick={() => { setSelectedQ(q); setAnswerText(''); setCategoryForm({ subject: q.category?.subject || '', bookName: q.category?.bookName || q.bookName || '', chapter: q.category?.chapter || q.chapter || '', lesson: q.category?.lesson || q.lesson || '', questionNumber: q.category?.questionNumber || q.questionNumber || '' }); }}
                   className={`question-card ${q.status}`}
                   style={{ borderColor: selectedQ?.id === q.id ? 'var(--primary)' : undefined, boxShadow: selectedQ?.id === q.id ? 'var(--shadow-glow)' : undefined }}
                 >
@@ -196,6 +196,18 @@ export default function TeacherDashboard() {
                 <h3 style={{ fontWeight: 700, fontSize: 14 }}>Question</h3>
                 <button onClick={() => setSelectedQ(null)} className="icon-btn" style={{ width: 28, height: 28 }}><X size={14} /></button>
               </div>
+
+              {/* Student-submitted course details */}
+              {(selectedQ.courseName || selectedQ.bookName || selectedQ.chapter || selectedQ.lesson || selectedQ.questionNumber) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  {selectedQ.courseName && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-light)' }}>📘 {selectedQ.courseName}</span>}
+                  {selectedQ.bookName && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>📖 {selectedQ.bookName}</span>}
+                  {selectedQ.chapter && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Ch. {selectedQ.chapter}</span>}
+                  {selectedQ.lesson && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Lesson {selectedQ.lesson}</span>}
+                  {selectedQ.questionNumber && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Q. {selectedQ.questionNumber}</span>}
+                </div>
+              )}
+
               <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', marginBottom: 12 }}>{selectedQ.content}</p>
               
               {/* Student Attachments */}

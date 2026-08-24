@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { questionsApi } from '@/lib/api';
 import { formatDistanceToNow, format } from 'date-fns';
-import { ArrowLeft, Paperclip, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Paperclip, GraduationCap, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
 export default function QuestionDetailPage() {
@@ -12,9 +12,31 @@ export default function QuestionDetailPage() {
   const [question, setQuestion] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+    try {
+      const r = await questionsApi.one(id);
+      setQuestion(r.data);
+    } catch {}
+    finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
-    questionsApi.one(id).then(r => setQuestion(r.data)).catch(() => {}).finally(() => setLoading(false));
+    load();
   }, [id]);
+
+  // Auto-poll every 30s while question is still pending
+  useEffect(() => {
+    if (!question || question.status !== 'pending') return;
+    const interval = setInterval(() => load(true), 30000);
+    return () => clearInterval(interval);
+  }, [question?.status, id]);
 
   if (loading) return <AppShell><div className="page-loader"><span className="spinner" /></div></AppShell>;
   if (!question) return <AppShell><div className="empty-state"><div className="empty-state-icon">❌</div><div className="empty-state-title">Question not found</div></div></AppShell>;
@@ -28,14 +50,34 @@ export default function QuestionDetailPage() {
   return (
     <AppShell>
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
-        <Link href="/student/questions" className="btn btn-ghost btn-sm" style={{ marginBottom: 16, paddingLeft: 0 }}>
-          <ArrowLeft size={14} /> Back to Questions
-        </Link>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Link href="/student/questions" className="btn btn-ghost btn-sm" style={{ paddingLeft: 0 }}>
+            <ArrowLeft size={14} /> Back to Questions
+          </Link>
+          <button
+            onClick={() => load(true)}
+            className="btn btn-secondary btn-sm"
+            disabled={refreshing}
+            title="Refresh to check for new answers"
+          >
+            <RefreshCw size={13} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
 
         {/* Question */}
         <div className="card" style={{ marginBottom: 24 }}>
           <div className="question-meta" style={{ marginBottom: 16 }}>
             {statusBadge(question.status)}
+            {(question.courseName || question.bookName) && (
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {question.courseName && <span style={{ fontWeight: 600, color: 'var(--primary-light)' }}>📘 {question.courseName}</span>}
+                {question.bookName && <span>📖 {question.bookName}</span>}
+                {question.chapter && <span>Ch. {question.chapter}</span>}
+                {question.lesson && <span>Lesson {question.lesson}</span>}
+                {question.questionNumber && <span>Q. {question.questionNumber}</span>}
+              </span>
+            )}
             {question.category && (
               <span className="badge" style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--primary-light)', border: '1px solid rgba(99,102,241,0.2)' }}>
                 📚 {question.category.subject} › {question.category.bookName} › {question.category.chapter} › {question.category.lesson}
