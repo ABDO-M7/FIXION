@@ -33,6 +33,21 @@ export class Question {
   @Column({ type: 'text' })
   content: string;
 
+  @Column({ nullable: true })
+  courseName: string;
+
+  @Column({ nullable: true })
+  bookName: string;
+
+  @Column({ nullable: true })
+  chapter: string;
+
+  @Column({ nullable: true })
+  lesson: string;
+
+  @Column({ nullable: true })
+  questionNumber: string;
+
   @Column({ type: 'jsonb', nullable: true, default: [] })
   attachments: string[];
 

@@ -1,9 +1,29 @@
-import { IsString, IsOptional, IsArray, IsBoolean, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsBoolean, IsEnum, IsUUID, IsNotEmpty } from 'class-validator';
 import { QuestionStatus } from '../entities/question.entity';
 
 export class CreateQuestionDto {
   @IsString()
   content: string;
+
+  @IsString()
+  @IsNotEmpty()
+  courseName: string;
+
+  @IsOptional()
+  @IsString()
+  bookName?: string;
+
+  @IsOptional()
+  @IsString()
+  chapter?: string;
+
+  @IsOptional()
+  @IsString()
+  lesson?: string;
+
+  @IsOptional()
+  @IsString()
+  questionNumber?: string;
 
   @IsOptional()
   @IsArray()

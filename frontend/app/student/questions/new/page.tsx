@@ -12,6 +12,11 @@ import { Upload, X, FileText, Image, ArrowLeft, Send } from 'lucide-react';
 import Link from 'next/link';
 
 const schema = z.object({
+  courseName: z.string().min(1, 'Course name is required'),
+  bookName: z.string().optional(),
+  chapter: z.string().optional(),
+  lesson: z.string().optional(),
+  questionNumber: z.string().optional(),
   content: z.string().min(20, 'Question must be at least 20 characters').max(5000),
 });
 
@@ -58,7 +63,15 @@ export default function NewQuestionPage() {
     const uploadedUrls = files.filter(f => f.url).map(f => f.url!);
     setIsSubmitting(true);
     try {
-      const res = await questionsApi.submit({ content: data.content, attachments: uploadedUrls });
+      const res = await questionsApi.submit({
+        courseName: data.courseName,
+        bookName: data.bookName,
+        chapter: data.chapter,
+        lesson: data.lesson,
+        questionNumber: data.questionNumber,
+        content: data.content,
+        attachments: uploadedUrls
+      });
       toast.success('Question submitted! A teacher will answer soon.');
       router.push(`/student/questions/${res.data.id}`);
     } catch (err: any) {
@@ -82,6 +95,41 @@ export default function NewQuestionPage() {
 
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="card">
+            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Course Details</h3>
+            
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label className="form-label" style={{ fontSize: 14, fontWeight: 500 }}>
+                Course Name <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <input
+                {...register('courseName')}
+                className={`form-input ${errors.courseName ? 'error' : ''}`}
+                placeholder="e.g. Biology 101"
+              />
+              {errors.courseName && <span className="form-error">{errors.courseName.message}</span>}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: 14, fontWeight: 500 }}>Book Name (optional)</label>
+                <input {...register('bookName')} className="form-input" placeholder="e.g. Campbell Biology" />
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: 14, fontWeight: 500 }}>Chapter (optional)</label>
+                <input {...register('chapter')} className="form-input" placeholder="e.g. 3" />
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: 14, fontWeight: 500 }}>Lesson (optional)</label>
+                <input {...register('lesson')} className="form-input" placeholder="e.g. 3.2" />
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: 14, fontWeight: 500 }}>Question # (optional)</label>
+                <input {...register('questionNumber')} className="form-input" placeholder="e.g. 15" />
+              </div>
+            </div>
+          </div>
+
           <div className="card">
             <div className="form-group">
               <label className="form-label" style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
