@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
   LayoutDashboard, HelpCircle, Bell, LogOut, Settings,
   Search, Menu, X, Globe, ChevronRight, BookOpen,
-  Users, BarChart2, Key, MessageSquare
+  Users, BarChart2, Key, MessageSquare, GraduationCap
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -16,6 +16,7 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 const studentNav = [
   { label: 'Dashboard', href: '/student', icon: LayoutDashboard },
   { label: 'My Questions', href: '/student/questions', icon: HelpCircle },
+  { label: 'Courses', href: '/student/courses', icon: GraduationCap },
   { label: 'Subscription', href: '/student/subscription', icon: Key },
   { label: 'Notifications', href: '/student/notifications', icon: Bell },
 ];

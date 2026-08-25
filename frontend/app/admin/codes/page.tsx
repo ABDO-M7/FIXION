@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { codesApi } from '@/lib/api';
-import { Key, Copy, Trash2, Search, CheckCircle, Clock } from 'lucide-react';
+import { Key, Copy, Trash2, CheckCircle, Clock, GraduationCap, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -13,7 +13,14 @@ export default function AdminCodesPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [generating, setGenerating] = useState(false);
-  const [form, setForm] = useState({ plan: 'monthly', quantity: '10', expiresAt: '' });
+  const [form, setForm] = useState({
+    plan: 'monthly',
+    quantity: '10',
+    expiresAt: '',
+    courseName: '',
+    teacherName: '',
+    groupName: '',
+  });
   const LIMIT = 50;
 
   const fetchCodes = async () => {
@@ -32,7 +39,14 @@ export default function AdminCodesPage() {
   const generate = async () => {
     setGenerating(true);
     try {
-      const res = await codesApi.generate(form.plan, +form.quantity, form.expiresAt || undefined);
+      const res = await codesApi.generate(
+        form.plan,
+        +form.quantity,
+        form.expiresAt || undefined,
+        form.courseName || undefined,
+        form.teacherName || undefined,
+        form.groupName || undefined,
+      );
       toast.success(`${res.data.length} codes generated!`);
       fetchCodes();
     } catch { toast.error('Failed to generate codes'); } finally { setGenerating(false); }
@@ -90,6 +104,51 @@ export default function AdminCodesPage() {
                 <input type="number" value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} className="form-input" min={1} max={500} />
               </div>
             </div>
+
+            <div style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-light)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <GraduationCap size={13} /> Course Info (optional)
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: 12 }}>Course Name</label>
+                  <select
+                    value={form.courseName}
+                    onChange={e => setForm(p => ({ ...p, courseName: e.target.value }))}
+                    className="form-input"
+                    style={{ appearance: 'auto', fontSize: 13 }}
+                  >
+                    <option value="">— No course (subscription only) —</option>
+                    {['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'].map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: 12 }}>Teacher Name</label>
+                    <input
+                      value={form.teacherName}
+                      onChange={e => setForm(p => ({ ...p, teacherName: e.target.value }))}
+                      className="form-input"
+                      placeholder="e.g. Mr. Ahmed"
+                      style={{ fontSize: 13 }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: 12 }}>Group Name</label>
+                    <input
+                      value={form.groupName}
+                      onChange={e => setForm(p => ({ ...p, groupName: e.target.value }))}
+                      className="form-input"
+                      placeholder="e.g. Group A"
+                      style={{ fontSize: 13 }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="form-group">
               <label className="form-label">Code Expiry (optional)</label>
               <input type="date" value={form.expiresAt} onChange={e => setForm(p => ({ ...p, expiresAt: e.target.value }))} className="form-input" />
@@ -133,18 +192,20 @@ export default function AdminCodesPage() {
             <tr>
               <th>Code</th>
               <th>Plan</th>
+              <th>Course</th>
+              <th>Teacher</th>
+              <th>Group</th>
               <th>Status</th>
               <th>Used By</th>
-              <th>Used At</th>
               <th>Expires</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></td></tr>
             ) : codes.length === 0 ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No codes found</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No codes found</td></tr>
             ) : codes.map(c => (
               <tr key={c.id}>
                 <td>
@@ -154,13 +215,19 @@ export default function AdminCodesPage() {
                   </div>
                 </td>
                 <td><span className={`badge ${c.plan === 'monthly' ? 'badge-active' : 'badge-pending'}`} style={{ textTransform: 'capitalize' }}>{c.plan}</span></td>
+                <td style={{ fontSize: 13 }}>
+                  {c.courseName
+                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><GraduationCap size={12} style={{ color: 'var(--primary-light)' }} />{c.courseName}</span>
+                    : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                </td>
+                <td style={{ fontSize: 13 }}>{c.teacherName || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                <td style={{ fontSize: 13 }}>{c.groupName || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                 <td>
                   {c.isUsed
                     ? <span className="badge badge-answered">Used</span>
                     : <span className="badge badge-pending">Available</span>}
                 </td>
                 <td style={{ fontSize: 12 }}>{c.usedBy?.name || '—'}</td>
-                <td style={{ fontSize: 12 }}>{c.usedAt ? format(new Date(c.usedAt), 'MMM d, yyyy') : '—'}</td>
                 <td style={{ fontSize: 12 }}>{c.expiresAt ? format(new Date(c.expiresAt), 'MMM d, yyyy') : '—'}</td>
                 <td>
                   {!c.isUsed && (

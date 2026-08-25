@@ -7,6 +7,7 @@ import { customAlphabet } from 'nanoid';
 import { addDays } from 'date-fns';
 import { Subscription, SubscriptionPlan } from './entities/subscription.entity';
 import { SubscriptionCode } from './entities/subscription-code.entity';
+import { CourseEnrollment } from './entities/course-enrollment.entity';
 import { User } from '../users/entities/user.entity';
 
 const generateCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 16);
@@ -18,9 +19,11 @@ export class SubscriptionsService {
     private subscriptionsRepo: Repository<Subscription>,
     @InjectRepository(SubscriptionCode)
     private codesRepo: Repository<SubscriptionCode>,
+    @InjectRepository(CourseEnrollment)
+    private enrollmentsRepo: Repository<CourseEnrollment>,
   ) {}
 
-  async redeemCode(code: string, student: User): Promise<Subscription> {
+  async redeemCode(code: string, student: User): Promise<{ subscription: Subscription; enrollment: CourseEnrollment | null }> {
     const subCode = await this.codesRepo.findOne({
       where: { code: code.toUpperCase().trim(), isUsed: false },
     });
@@ -50,21 +53,51 @@ export class SubscriptionsService {
       usedAt: new Date(),
     });
 
+    let subscription: Subscription;
     if (existing) {
       await this.subscriptionsRepo.update(existing.id, { expiresAt, plan: subCode.plan });
-      return this.subscriptionsRepo.findOne({ where: { id: existing.id } }) as Promise<Subscription>;
+      subscription = await this.subscriptionsRepo.findOne({ where: { id: existing.id } }) as Subscription;
+    } else {
+      subscription = await this.subscriptionsRepo.save(
+        this.subscriptionsRepo.create({
+          userId: student.id,
+          plan: subCode.plan,
+          startsAt: new Date(),
+          expiresAt,
+          isActive: true,
+          codeUsedId: subCode.id,
+        }),
+      );
     }
 
-    return this.subscriptionsRepo.save(
-      this.subscriptionsRepo.create({
-        userId: student.id,
-        plan: subCode.plan,
-        startsAt: new Date(),
-        expiresAt,
-        isActive: true,
-        codeUsedId: subCode.id,
-      }),
-    );
+    // Auto-enroll in course if code has course info
+    let enrollment: CourseEnrollment | null = null;
+    if (subCode.courseName) {
+      enrollment = await this.enrollmentsRepo.save(
+        this.enrollmentsRepo.create({
+          studentId: student.id,
+          courseName: subCode.courseName,
+          teacherName: subCode.teacherName,
+          groupName: subCode.groupName,
+          codeId: subCode.id,
+        }),
+      );
+    }
+
+    return { subscription, enrollment };
+  }
+
+  async getMyEnrollments(studentId: string): Promise<CourseEnrollment[]> {
+    return this.enrollmentsRepo.find({
+      where: { studentId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getEnrollmentById(id: string, studentId: string): Promise<CourseEnrollment> {
+    const enrollment = await this.enrollmentsRepo.findOne({ where: { id, studentId } });
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+    return enrollment;
   }
 
   async getStatus(userId: string) {
@@ -85,12 +118,20 @@ export class SubscriptionsService {
     return { isActive: true, plan: sub.plan, expiresAt: sub.expiresAt, daysLeft };
   }
 
-  async generateCodes(plan: SubscriptionPlan, quantity: number, admin: User, expiresAt?: Date) {
+  async generateCodes(
+    plan: SubscriptionPlan,
+    quantity: number,
+    admin: User,
+    expiresAt?: Date,
+    courseName?: string,
+    teacherName?: string,
+    groupName?: string,
+  ) {
     const codes: SubscriptionCode[] = [];
     for (let i = 0; i < Math.min(quantity, 500); i++) {
       const code = generateCode();
       codes.push(
-        this.codesRepo.create({ code, plan, createdById: admin.id, expiresAt }),
+        this.codesRepo.create({ code, plan, createdById: admin.id, expiresAt, courseName, teacherName, groupName }),
       );
     }
     return this.codesRepo.save(codes);

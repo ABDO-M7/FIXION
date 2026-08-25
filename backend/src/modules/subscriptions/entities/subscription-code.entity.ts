@@ -43,6 +43,15 @@ export class SubscriptionCode {
   @Column({ nullable: true, type: 'timestamptz' })
   expiresAt: Date;
 
+  @Column({ nullable: true })
+  courseName: string;
+
+  @Column({ nullable: true })
+  teacherName: string;
+
+  @Column({ nullable: true })
+  groupName: string;
+
   @CreateDateColumn()
   createdAt: Date;
 }

@@ -42,6 +42,9 @@ export class CodesController {
     @Body('plan') plan: SubscriptionPlan,
     @Body('quantity') quantity: number,
     @Body('expiresAt') expiresAt: string,
+    @Body('courseName') courseName: string,
+    @Body('teacherName') teacherName: string,
+    @Body('groupName') groupName: string,
     @CurrentUser() admin: any,
   ) {
     return this.subscriptionsService.generateCodes(
@@ -49,6 +52,9 @@ export class CodesController {
       quantity,
       admin,
       expiresAt ? new Date(expiresAt) : undefined,
+      courseName || undefined,
+      teacherName || undefined,
+      groupName || undefined,
     );
   }
 
@@ -67,5 +73,23 @@ export class CodesController {
   @Roles(UserRole.ADMIN)
   revoke(@Param('id') id: string) {
     return this.subscriptionsService.revokeCode(id);
+  }
+}
+
+@Controller('enrollments')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class EnrollmentsController {
+  constructor(private readonly subscriptionsService: SubscriptionsService) {}
+
+  @Get('my')
+  @Roles(UserRole.STUDENT)
+  getMyEnrollments(@CurrentUser('id') studentId: string) {
+    return this.subscriptionsService.getMyEnrollments(studentId);
+  }
+
+  @Get('my/:id')
+  @Roles(UserRole.STUDENT)
+  getEnrollmentById(@Param('id') id: string, @CurrentUser('id') studentId: string) {
+    return this.subscriptionsService.getEnrollmentById(id, studentId);
   }
 }
