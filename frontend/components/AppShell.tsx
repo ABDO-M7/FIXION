@@ -47,7 +47,7 @@ interface AppShellProps { children: React.ReactNode; }
 
 export default function AppShell({ children }: AppShellProps) {
   const { user, logout } = useAuthStore();
-  const { sidebarOpen, toggleSidebar, locale, setLocale } = useUIStore();
+  const { sidebarOpen, toggleSidebar, locale, setLocale, setSidebarOpen } = useUIStore();
   const { unreadCount, setUnreadCount } = useNotificationStore();
   const router = useRouter();
   const pathname = usePathname();
@@ -58,6 +58,11 @@ export default function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     notificationsApi.unreadCount().then(r => setUnreadCount(r.data)).catch(() => {});
+    
+    // Auto-collapse sidebar on mobile devices
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
   }, []);
 
   const handleLogout = async () => {
@@ -76,8 +81,14 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <div className={`app-layout ${!sidebarOpen ? 'collapsed' : ''}`}>
+      {/* ── Mobile Sidebar Overlay ───────────────────────────────── */}
+      <div 
+        className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
+        onClick={toggleSidebar}
+      />
+
       {/* ── Sidebar ──────────────────────────────────────────── */}
-      <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
+      <aside className={`sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
 
         {/* Logo */}
         <div className="sidebar-logo">

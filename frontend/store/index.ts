@@ -40,6 +40,7 @@ interface UIStore {
   locale: 'en' | 'ar';
   notificationsOpen: boolean;
   toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
   setLocale: (locale: 'en' | 'ar') => void;
   toggleNotifications: () => void;
   setNotificationsOpen: (open: boolean) => void;
@@ -52,6 +53,7 @@ export const useUIStore = create<UIStore>()(
       locale: 'en',
       notificationsOpen: false,
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      setSidebarOpen: (open) => set({ sidebarOpen: open }),
       setLocale: (locale) => {
         set({ locale });
         if (typeof document !== 'undefined') {
