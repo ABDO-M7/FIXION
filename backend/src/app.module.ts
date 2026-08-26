@@ -22,6 +22,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { HealthModule } from './health/health.module';
+import { AssignmentsModule } from './modules/assignments/assignments.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Question } from './modules/questions/entities/question.entity';
@@ -30,6 +31,8 @@ import { Category } from './modules/categories/entities/category.entity';
 import { Subscription } from './modules/subscriptions/entities/subscription.entity';
 import { SubscriptionCode } from './modules/subscriptions/entities/subscription-code.entity';
 import { CourseEnrollment } from './modules/subscriptions/entities/course-enrollment.entity';
+import { Assignment } from './modules/assignments/entities/assignment.entity';
+import { AssignmentSubmission } from './modules/assignments/entities/assignment-submission.entity';
 import { Notification } from './modules/notifications/entities/notification.entity';
 
 @Module({
@@ -49,7 +52,7 @@ import { Notification } from './modules/notifications/entities/notification.enti
         type: 'postgres',
         url: config.get<string>('database.url'),
         ssl: config.get('database.ssl'),
-        entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Notification],
+        entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Assignment, AssignmentSubmission, Notification],
         synchronize: config.get('app.nodeEnv') !== 'production', // Use migrations in prod
         logging: config.get('app.nodeEnv') === 'development',
         extra: {
@@ -74,6 +77,7 @@ import { Notification } from './modules/notifications/entities/notification.enti
     NotificationsModule,
     UploadsModule,
     AdminModule,
+    AssignmentsModule,
     HealthModule,
   ],
 })

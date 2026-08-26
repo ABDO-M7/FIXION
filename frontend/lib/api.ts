@@ -102,6 +102,29 @@ export const enrollmentsApi = {
   one: (id: string) => api.get(`/enrollments/my/${id}`),
 };
 
+export const assignmentsApi = {
+  // Teacher
+  myCourses: () => api.get('/assignments/courses/mine'),
+  groups: (courseName: string) => api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups`),
+  students: (courseName: string, groupName: string) =>
+    api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/students`),
+  list: (courseName: string, groupName: string, type?: string) =>
+    api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}`, { params: type ? { type } : {} }),
+  create: (data: any) => api.post('/assignments', data),
+  submissions: (id: string, courseName: string, groupName: string) =>
+    api.get(`/assignments/${id}/submissions`, { params: { courseName, groupName } }),
+  grade: (submissionId: string, grade: number, feedback?: string) =>
+    api.patch(`/assignments/submissions/${submissionId}/grade`, { grade, feedback }),
+  gradeMatrix: (courseName: string, groupName: string) =>
+    api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/grades`),
+  delete: (id: string) => api.delete(`/assignments/${id}`),
+  // Student
+  myAssignments: (courseName: string, groupName: string) =>
+    api.get(`/assignments/student/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}`),
+  submit: (id: string, data: any) => api.post(`/assignments/${id}/submissions`, data),
+};
+
+
 export const categoriesApi = {
   list: (subject?: string) => api.get('/categories', { params: { subject } }),
   create: (data: any) => api.post('/categories', data),

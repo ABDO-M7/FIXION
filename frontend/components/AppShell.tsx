@@ -23,6 +23,7 @@ const studentNav = [
 
 const teacherNav = [
   { label: 'Dashboard', href: '/teacher', icon: LayoutDashboard },
+  { label: 'Courses', href: '/teacher/courses', icon: GraduationCap },
   { label: 'Questions', href: '/teacher/questions', icon: HelpCircle },
   { label: 'Categories', href: '/teacher/categories', icon: BookOpen },
   { label: 'Notifications', href: '/teacher/notifications', icon: Bell },
