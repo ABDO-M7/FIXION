@@ -244,9 +244,11 @@ function SubmitModal({
 // ── Assignment Card ────────────────────────────────────────────────────────────
 function AssignmentCard({
   assignment,
+  courseId,
   onRefresh,
 }: {
   assignment: Assignment;
+  courseId: string;
   onRefresh: () => void;
 }) {
   const [showModal, setShowModal] = useState(false);
@@ -345,7 +347,7 @@ function AssignmentCard({
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           {assignment.type === 'QUIZ' ? (
             <Link
-              href={`/student/courses/${id}/quiz/${assignment.id}`}
+              href={`/student/courses/${courseId}/quiz/${assignment.id}`}
               className={`btn ${sub ? 'btn-secondary' : 'btn-primary'} btn-sm`}
             >
               <ClipboardList size={13} />
@@ -529,7 +531,7 @@ export default function CourseDetailPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {filtered.map(a => (
-            <AssignmentCard key={a.id} assignment={a} onRefresh={refresh} />
+            <AssignmentCard key={a.id} assignment={a} courseId={id} onRefresh={refresh} />
           ))}
         </div>
       )}
