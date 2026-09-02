@@ -6,10 +6,11 @@ import { enrollmentsApi, assignmentsApi, uploadsApi } from '@/lib/api';
 import {
   GraduationCap, User, Users, ArrowLeft, BookOpen,
   ClipboardList, Upload, X, FileText, Image, CheckCircle,
-  Clock, Loader2, ExternalLink, Star,
+  Clock, Loader2, ExternalLink, Star, BarChart2, TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { format } from 'date-fns';
 
 const COURSE_COLORS: Record<string, string> = {
   'فيزيا': '#6366f1',
@@ -25,6 +26,7 @@ type Assignment = {
   title: string;
   description?: string;
   dueDate?: string;
+  createdAt?: string;
   maxGrade: number;
   submission: {
     id: string;
@@ -376,13 +378,185 @@ function AssignmentCard({
   );
 }
 
+// ── Grades Tab ──────────────────────────────────────────────────────────────────
+function GradesTab({ assignments }: { assignments: Assignment[] }) {
+  const homeworks = assignments.filter(a => a.type === 'HOMEWORK');
+  const quizzes   = assignments.filter(a => a.type === 'QUIZ');
+
+  const sumGrade   = (list: Assignment[]) => list.reduce((acc, a) => acc + (a.submission?.grade ?? 0), 0);
+  const sumMax     = (list: Assignment[]) => list.reduce((acc, a) => acc + a.maxGrade, 0);
+  const scored     = (list: Assignment[]) => list.filter(a => a.submission?.grade !== null && a.submission?.grade !== undefined);
+
+  const hwEarned  = sumGrade(scored(homeworks));
+  const hwMax     = sumMax(homeworks);
+  const qzEarned  = sumGrade(scored(quizzes));
+  const qzMax     = sumMax(quizzes);
+  const totalEarned = hwEarned + qzEarned;
+  const totalMax    = hwMax    + qzMax;
+
+  // Group assignments by month (from createdAt or dueDate)
+  const byMonth: Record<string, Assignment[]> = {};
+  for (const a of assignments) {
+    const d = a.createdAt || a.dueDate;
+    const label = d ? format(new Date(d), 'MMMM yyyy') : 'Unscheduled';
+    if (!byMonth[label]) byMonth[label] = [];
+    byMonth[label].push(a);
+  }
+
+  const pct = (earned: number, max: number) => max > 0 ? Math.round((earned / max) * 100) : 0;
+  const pctColor = (p: number) => p >= 80 ? '#10b981' : p >= 50 ? '#f59e0b' : '#ef4444';
+
+  // Summary card
+  const SummaryCard = ({ label, earned, max, icon, color }: any) => (
+    <div style={{
+      background: `${color}11`, border: `1px solid ${color}33`,
+      borderRadius: 14, padding: '16px 20px', flex: 1, minWidth: 140,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        {icon}
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 800, color }}>{earned}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>out of {max}</div>
+      <div style={{ marginTop: 10, height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 99, width: `${pct(earned, max)}%`, background: color, transition: 'width 0.6s ease' }} />
+      </div>
+      <div style={{ fontSize: 11, color, fontWeight: 700, marginTop: 4 }}>{pct(earned, max)}%</div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+      {/* Summary row */}
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        <SummaryCard label="Homework" earned={hwEarned} max={hwMax} color="#f59e0b" icon={<BookOpen size={15} style={{ color: '#f59e0b' }} />} />
+        <SummaryCard label="Quizzes"  earned={qzEarned} max={qzMax} color="#6366f1" icon={<ClipboardList size={15} style={{ color: '#6366f1' }} />} />
+        <SummaryCard label="Total" earned={totalEarned} max={totalMax} color="#10b981" icon={<TrendingUp size={15} style={{ color: '#10b981' }} />} />
+      </div>
+
+      {/* Per-assignment table */}
+      <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <BarChart2 size={16} style={{ color: 'var(--primary-light)' }} />
+          <h3 style={{ fontWeight: 700, fontSize: 14 }}>All Assignments</h3>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'var(--bg-elevated)' }}>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Assignment</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Type</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Month</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Grade</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {assignments.map(a => {
+              const g = a.submission?.grade;
+              const hasGrade = g !== null && g !== undefined;
+              const p = hasGrade ? pct(g!, a.maxGrade) : null;
+              const d = a.createdAt || a.dueDate;
+              return (
+                <tr key={a.id} style={{ borderTop: '1px solid var(--border)' }}>
+                  <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600 }}>{a.title}</td>
+                  <td style={{ padding: '12px 16px' }}>
+                    <span className={`badge ${a.type === 'QUIZ' ? 'badge-active' : 'badge-pending'}`} style={{ fontSize: 10 }}>
+                      {a.type === 'QUIZ' ? '📝 Quiz' : '📚 Homework'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {d ? format(new Date(d), 'MMM yyyy') : '—'}
+                  </td>
+                  <td style={{ padding: '12px 16px' }}>
+                    {hasGrade ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 800, fontSize: 14, color: pctColor(p!) }}>
+                          {g} / {a.maxGrade}
+                        </span>
+                        <span style={{ fontSize: 11, color: pctColor(p!), fontWeight: 600 }}>({p}%)</span>
+                      </div>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px 16px' }}>
+                    {!a.submission ? (
+                      <span className="badge badge-pending" style={{ fontSize: 10 }}><Clock size={10} style={{ marginRight: 3 }}/>Not Submitted</span>
+                    ) : hasGrade ? (
+                      <span className="badge badge-answered" style={{ fontSize: 10 }}><CheckCircle size={10} style={{ marginRight: 3 }}/>Graded</span>
+                    ) : (
+                      <span className="badge" style={{ fontSize: 10, background: 'rgba(99,102,241,0.15)', color: 'var(--primary-light)' }}><Clock size={10} style={{ marginRight: 3 }}/>Awaiting Grade</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Monthly breakdown */}
+      <div>
+        <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <TrendingUp size={16} style={{ color: 'var(--primary-light)' }} /> Monthly Breakdown
+        </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {Object.entries(byMonth).map(([month, list]) => {
+            const mScored = scored(list);
+            const mEarned = sumGrade(mScored);
+            const mMax    = sumMax(list);
+            const mPct    = pct(mEarned, mMax);
+            return (
+              <div key={month} className="card" style={{ padding: '16px 20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{month}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {list.length} assignment{list.length !== 1 ? 's' : ''} — {mScored.length} graded
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 800, fontSize: 20, color: pctColor(mPct) }}>
+                      {mEarned} <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)' }}>/ {mMax}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: pctColor(mPct), fontWeight: 700 }}>{mPct}%</div>
+                  </div>
+                </div>
+                <div style={{ height: 6, borderRadius: 99, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 99, width: `${mPct}%`, background: pctColor(mPct), transition: 'width 0.6s ease' }} />
+                </div>
+                {/* mini rows */}
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {list.map(a => {
+                    const g = a.submission?.grade;
+                    const hasG = g !== null && g !== undefined;
+                    return (
+                      <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderTop: '1px solid var(--border)' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>{a.title}</span>
+                        <span style={{ fontWeight: 700, color: hasG ? pctColor(pct(g!, a.maxGrade)) : 'var(--text-muted)' }}>
+                          {hasG ? `${g} / ${a.maxGrade}` : '—'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [enrollment, setEnrollment] = useState<any>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'homework' | 'quiz'>('homework');
+  const [tab, setTab] = useState<'homework' | 'quiz' | 'grades'>('homework');
 
   const loadAssignments = useCallback(async (courseName: string, groupName: string) => {
     const res = await assignmentsApi.myAssignments(courseName, groupName);
@@ -515,10 +689,19 @@ export default function CourseDetailPage() {
             </span>
           )}
         </button>
+        <button
+          className={`tab-btn ${tab === 'grades' ? 'active' : ''}`}
+          onClick={() => setTab('grades')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <BarChart2 size={15} /> My Grades
+        </button>
       </div>
 
       {/* Content */}
-      {filtered.length === 0 ? (
+      {tab === 'grades' ? (
+        <GradesTab assignments={assignments} />
+      ) : filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '60px 24px' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>{tab === 'homework' ? '📚' : '📝'}</div>
           <h3 style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
