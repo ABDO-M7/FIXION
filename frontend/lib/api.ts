@@ -8,7 +8,7 @@ const API_URLS = [
 const api = axios.create({
   baseURL: API_URLS[0],
   withCredentials: true,
-  timeout: 8000,
+  timeout: 30000, // 30 seconds to allow for slower connections
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -163,7 +163,10 @@ export const uploadsApi = {
   upload: (file: File) => {
     const form = new FormData();
     form.append('file', file);
-    return api.post('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return api.post('/uploads', form, { 
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0, // No timeout for file uploads
+    });
   },
   uploadMany: async (files: File[]): Promise<string[]> => {
     const urls: string[] = [];
