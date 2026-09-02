@@ -212,9 +212,14 @@ function SubmissionsPanel({
               <tbody>
                 {(data?.studentRows || []).map((row: any) => (
                   <tr key={row.student.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '10px 12px', fontSize: 13 }}>
+                    <td style={{ padding: '10px 12px', fontSize: 13, minWidth: 160 }}>
                       <div style={{ fontWeight: 600 }}>{row.student.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.student.email}</div>
+                      {row.student.studentId && (
+                        <div style={{ fontSize: 11, color: 'var(--primary-light)', fontWeight: 600, marginTop: 2 }}>
+                          ID: {row.student.studentId}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '10px 12px' }}>
                       {row.submitted
@@ -359,9 +364,14 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
         <tbody>
           {data.students.map((student: any) => (
             <tr key={student.id} style={{ borderTop: '1px solid var(--border)' }}>
-              <td style={{ padding: '10px 14px', fontSize: 13 }}>
+              <td style={{ padding: '10px 14px', fontSize: 13, minWidth: 180 }}>
                 <div style={{ fontWeight: 600 }}>{student.name}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{student.email}</div>
+                {student.studentId && (
+                  <div style={{ fontSize: 11, color: 'var(--primary-light)', fontWeight: 600, marginTop: 2 }}>
+                    ID: {student.studentId}
+                  </div>
+                )}
               </td>
               {data.assignments.map((a: any, i: number) => {
                 const grade = data.gradeMap[student.id]?.[a.id];

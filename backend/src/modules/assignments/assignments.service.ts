@@ -46,6 +46,9 @@ export class AssignmentsService {
       id: e.studentId,
       name: e.student?.name,
       email: e.student?.email,
+      studentId: e.student?.studentId,
+      phone: e.student?.phone,
+      level: e.student?.level,
     }));
   }
 
