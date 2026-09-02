@@ -312,8 +312,10 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
     );
   }
 
-  const quizzes = data.assignments.filter((a: any) => a.type === 'QUIZ');
-  const homeworks = data.assignments.filter((a: any) => a.type === 'HOMEWORK');
+  const quizzes   = data.assignments.filter((a: any) => a.type === 'QUIZ');
+  const homeworks  = data.assignments.filter((a: any) => a.type === 'HOMEWORK');
+  // Always render in the SAME order as the header: quizzes first, then homeworks
+  const orderedAssignments = [...quizzes, ...homeworks];
 
   const getCellStyle = (grade: number | null | undefined, maxGrade: number) => {
     if (grade === null || grade === undefined) return {
@@ -348,7 +350,7 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
           </tr>
           <tr>
             <th style={{ padding: '8px 14px', textAlign: 'left', fontSize: 11, background: 'var(--bg-surface)' }}></th>
-            {data.assignments.map((a: any, i: number) => (
+            {orderedAssignments.map((a: any, i: number) => (
               <th key={a.id} style={{
                 padding: '8px 12px', fontSize: 11, fontWeight: 600,
                 textAlign: 'center', maxWidth: 120,
@@ -365,7 +367,7 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
           {data.students.map((student: any) => (
             <tr key={student.id} style={{ borderTop: '1px solid var(--border)' }}>
               <td style={{ padding: '10px 14px', fontSize: 13, minWidth: 180 }}>
-                <div style={{ fontWeight: 600 }}>{student.name}</div>
+                <div style={{ fontWeight: 600 }}>{student.name || student.email || '—'}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{student.email}</div>
                 {student.studentId && (
                   <div style={{ fontSize: 11, color: 'var(--primary-light)', fontWeight: 600, marginTop: 2 }}>
@@ -373,7 +375,7 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
                   </div>
                 )}
               </td>
-              {data.assignments.map((a: any, i: number) => {
+              {orderedAssignments.map((a: any, i: number) => {
                 const grade = data.gradeMap[student.id]?.[a.id];
                 const maxGrade = a.maxGrade ?? 100;
                 return (
