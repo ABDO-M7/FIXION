@@ -12,40 +12,35 @@ import Image from 'next/image';
 import { authApi, notificationsApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const studentNav = [
-  { label: 'Dashboard',      href: '/student',                icon: LayoutDashboard },
-  { label: 'My Questions',   href: '/student/questions',      icon: HelpCircle },
-  { label: 'Courses',        href: '/student/courses',        icon: GraduationCap },
-  { label: 'Appointments',   href: '/student/appointments',   icon: Calendar },
-  { label: 'Subscription',   href: '/student/subscription',   icon: Key },
-  { label: 'Profile',        href: '/student/profile',        icon: User },
-  { label: 'Notifications',  href: '/student/notifications',  icon: Bell },
+  { key: 'nav.dashboard',      href: '/student',                icon: LayoutDashboard },
+  { key: 'nav.questions',      href: '/student/questions',      icon: HelpCircle },
+  { key: 'nav.courses',        href: '/student/courses',        icon: GraduationCap },
+  { key: 'nav.appointments',   href: '/student/appointments',   icon: Calendar },
+  { key: 'nav.subscription',   href: '/student/subscription',   icon: Key },
+  { key: 'nav.profile',        href: '/student/profile',        icon: User },
+  { key: 'nav.notifications',  href: '/student/notifications',  icon: Bell },
 ];
 
 const teacherNav = [
-  { label: 'Dashboard',      href: '/teacher',                icon: LayoutDashboard },
-  { label: 'Courses',        href: '/teacher/courses',        icon: GraduationCap },
-  { label: 'Appointments',   href: '/teacher/appointments',   icon: Calendar },
-  { label: 'Questions',      href: '/teacher/questions',      icon: HelpCircle },
-  { label: 'Categories',     href: '/teacher/categories',     icon: BookOpen },
-  { label: 'Profile',        href: '/teacher/profile',        icon: User },
-  { label: 'Notifications',  href: '/teacher/notifications',  icon: Bell },
+  { key: 'nav.dashboard',      href: '/teacher',                icon: LayoutDashboard },
+  { key: 'nav.courses',        href: '/teacher/courses',        icon: GraduationCap },
+  { key: 'nav.appointments',   href: '/teacher/appointments',   icon: Calendar },
+  { key: 'nav.allQuestions',   href: '/teacher/questions',      icon: HelpCircle },
+  { key: 'nav.categories',     href: '/teacher/categories',     icon: BookOpen },
+  { key: 'nav.profile',        href: '/teacher/profile',        icon: User },
+  { key: 'nav.notifications',  href: '/teacher/notifications',  icon: Bell },
 ];
 
 const adminNav = [
-  { label: 'Dashboard',  href: '/admin',            icon: LayoutDashboard },
-  { label: 'Users',      href: '/admin/users',      icon: Users },
-  { label: 'Questions',  href: '/admin/questions',  icon: MessageSquare },
-  { label: 'Codes',      href: '/admin/codes',      icon: Key },
-  { label: 'Analytics',  href: '/admin/analytics',  icon: BarChart2 },
+  { key: 'nav.dashboard',    href: '/admin',            icon: LayoutDashboard },
+  { key: 'nav.users',        href: '/admin/users',      icon: Users },
+  { key: 'nav.allQuestions', href: '/admin/questions',  icon: MessageSquare },
+  { key: 'nav.codes',        href: '/admin/codes',      icon: Key },
+  { key: 'nav.analytics',    href: '/admin/analytics',  icon: BarChart2 },
 ];
-
-const ROLE_LABELS: Record<string, string> = {
-  student: 'Student',
-  teacher: 'Teacher',
-  admin:   'Admin',
-};
 
 interface AppShellProps { children: React.ReactNode; }
 
@@ -55,6 +50,7 @@ export default function AppShell({ children }: AppShellProps) {
   const { unreadCount, setUnreadCount } = useNotificationStore();
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   const nav = user?.role === 'admin' ? adminNav : user?.role === 'teacher' ? teacherNav : studentNav;
 
@@ -83,7 +79,7 @@ export default function AppShell({ children }: AppShellProps) {
     try { await authApi.logout(); } catch {}
     logout();
     router.push('/login');
-    toast.success('Logged out');
+    toast.success(t('common.logout'));
   };
 
   const initial = user?.name?.[0]?.toUpperCase() || '?';
@@ -117,7 +113,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         {/* Navigation */}
         <nav className="sidebar-nav">
-          {sidebarOpen && <span className="nav-section-label">Navigation</span>}
+          {sidebarOpen && <span className="nav-section-label">{t('nav.navigation')}</span>}
 
           {nav.map((item) => {
             const Icon = item.icon;
@@ -127,11 +123,11 @@ export default function AppShell({ children }: AppShellProps) {
                 key={item.href}
                 href={item.href}
                 className={`nav-item ${active ? 'active' : ''}`}
-                title={!sidebarOpen ? item.label : undefined}
+                title={!sidebarOpen ? t(item.key) : undefined}
               >
                 <Icon size={17} style={{ flexShrink: 0 }} />
-                {sidebarOpen && <span style={{ flex: 1 }}>{item.label}</span>}
-                {sidebarOpen && item.label === 'Notifications' && unreadCount > 0 && (
+                {sidebarOpen && <span style={{ flex: 1 }}>{t(item.key)}</span>}
+                {sidebarOpen && item.key === 'nav.notifications' && unreadCount > 0 && (
                   <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
                 )}
               </Link>
@@ -150,12 +146,12 @@ export default function AppShell({ children }: AppShellProps) {
             <>
               <div className="user-info">
                 <div className="user-name">{user?.name}</div>
-                <div className="user-role">{ROLE_LABELS[user?.role || ''] || user?.role}</div>
+                <div className="user-role">{user?.role ? t(`roles.${user.role}`) : ''}</div>
               </div>
               <button
                 onClick={handleLogout}
                 className="icon-btn"
-                title="Logout"
+                title={t('common.logout')}
                 style={{ color: 'var(--text-muted)', width: 32, height: 32 }}
               >
                 <LogOut size={15} />
@@ -174,14 +170,14 @@ export default function AppShell({ children }: AppShellProps) {
             <button
               className="icon-btn"
               onClick={toggleSidebar}
-              title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              title={sidebarOpen ? t('common.collapseSidebar') : t('common.expandSidebar')}
             >
               {sidebarOpen ? <X size={17} /> : <Menu size={17} />}
             </button>
 
             <div className="topbar-search">
               <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-              <input placeholder="Search…" />
+              <input placeholder={t('common.search')} />
             </div>
           </div>
 
@@ -190,7 +186,7 @@ export default function AppShell({ children }: AppShellProps) {
             <button
               className="icon-btn"
               onClick={() => setLocale(locale === 'en' ? 'ar' : 'en')}
-              title="Toggle Arabic/English"
+              title={t('common.toggleLanguage')}
               style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}
             >
               <Globe size={16} />
