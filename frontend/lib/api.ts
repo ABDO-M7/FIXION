@@ -153,4 +153,14 @@ export const uploadsApi = {
     form.append('file', file);
     return api.post('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
+  uploadMany: async (files: File[]): Promise<string[]> => {
+    const urls: string[] = [];
+    for (const file of files) {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      urls.push(res.data.url);
+    }
+    return urls;
+  },
 };
