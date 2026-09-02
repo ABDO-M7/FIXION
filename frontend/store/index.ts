@@ -9,6 +9,9 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   avatarUrl?: string;
+  phone?: string;
+  level?: string;
+  studentId?: string;
 }
 
 interface AuthStore {

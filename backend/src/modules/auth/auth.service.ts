@@ -149,6 +149,9 @@ export class AuthService {
         email: user.email,
         role: user.role,
         avatarUrl: user.avatarUrl,
+        phone: user.phone,
+        level: user.level,
+        studentId: user.studentId,
       },
     };
   }
