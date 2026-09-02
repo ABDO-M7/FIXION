@@ -122,6 +122,17 @@ export const assignmentsApi = {
   myAssignments: (courseName: string, groupName: string) =>
     api.get(`/assignments/student/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}`),
   submit: (id: string, data: any) => api.post(`/assignments/${id}/submissions`, data),
+  quizSubmit: (id: string, answers: Record<string, string>) =>
+    api.post(`/assignments/${id}/quiz-submit`, { answers }),
+  // Quiz questions
+  getQuestions: (id: string) => api.get(`/assignments/${id}/questions`),
+  createQuestion: (id: string, data: any) => api.post(`/assignments/${id}/questions`, data),
+  updateQuestion: (assignmentId: string, qid: string, data: any) =>
+    api.patch(`/assignments/${assignmentId}/questions/${qid}`, data),
+  deleteQuestion: (assignmentId: string, qid: string) =>
+    api.delete(`/assignments/${assignmentId}/questions/${qid}`),
+  reorderQuestions: (id: string, orderedIds: string[]) =>
+    api.patch(`/assignments/${id}/questions/reorder`, { orderedIds }),
 };
 
 

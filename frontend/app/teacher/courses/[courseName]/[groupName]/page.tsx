@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi } from '@/lib/api';
 import {
@@ -30,19 +30,25 @@ function CreateModal({
   courseName: string;
   groupName: string;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (newId?: string) => void;
 }) {
-  const [form, setForm] = useState({ title: '', description: '', dueDate: '' });
+  const router = useRouter();
+  const [form, setForm] = useState({ title: '', description: '', dueDate: '', maxGrade: '100' });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     if (!form.title.trim()) { toast.error('Title is required'); return; }
+    if (!form.maxGrade || +form.maxGrade < 1) { toast.error('Max grade must be at least 1'); return; }
     setSaving(true);
     try {
-      await assignmentsApi.create({ ...form, type, courseName, groupName });
+      const res = await assignmentsApi.create({ ...form, maxGrade: +form.maxGrade, type, courseName, groupName });
       toast.success(`${type === 'QUIZ' ? 'Quiz' : 'Homework'} created!`);
-      onCreated();
+      onCreated((res.data as any).id);
       onClose();
+      // For quizzes: redirect to builder
+      if (type === 'QUIZ') {
+        router.push(`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/quiz/${(res.data as any).id}`);
+      }
     } catch {
       toast.error('Failed to create');
     } finally { setSaving(false); }
@@ -81,19 +87,36 @@ function CreateModal({
               style={{ resize: 'vertical' }}
             />
           </div>
-          <div className="form-group">
-            <label className="form-label">Due Date (optional)</label>
-            <input
-              type="datetime-local"
-              className="form-input"
-              value={form.dueDate}
-              onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">Due Date (optional)</label>
+              <input
+                type="datetime-local"
+                className="form-input"
+                value={form.dueDate}
+                onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Max Grade *</label>
+              <input
+                type="number" min={1} max={1000}
+                className="form-input"
+                value={form.maxGrade}
+                onChange={e => setForm(p => ({ ...p, maxGrade: e.target.value }))}
+                placeholder="100"
+              />
+            </div>
           </div>
+          {type === 'QUIZ' && (
+            <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'var(--primary-light)' }}>
+              📝 After creating, you'll be taken to the <strong>Quiz Builder</strong> to add questions.
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button onClick={onClose} className="btn btn-secondary">Cancel</button>
             <button onClick={save} disabled={saving} className="btn btn-primary">
-              {saving ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : 'Create'}
+              {saving ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : (type === 'QUIZ' ? 'Create & Build →' : 'Create')}
             </button>
           </div>
         </div>
@@ -287,12 +310,19 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
   const quizzes = data.assignments.filter((a: any) => a.type === 'QUIZ');
   const homeworks = data.assignments.filter((a: any) => a.type === 'HOMEWORK');
 
-  const getCellStyle = (grade: number | null | undefined) => ({
-    padding: '8px 12px', fontSize: 13, textAlign: 'center' as const,
-    background: grade === null || grade === undefined ? 'transparent' : grade >= 60 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-    color: grade === null || grade === undefined ? 'var(--text-muted)' : grade >= 60 ? '#10b981' : '#ef4444',
-    fontWeight: grade !== null && grade !== undefined ? 700 : 400,
-  });
+  const getCellStyle = (grade: number | null | undefined, maxGrade: number) => {
+    if (grade === null || grade === undefined) return {
+      padding: '8px 12px', fontSize: 13, textAlign: 'center' as const,
+      color: 'var(--text-muted)', fontWeight: 400,
+    };
+    const pct = maxGrade > 0 ? (grade / maxGrade) * 100 : 0;
+    return {
+      padding: '8px 12px', fontSize: 13, textAlign: 'center' as const,
+      background: pct >= 70 ? 'rgba(16,185,129,0.1)' : pct >= 50 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)',
+      color: pct >= 70 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444',
+      fontWeight: 700,
+    };
+  };
 
   return (
     <div className="table-container" style={{ overflowX: 'auto' }}>
@@ -321,6 +351,7 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
                 borderLeft: (i === 0 || (i === quizzes.length && homeworks.length > 0)) ? '2px solid var(--border)' : '1px solid var(--border)',
               }}>
                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>{a.title}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>/ {a.maxGrade ?? 100}</div>
               </th>
             ))}
           </tr>
@@ -334,12 +365,13 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
               </td>
               {data.assignments.map((a: any, i: number) => {
                 const grade = data.gradeMap[student.id]?.[a.id];
+                const maxGrade = a.maxGrade ?? 100;
                 return (
                   <td key={a.id} style={{
-                    ...getCellStyle(grade),
+                    ...getCellStyle(grade, maxGrade),
                     borderLeft: (i === 0 || (i === quizzes.length && homeworks.length > 0)) ? '2px solid var(--border)' : '1px solid var(--border)',
                   }}>
-                    {grade !== null && grade !== undefined ? `${grade}` : '—'}
+                    {grade !== null && grade !== undefined ? `${grade} / ${maxGrade}` : '—'}
                   </td>
                 );
               })}

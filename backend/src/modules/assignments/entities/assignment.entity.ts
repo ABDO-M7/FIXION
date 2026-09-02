@@ -49,6 +49,9 @@ export class Assignment {
   @Column({ type: 'timestamptz', nullable: true })
   dueDate: Date;
 
+  @Column({ type: 'int', default: 100 })
+  maxGrade: number;
+
   @OneToMany(() => AssignmentSubmission, (s) => s.assignment)
   submissions: AssignmentSubmission[];
 

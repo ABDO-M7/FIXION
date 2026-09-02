@@ -25,6 +25,7 @@ type Assignment = {
   title: string;
   description?: string;
   dueDate?: string;
+  maxGrade: number;
   submission: {
     id: string;
     content: string;
@@ -251,6 +252,7 @@ function AssignmentCard({
   const [showModal, setShowModal] = useState(false);
   const sub = assignment.submission;
   const isHw = assignment.type === 'HOMEWORK';
+  const maxGrade = assignment.maxGrade ?? 100;
 
   return (
     <>
@@ -286,7 +288,7 @@ function AssignmentCard({
               borderRadius: 20, padding: '4px 12px',
             }}>
               <Star size={12} style={{ color: '#10b981' }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>{sub.grade}/100</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#34d399' }}>{sub.grade} / {maxGrade}</span>
             </div>
           ) : sub ? (
             <span className="badge badge-answered"><CheckCircle size={11} style={{ marginRight: 3 }} />Submitted</span>
@@ -339,15 +341,25 @@ function AssignmentCard({
           </div>
         )}
 
-        {/* Submit / Update button */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            className={`btn ${sub ? 'btn-secondary' : 'btn-primary'} btn-sm`}
-            onClick={() => setShowModal(true)}
-          >
-            <Upload size={13} />
-            {sub ? 'Update Submission' : 'Submit'}
-          </button>
+        {/* Action button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          {assignment.type === 'QUIZ' ? (
+            <Link
+              href={`/student/courses/${id}/quiz/${assignment.id}`}
+              className={`btn ${sub ? 'btn-secondary' : 'btn-primary'} btn-sm`}
+            >
+              <ClipboardList size={13} />
+              {sub ? 'Retake Quiz' : 'Take Quiz'}
+            </Link>
+          ) : (
+            <button
+              className={`btn ${sub ? 'btn-secondary' : 'btn-primary'} btn-sm`}
+              onClick={() => setShowModal(true)}
+            >
+              <Upload size={13} />
+              {sub ? 'Update Submission' : 'Submit'}
+            </button>
+          )}
         </div>
       </div>
 
