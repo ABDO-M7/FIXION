@@ -35,8 +35,14 @@ function AuthCallbackInner() {
         setUser(res.data);
         setStatus('success');
         const role = res.data.role;
+        const missingData = !res.data.phone || (role === 'student' && !res.data.level);
+        
         setTimeout(() => {
-          router.push(role === 'admin' ? '/admin' : role === 'teacher' ? '/teacher' : '/student');
+          if (missingData) {
+            router.push('/onboarding');
+          } else {
+            router.push(role === 'admin' ? '/admin' : role === 'teacher' ? '/teacher' : '/student');
+          }
         }, 1500);
       } catch {
         setStatus('error');

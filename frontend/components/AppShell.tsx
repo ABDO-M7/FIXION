@@ -67,6 +67,16 @@ export default function AppShell({ children }: AppShellProps) {
     }
   }, []);
 
+  // Enforce onboarding for Google OAuth users missing phone/level
+  useEffect(() => {
+    if (user && pathname !== '/onboarding') {
+      const missingData = !user.phone || (user.role === 'student' && !user.level);
+      if (missingData) {
+        router.push('/onboarding');
+      }
+    }
+  }, [user, pathname, router]);
+
   const handleLogout = async () => {
     try { await authApi.logout(); } catch {}
     logout();

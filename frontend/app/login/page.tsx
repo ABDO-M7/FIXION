@@ -51,9 +51,15 @@ export default function LoginPage() {
       toast.success(`Welcome back, ${user.name}!`);
 
       const role = user.role;
-      if (role === 'admin') router.push('/admin');
-      else if (role === 'teacher') router.push('/teacher');
-      else router.push('/student');
+      const missingData = !user.phone || (role === 'student' && !user.level);
+      
+      if (missingData) {
+        router.push('/onboarding');
+      } else {
+        if (role === 'admin') router.push('/admin');
+        else if (role === 'teacher') router.push('/teacher');
+        else router.push('/student');
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {
