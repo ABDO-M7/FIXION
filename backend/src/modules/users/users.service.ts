@@ -27,6 +27,16 @@ export class UsersService {
     return this.usersRepo.save(user);
   }
 
+  async ensureStudentId(id: string): Promise<User> {
+    const user = await this.findById(id);
+    if (user && !user.studentId) {
+      const studentId = await this.generateStudentId();
+      await this.usersRepo.update(id, { studentId });
+      return this.findById(id) as Promise<User>;
+    }
+    return user as User;
+  }
+
   async findById(id: string): Promise<User | null> {
     return this.usersRepo.findOne({ where: { id } });
   }

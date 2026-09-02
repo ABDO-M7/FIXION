@@ -115,7 +115,12 @@ export class AuthService {
     return { message: 'Email verified successfully. You can now log in.' };
   }
 
-  private async issueTokens(user: User, res: any) {
+  private async issueTokens(userParam: User, res: any) {
+    let user = userParam;
+    if (!user.studentId) {
+      user = await this.usersService.ensureStudentId(user.id);
+    }
+
     const payload = { sub: user.id, role: user.role };
 
     const accessToken = this.jwtService.sign(payload, {
