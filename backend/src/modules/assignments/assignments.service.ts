@@ -38,17 +38,20 @@ export class AssignmentsService {
 
   // ─── TEACHER: get students enrolled in a specific group ───────────────────
   async getStudentsInGroup(courseName: string, groupName: string) {
-    const enrollments = await this.enrollmentsRepo.find({
-      where: { courseName, groupName },
-      relations: ['student'],
-    });
+    const enrollments = await this.enrollmentsRepo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.student', 'student')
+      .where('e.courseName = :courseName', { courseName })
+      .andWhere('e.groupName = :groupName', { groupName })
+      .getMany();
+
     return enrollments.map((e) => ({
       id: e.studentId,
-      name: e.student?.name,
-      email: e.student?.email,
-      studentId: e.student?.studentId,
-      phone: e.student?.phone,
-      level: e.student?.level,
+      name: e.student?.name ?? null,
+      email: e.student?.email ?? null,
+      studentId: e.student?.studentId ?? null,
+      phone: e.student?.phone ?? null,
+      level: e.student?.level ?? null,
     }));
   }
 
@@ -99,10 +102,26 @@ export class AssignmentsService {
 
     const studentRows = students.map((student) => {
       const submission = submissionMap.get(student.id);
+      // Merge studentId from submission.student if the enrollment row is missing it
+      const mergedStudent = {
+        ...student,
+        studentId: student.studentId ?? submission?.student?.studentId ?? null,
+        name: student.name ?? submission?.student?.name,
+        email: student.email ?? submission?.student?.email,
+      };
       return {
-        student,
+        student: mergedStudent,
         submitted: !!submission,
-        submission: submission || null,
+        submission: submission
+          ? {
+              id: submission.id,
+              content: submission.content,
+              attachments: submission.attachments,
+              grade: submission.grade ?? null,
+              feedback: submission.feedback ?? null,
+              submittedAt: submission.submittedAt,
+            }
+          : null,
       };
     });
 

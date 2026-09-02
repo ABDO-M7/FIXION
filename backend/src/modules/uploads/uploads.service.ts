@@ -49,7 +49,7 @@ export class UploadsService {
   ): Promise<{ url: string; key: string }> {
     if (!this.bucket || !this.publicUrl) {
       throw new BadRequestException(
-        'File storage (R2) is not configured. Set R2_* environment variables to enable uploads.',
+        'File uploads are currently unavailable. Please contact your teacher or administrator.',
       );
     }
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {

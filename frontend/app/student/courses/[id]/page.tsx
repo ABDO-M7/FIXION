@@ -97,30 +97,48 @@ function SubmitModal({
     }
 
     setSaving(true);
-    setUploading(true);
     let uploadedUrls: string[] = [...existingUrls];
+    const failedUploads: string[] = [];
 
-    try {
-      // Upload each new file
+    // Upload each new file, collect failures separately
+    if (files.length > 0) {
+      setUploading(true);
       for (const file of files) {
-        const res = await uploadsApi.upload(file);
-        uploadedUrls.push(res.data.url);
+        try {
+          const res = await uploadsApi.upload(file);
+          uploadedUrls.push(res.data.url);
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || `Failed to upload ${file.name}`;
+          failedUploads.push(file.name);
+          toast.error(msg);
+        }
       }
       setUploading(false);
+    }
 
-      // Submit to the assignment
+    // If ALL files failed and there's no text or existing files, block
+    if (failedUploads.length > 0 && uploadedUrls.length === 0 && !content.trim()) {
+      setSaving(false);
+      return;
+    }
+
+    try {
+      // Submit to the assignment (even if some files failed)
       await assignmentsApi.submit(assignment.id, {
         content: content.trim(),
         attachments: uploadedUrls,
       });
 
-      toast.success('Submitted successfully! ✅');
+      if (failedUploads.length > 0) {
+        toast.success('Submitted, but some files could not be uploaded.');
+      } else {
+        toast.success('Submitted successfully! ✅');
+      }
       onSubmitted();
       onClose();
     } catch (err: any) {
       const msg = err?.response?.data?.message || 'Submission failed';
       toast.error(msg);
-      setUploading(false);
     } finally {
       setSaving(false);
     }
