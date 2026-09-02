@@ -20,14 +20,13 @@ export class AppointmentsService {
     message?: string;
     preferredTime?: string;
   }) {
-    const appt = this.repo.create({
-      studentId: student.id,
-      courseName: dto.courseName,
-      topic: dto.topic,
-      message: dto.message ?? null,
-      preferredTime: dto.preferredTime ?? null,
-      status: AppointmentStatus.PENDING,
-    });
+    const appt = new Appointment();
+    appt.studentId = student.id;
+    appt.courseName = dto.courseName;
+    appt.topic = dto.topic;
+    appt.message = dto.message ?? null as any;
+    appt.preferredTime = dto.preferredTime ?? null as any;
+    appt.status = AppointmentStatus.PENDING;
     return this.repo.save(appt);
   }
 
