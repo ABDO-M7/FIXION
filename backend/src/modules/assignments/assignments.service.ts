@@ -38,15 +38,13 @@ export class AssignmentsService {
 
   // ─── TEACHER: get students enrolled in a specific group ───────────────────
   async getStudentsInGroup(courseName: string, groupName: string) {
-    const enrollments = await this.enrollmentsRepo
-      .createQueryBuilder('e')
-      .leftJoinAndSelect('e.student', 'student')
-      .where('e.courseName = :courseName', { courseName })
-      .andWhere('e.groupName = :groupName', { groupName })
-      .getMany();
+    const enrollments = await this.enrollmentsRepo.find({
+      where: { courseName, groupName },
+      relations: ['student'],
+    });
 
     return enrollments.map((e) => ({
-      id: e.studentId,
+      id: e.student?.id || e.studentId, // use student.id from relation to be safe
       name: e.student?.name ?? null,
       email: e.student?.email ?? null,
       studentId: e.student?.studentId ?? null,
