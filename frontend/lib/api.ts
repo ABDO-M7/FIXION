@@ -63,6 +63,7 @@ export const authApi = {
   logout: () => api.post('/auth/logout'),
   refresh: () => api.post('/auth/refresh'),
   me: () => api.get('/auth/me'),
+  updateProfile: (data: any) => api.patch('/users/me', data),
   verifyEmail: (token: string) => api.post('/auth/verify-email', { token }),
   googleLogin: () => { window.location.href = `${API_URLS[0]}/auth/google`; },
 };

@@ -20,7 +20,7 @@ export class UsersService {
 
   async create(data: Partial<User>): Promise<User> {
     let studentId = data.studentId;
-    if (!studentId && (data.role === undefined || data.role === UserRole.STUDENT)) {
+    if (!studentId) {
       studentId = await this.generateStudentId();
     }
     const user = this.usersRepo.create({ ...data, studentId });

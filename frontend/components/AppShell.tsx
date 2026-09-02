@@ -4,7 +4,7 @@ import { useAuthStore, useUIStore, useNotificationStore } from '@/store';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   LayoutDashboard, HelpCircle, Bell, LogOut,
-  Search, Menu, X, Globe, BookOpen,
+  Search, Menu, X, Globe, BookOpen, User,
   Users, BarChart2, Key, MessageSquare, GraduationCap,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -18,6 +18,7 @@ const studentNav = [
   { label: 'My Questions',   href: '/student/questions',      icon: HelpCircle },
   { label: 'Courses',        href: '/student/courses',        icon: GraduationCap },
   { label: 'Subscription',   href: '/student/subscription',   icon: Key },
+  { label: 'Profile',        href: '/student/profile',        icon: User },
   { label: 'Notifications',  href: '/student/notifications',  icon: Bell },
 ];
 
@@ -26,6 +27,7 @@ const teacherNav = [
   { label: 'Courses',        href: '/teacher/courses',        icon: GraduationCap },
   { label: 'Questions',      href: '/teacher/questions',      icon: HelpCircle },
   { label: 'Categories',     href: '/teacher/categories',     icon: BookOpen },
+  { label: 'Profile',        href: '/teacher/profile',        icon: User },
   { label: 'Notifications',  href: '/teacher/notifications',  icon: Bell },
 ];
 
@@ -127,7 +129,11 @@ export default function AppShell({ children }: AppShellProps) {
 
         {/* User */}
         <div className="sidebar-user">
-          <div className="user-avatar">{initial}</div>
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="Avatar" className="user-avatar" style={{ objectFit: 'cover' }} />
+          ) : (
+            <div className="user-avatar">{initial}</div>
+          )}
           {sidebarOpen && (
             <>
               <div className="user-info">
@@ -185,13 +191,15 @@ export default function AppShell({ children }: AppShellProps) {
             </Link>
 
             {/* Avatar */}
-            <div
-              className="user-avatar"
-              style={{ width: 32, height: 32, fontSize: 12, cursor: 'default' }}
-              title={user?.name}
-            >
-              {initial}
-            </div>
+            <Link href={`/${user?.role}/profile`} title="Profile">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="Avatar" className="user-avatar" style={{ width: 32, height: 32, objectFit: 'cover' }} />
+              ) : (
+                <div className="user-avatar" style={{ width: 32, height: 32, fontSize: 12 }}>
+                  {initial}
+                </div>
+              )}
+            </Link>
           </div>
         </header>
 
