@@ -15,7 +15,8 @@ const schema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  phone: z.string().regex(/^\+?[0-9\s\-().]{7,20}$/, 'Invalid phone number').optional().or(z.literal('')),
+  level: z.string().min(1, 'Please select your level'),
+  phone: z.string().regex(/^\+?[0-9\s\-().]{7,20}$/, 'Invalid phone number'),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -108,7 +109,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Phone Number <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(optional)</span></label>
+            <label className="form-label">Phone Number</label>
             <div style={{ position: 'relative' }}>
               <Phone size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
@@ -120,6 +121,21 @@ export default function RegisterPage() {
               />
             </div>
             {errors.phone && <span className="form-error">{errors.phone.message}</span>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">School Level</label>
+            <select
+              {...register('level')}
+              className={`form-input ${errors.level ? 'error' : ''}`}
+              defaultValue=""
+            >
+              <option value="" disabled>Select your level...</option>
+              <option value="Level 1">Level 1</option>
+              <option value="Level 2">Level 2</option>
+              <option value="Level 3">Level 3</option>
+            </select>
+            {errors.level && <span className="form-error">{errors.level.message}</span>}
           </div>
 
           <button type="submit" className="btn btn-primary btn-full btn-lg" disabled={isLoading} style={{ marginTop: 8 }}>

@@ -21,10 +21,13 @@ export class RegisterDto {
   @MaxLength(100)
   name: string;
 
-  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  level: string;
+
   @IsString()
   @Matches(/^\+?[0-9\s\-().]{7,20}$/, { message: 'Invalid phone number' })
-  phone?: string;
+  phone: string;
 }
 
 export class LoginDto {

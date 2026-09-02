@@ -10,8 +10,20 @@ export class UsersService {
     private usersRepo: Repository<User>,
   ) {}
 
+  private async generateStudentId(): Promise<string> {
+    while (true) {
+      const studentId = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
+      const existing = await this.usersRepo.findOne({ where: { studentId } });
+      if (!existing) return studentId;
+    }
+  }
+
   async create(data: Partial<User>): Promise<User> {
-    const user = this.usersRepo.create(data);
+    let studentId = data.studentId;
+    if (!studentId && (data.role === undefined || data.role === UserRole.STUDENT)) {
+      studentId = await this.generateStudentId();
+    }
+    const user = this.usersRepo.create({ ...data, studentId });
     return this.usersRepo.save(user);
   }
 

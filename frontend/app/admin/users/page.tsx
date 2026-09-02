@@ -136,7 +136,12 @@ export default function AdminUsersPage() {
                     </div>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{u.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.email}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <span>{u.email}</span>
+                        {u.phone && <span>• {u.phone}</span>}
+                        {u.studentId && <span style={{ color: 'var(--primary-light)', fontWeight: 600 }}>• ID: {u.studentId}</span>}
+                        {u.level && <span>• {u.level}</span>}
+                      </div>
                     </div>
                   </div>
                 </td>

@@ -35,6 +35,8 @@ export class AuthService {
       name: dto.name,
       passwordHash,
       emailVerificationToken,
+      level: dto.level,
+      phone: dto.phone,
     });
 
     await this.emailService.sendVerificationEmail(user.email, user.name, emailVerificationToken);

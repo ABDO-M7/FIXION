@@ -40,6 +40,13 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })
   role: UserRole;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  level: string; // e.g., 'Level 1', 'Level 2', 'Level 3'
+
+  @Column({ type: 'varchar', length: 6, unique: true, nullable: true })
+  studentId: string;
+
+
   @Column({ nullable: true })
   oauthProvider: string;
 
