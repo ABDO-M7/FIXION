@@ -6,6 +6,7 @@ import { useNotificationStore } from '@/store';
 import { Bell, CheckCheck, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -13,6 +14,7 @@ export default function NotificationsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const { resetUnread } = useNotificationStore();
+  const { t } = useTranslation();
   const LIMIT = 20;
 
   const fetchNotifications = async () => {
@@ -38,7 +40,7 @@ export default function NotificationsPage() {
       await notificationsApi.markAllRead();
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       resetUnread();
-      toast.success('All notifications marked as read');
+      toast.success(t('notifications.markAllRead'));
     } catch { toast.error('Failed to mark all read'); }
   };
 
@@ -54,7 +56,7 @@ export default function NotificationsPage() {
     <AppShell>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Notifications</h1>
+          <h1 className="page-title">{t('notifications.title')}</h1>
           <p className="page-subtitle">
             {total} total
             {unreadCount > 0 && <span style={{ color: 'var(--primary-light)', marginLeft: 8 }}>· {unreadCount} unread</span>}
@@ -62,7 +64,7 @@ export default function NotificationsPage() {
         </div>
         {unreadCount > 0 && (
           <button onClick={markAllRead} className="btn btn-secondary">
-            <CheckCheck size={15} /> Mark all read
+            <CheckCheck size={15} /> {t('notifications.markAllRead')}
           </button>
         )}
       </div>
@@ -72,8 +74,8 @@ export default function NotificationsPage() {
       ) : notifications.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">🔔</div>
-          <div className="empty-state-title">No notifications</div>
-          <div className="empty-state-text">You'll be notified here when your questions get answered.</div>
+          <div className="empty-state-title">{t('notifications.empty')}</div>
+          <div className="empty-state-text">{t('notifications.emptyText')}</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border)' }}>
@@ -129,9 +131,9 @@ export default function NotificationsPage() {
 
       {total > LIMIT && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 20 }}>
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="btn btn-secondary btn-sm">← Prev</button>
-          <span style={{ padding: '6px 14px', fontSize: 13, color: 'var(--text-muted)' }}>Page {page} of {Math.ceil(total / LIMIT)}</span>
-          <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / LIMIT)} className="btn btn-secondary btn-sm">Next →</button>
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="btn btn-secondary btn-sm">{t('common.prev')}</button>
+          <span style={{ padding: '6px 14px', fontSize: 13, color: 'var(--text-muted)' }}>{t('common.page')} {page} {t('common.of')} {Math.ceil(total / LIMIT)}</span>
+          <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / LIMIT)} className="btn btn-secondary btn-sm">{t('common.next')}</button>
         </div>
       )}
     </AppShell>

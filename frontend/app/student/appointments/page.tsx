@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type Appointment = {
   id: string;
@@ -27,6 +28,7 @@ export default function StudentAppointmentsPage() {
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const { t } = useTranslation();
 
   const [form, setForm] = useState({
     courseName: '',
@@ -49,36 +51,34 @@ export default function StudentAppointmentsPage() {
         setForm((prev) => ({ ...prev, courseName: prev.courseName || enrollRes.data[0].courseName }));
       }
     } catch {
-      toast.error('Failed to load appointments');
+      toast.error(t('appointments.failedLoad'));
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.courseName.trim()) {
-      toast.error('Please select or enter a course name');
+      toast.error(t('appointments.selectCourseError'));
       return;
     }
     if (!form.topic.trim()) {
-      toast.error('Please specify the topic you need explained');
+      toast.error(t('appointments.topicError'));
       return;
     }
 
     setSubmitting(true);
     try {
       await appointmentsApi.create(form);
-      toast.success('Appointment request sent to teachers! 🚀');
+      toast.success(t('appointments.sentSuccess'));
       setShowModal(false);
       setForm({ courseName: enrollments[0]?.courseName || '', topic: '', message: '', preferredTime: '' });
       loadData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to submit request');
+      toast.error(err?.response?.data?.message || t('appointments.failedSubmit'));
     } finally {
       setSubmitting(false);
     }
@@ -89,19 +89,19 @@ export default function StudentAppointmentsPage() {
       case 'ACCEPTED':
         return (
           <span className="badge badge-answered" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <CheckCircle size={12} /> Accepted & Scheduled
+            <CheckCircle size={12} /> {t('status.accepted')}
           </span>
         );
       case 'DECLINED':
         return (
           <span className="badge" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <XCircle size={12} /> Declined
+            <XCircle size={12} /> {t('status.declined')}
           </span>
         );
       default:
         return (
           <span className="badge badge-pending" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Clock size={12} /> Pending Teacher Review
+            <Clock size={12} /> {t('status.pendingReview')}
           </span>
         );
     }
@@ -113,10 +113,10 @@ export default function StudentAppointmentsPage() {
       <div className="page-header" style={{ marginBottom: 24 }}>
         <div>
           <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Calendar className="page-title-icon" /> Explanation Appointments
+            <Calendar className="page-title-icon" /> {t('appointments.title')}
           </h1>
           <p className="page-subtitle">
-            Request 1-on-1 explanation sessions with your specialized teachers.
+            {t('appointments.subtitle')}
           </p>
         </div>
         <button
@@ -124,7 +124,7 @@ export default function StudentAppointmentsPage() {
           className="btn btn-primary"
           style={{ display: 'flex', alignItems: 'center', gap: 8 }}
         >
-          <Plus size={16} /> Request Appointment
+          <Plus size={16} /> {t('appointments.requestBtn')}
         </button>
       </div>
 
@@ -136,16 +136,16 @@ export default function StudentAppointmentsPage() {
       ) : appointments.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '60px 24px', maxWidth: 540, margin: '0 auto' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📅</div>
-          <h3 style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>No Appointment Requests Yet</h3>
+          <h3 style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>{t('appointments.noAppointments')}</h3>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>
-            Stuck on a tricky topic? Request an appointment and a specialized teacher will reach out to explain it to you.
+            {t('appointments.noAppointmentsText')}
           </p>
           <button
             onClick={() => setShowModal(true)}
             className="btn btn-primary"
             style={{ margin: '0 auto' }}
           >
-            <Plus size={16} style={{ marginRight: 6 }} /> Request Your First Appointment
+            <Plus size={16} style={{ marginRight: 6 }} /> {t('appointments.requestFirst')}
           </button>
         </div>
       ) : (
@@ -163,13 +163,13 @@ export default function StudentAppointmentsPage() {
                   </div>
                   <h3 style={{ fontSize: 16, fontWeight: 700, margin: '4px 0' }}>{appt.topic}</h3>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    Requested on {format(new Date(appt.createdAt), 'PPP p')}
+                    {t('common.requestedOn')} {format(new Date(appt.createdAt), 'PPP p')}
                   </div>
                 </div>
 
                 {appt.preferredTime && (
                   <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 12px', fontSize: 12, textAlign: 'right' }}>
-                    <div style={{ color: 'var(--text-muted)', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>Preferred Time</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>{t('appointments.preferredTime')}</div>
                     <div style={{ fontWeight: 600, color: 'var(--primary-light)', marginTop: 2 }}>{appt.preferredTime}</div>
                   </div>
                 )}
@@ -177,7 +177,7 @@ export default function StudentAppointmentsPage() {
 
               {appt.message && (
                 <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: 12, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>Your Note: </span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{t('appointments.yourNote')} </span>
                   {appt.message}
                 </div>
               )}
@@ -192,7 +192,7 @@ export default function StudentAppointmentsPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <User size={14} style={{ color: appt.status === 'ACCEPTED' ? '#10b981' : '#ef4444' }} />
                     <span style={{ fontSize: 12, fontWeight: 700, color: appt.status === 'ACCEPTED' ? '#10b981' : '#ef4444' }}>
-                      Teacher Reply {appt.teacher?.name ? `(${appt.teacher.name})` : ''}
+                      {t('appointments.teacherReply')} {appt.teacher?.name ? `(${appt.teacher.name})` : ''}
                     </span>
                   </div>
                   <p style={{ fontSize: 13, color: 'var(--text-main)', margin: 0, whiteSpace: 'pre-wrap' }}>
@@ -200,7 +200,7 @@ export default function StudentAppointmentsPage() {
                   </p>
                   {appt.scheduledTime && (
                     <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Calendar size={13} /> Scheduled for: {appt.scheduledTime}
+                      <Calendar size={13} /> {t('common.scheduledFor')} {appt.scheduledTime}
                     </div>
                   )}
                 </div>
@@ -210,7 +210,7 @@ export default function StudentAppointmentsPage() {
         </div>
       )}
 
-      {/* Modal to Request New Appointment */}
+      {/* Modal */}
       {showModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
@@ -219,7 +219,7 @@ export default function StudentAppointmentsPage() {
           <div className="card" style={{ width: '100%', maxWidth: 500 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
               <h3 style={{ fontWeight: 700, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Sparkles size={18} style={{ color: 'var(--primary-light)' }} /> Request 1-on-1 Explanation
+                <Sparkles size={18} style={{ color: 'var(--primary-light)' }} /> {t('appointments.modalTitle')}
               </h3>
               <button onClick={() => setShowModal(false)} className="icon-btn" style={{ width: 28, height: 28 }}>
                 <X size={14} />
@@ -228,7 +228,7 @@ export default function StudentAppointmentsPage() {
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="form-group">
-                <label className="form-label">Select Course / Subject *</label>
+                <label className="form-label">{t('appointments.selectCourse')}</label>
                 {enrollments.length > 0 ? (
                   <select
                     className="form-input"
@@ -236,7 +236,7 @@ export default function StudentAppointmentsPage() {
                     onChange={(e) => setForm({ ...form, courseName: e.target.value })}
                     required
                   >
-                    <option value="" disabled>-- Select a course --</option>
+                    <option value="" disabled>{t('appointments.selectCoursePlaceholder')}</option>
                     {enrollments.map((e: any) => (
                       <option key={e.id} value={e.courseName}>{e.courseName}</option>
                     ))}
@@ -254,11 +254,11 @@ export default function StudentAppointmentsPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Topic / Part to Explain *</label>
+                <label className="form-label">{t('appointments.topicLabel')}</label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Newton's 2nd Law, Integration by Parts..."
+                  placeholder={t('appointments.topicPlaceholder')}
                   value={form.topic}
                   onChange={(e) => setForm({ ...form, topic: e.target.value })}
                   required
@@ -266,22 +266,22 @@ export default function StudentAppointmentsPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Preferred Date & Time (Optional)</label>
+                <label className="form-label">{t('appointments.timeLabel')}</label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Tomorrow at 5:00 PM, Saturday afternoon..."
+                  placeholder={t('appointments.timePlaceholder')}
                   value={form.preferredTime}
                   onChange={(e) => setForm({ ...form, preferredTime: e.target.value })}
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Details / Specific Questions (Optional)</label>
+                <label className="form-label">{t('appointments.detailsLabel')}</label>
                 <textarea
                   className="form-input"
                   rows={3}
-                  placeholder="Explain what specific part you're struggling with..."
+                  placeholder={t('appointments.detailsPlaceholder')}
                   value={form.message}
                   onChange={(e) => setForm({ ...form, message: e.target.value })}
                   style={{ resize: 'vertical' }}
@@ -290,10 +290,10 @@ export default function StudentAppointmentsPage() {
 
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 6 }}>
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button type="submit" disabled={submitting} className="btn btn-primary">
-                  {submitting ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : 'Send Request'}
+                  {submitting ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : t('appointments.sendRequest')}
                 </button>
               </div>
             </form>

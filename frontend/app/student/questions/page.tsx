@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { questionsApi } from '@/lib/api';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const STATUS_FILTERS = ['all', 'pending', 'answered', 'closed'] as const;
 
@@ -15,6 +16,7 @@ export default function MyQuestionsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const { t } = useTranslation();
 
   const LIMIT = 10;
 
@@ -39,20 +41,28 @@ export default function MyQuestionsPage() {
   });
 
   const statusBadge = (s: string) => {
-    if (s === 'answered') return <span className="badge badge-answered">✓ Answered</span>;
-    if (s === 'pending') return <span className="badge badge-pending">⏳ Pending</span>;
-    return <span className="badge badge-closed">Closed</span>;
+    if (s === 'answered') return <span className="badge badge-answered">✓ {t('status.answered')}</span>;
+    if (s === 'pending') return <span className="badge badge-pending">⏳ {t('status.pending')}</span>;
+    return <span className="badge badge-closed">{t('status.closed')}</span>;
+  };
+
+  const statusLabel = (s: string) => {
+    if (s === 'all') return t('nav.allQuestions') === 'Questions' ? 'All' : 'الكل';
+    if (s === 'pending') return t('status.pending');
+    if (s === 'answered') return t('status.answered');
+    if (s === 'closed') return t('status.closed');
+    return s;
   };
 
   return (
     <AppShell>
       <div className="page-header">
         <div>
-          <h1 className="page-title">My Questions</h1>
-          <p className="page-subtitle">{total} questions submitted</p>
+          <h1 className="page-title">{t('questions.title')}</h1>
+          <p className="page-subtitle">{total} {t('questions.subtitle')}</p>
         </div>
         <Link href="/student/questions/new" className="btn btn-primary">
-          <Plus size={15} /> Ask Question
+          <Plus size={15} /> {t('questions.askQuestion')}
         </Link>
       </div>
 
@@ -63,7 +73,7 @@ export default function MyQuestionsPage() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search your questions..."
+            placeholder={t('questions.searchPlaceholder')}
           />
         </div>
         <div className="tabs" style={{ flex: 'none' }}>
@@ -74,7 +84,7 @@ export default function MyQuestionsPage() {
               onClick={() => setStatus(s)}
               style={{ textTransform: 'capitalize', flex: 'none', padding: '7px 14px' }}
             >
-              {s}
+              {statusLabel(s)}
             </button>
           ))}
         </div>
@@ -86,13 +96,13 @@ export default function MyQuestionsPage() {
       ) : filtered.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">🔍</div>
-          <div className="empty-state-title">No questions found</div>
+          <div className="empty-state-title">{t('questions.noFound')}</div>
           <div className="empty-state-text">
-            {search ? 'Try a different search term' : "You haven't asked any questions yet."}
+            {search ? t('questions.noFoundSearch') : t('questions.noFoundEmpty')}
           </div>
           {!search && (
             <Link href="/student/questions/new" className="btn btn-primary" style={{ marginTop: 16 }}>
-              <Plus size={15} /> Ask Your First Question
+              <Plus size={15} /> {t('questions.askFirst')}
             </Link>
           )}
         </div>
@@ -108,7 +118,9 @@ export default function MyQuestionsPage() {
                   </span>
                 )}
                 {q.attachments?.length > 0 && (
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>📎 {q.attachments.length} file{q.attachments.length > 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    📎 {q.attachments.length} {q.attachments.length > 1 ? t('common.files') : t('common.file')}
+                  </span>
                 )}
                 <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>
                   {formatDistanceToNow(new Date(q.createdAt), { addSuffix: true })}
@@ -119,7 +131,7 @@ export default function MyQuestionsPage() {
               </p>
               {q.answers?.length > 0 && (
                 <div style={{ fontSize: 13, color: 'var(--success)', fontWeight: 500 }}>
-                  💬 {q.answers.length} answer{q.answers.length > 1 ? 's' : ''}
+                  💬 {q.answers.length} {q.answers.length > 1 ? t('questions.answers') : t('questions.answer')}
                 </div>
               )}
             </Link>
@@ -130,11 +142,15 @@ export default function MyQuestionsPage() {
       {/* Pagination */}
       {total > LIMIT && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 24 }}>
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="btn btn-secondary btn-sm">← Prev</button>
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="btn btn-secondary btn-sm">
+            {t('common.prev')}
+          </button>
           <span style={{ padding: '6px 14px', fontSize: 13, color: 'var(--text-muted)' }}>
-            Page {page} of {Math.ceil(total / LIMIT)}
+            {t('common.page')} {page} {t('common.of')} {Math.ceil(total / LIMIT)}
           </span>
-          <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / LIMIT)} className="btn btn-secondary btn-sm">Next →</button>
+          <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / LIMIT)} className="btn btn-secondary btn-sm">
+            {t('common.next')}
+          </button>
         </div>
       )}
     </AppShell>

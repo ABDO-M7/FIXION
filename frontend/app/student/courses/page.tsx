@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { enrollmentsApi } from '@/lib/api';
-import { GraduationCap, User, Users, ChevronRight, BookOpen } from 'lucide-react';
+import { GraduationCap, User, Users, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const COURSE_COLORS: Record<string, string> = {
   'فيزيا': '#6366f1',
@@ -17,6 +18,7 @@ const COURSE_COLORS: Record<string, string> = {
 export default function StudentCoursesPage() {
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
 
   useEffect(() => {
     enrollmentsApi.my()
@@ -29,9 +31,9 @@ export default function StudentCoursesPage() {
     <AppShell>
       <div className="page-header">
         <div>
-          <h1 className="page-title">My Courses</h1>
+          <h1 className="page-title">{t('courses.title')}</h1>
           <p className="page-subtitle">
-            {loading ? '...' : `${enrollments.length} enrolled course${enrollments.length !== 1 ? 's' : ''}`}
+            {loading ? '...' : `${enrollments.length} ${enrollments.length !== 1 ? t('courses.courses') : t('courses.course')}`}
           </p>
         </div>
       </div>
@@ -43,12 +45,12 @@ export default function StudentCoursesPage() {
       ) : enrollments.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '60px 24px' }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>🎓</div>
-          <h2 style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>No courses yet</h2>
+          <h2 style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>{t('courses.noCourses')}</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24 }}>
-            Redeem a subscription code that includes a course to get enrolled.
+            {t('courses.noCoursesText')}
           </p>
           <Link href="/student/subscription" className="btn btn-primary">
-            Redeem a Code
+            {t('courses.redeemCode')}
           </Link>
         </div>
       ) : (
@@ -96,7 +98,7 @@ export default function StudentCoursesPage() {
                         {enrollment.courseName}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                        Enrolled {formatDistanceToNow(new Date(enrollment.createdAt), { addSuffix: true })}
+                        {t('common.enrolled')} {formatDistanceToNow(new Date(enrollment.createdAt), { addSuffix: true })}
                       </div>
                     </div>
                   </div>
@@ -120,7 +122,7 @@ export default function StudentCoursesPage() {
                   {/* Footer */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      Open <ChevronRight size={14} />
+                      {t('courses.open')} <ChevronRight size={14} />
                     </span>
                   </div>
                 </div>

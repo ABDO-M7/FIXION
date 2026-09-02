@@ -5,6 +5,7 @@ import { subscriptionsApi } from '@/lib/api';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { Key, CheckCircle, Calendar, Clock, ArrowRight } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function SubscriptionPage() {
   const [sub, setSub] = useState<any>(null);
@@ -12,6 +13,7 @@ export default function SubscriptionPage() {
   const [redeeming, setRedeeming] = useState(false);
   const { register, handleSubmit, reset, watch } = useForm<{ code: string }>();
   const code = watch('code') || '';
+  const { t } = useTranslation();
 
   const fetchStatus = async () => {
     try {
@@ -28,11 +30,11 @@ export default function SubscriptionPage() {
     setRedeeming(true);
     try {
       await subscriptionsApi.redeem(data.code.trim().toUpperCase());
-      toast.success('🎉 Code redeemed! Your subscription is now active.');
+      toast.success(t('subscription.redeemSuccess'));
       reset();
       fetchStatus();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Invalid code. Please check and try again.');
+      toast.error(err.response?.data?.message || t('subscription.invalidCode'));
     } finally {
       setRedeeming(false);
     }
@@ -42,8 +44,8 @@ export default function SubscriptionPage() {
     <AppShell>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Subscription</h1>
-          <p className="page-subtitle">Manage your access to Fixion</p>
+          <h1 className="page-title">{t('subscription.title')}</h1>
+          <p className="page-subtitle">{t('subscription.subtitle')}</p>
         </div>
       </div>
 
@@ -70,20 +72,20 @@ export default function SubscriptionPage() {
               </div>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-                  {sub?.isActive ? 'Subscription Active' : 'No Active Subscription'}
+                  {sub?.isActive ? t('subscription.active') : t('subscription.inactive')}
                 </div>
                 {sub?.isActive ? (
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Calendar size={13} /> Plan: <strong style={{ textTransform: 'capitalize' }}>{sub.plan}</strong>
+                      <Calendar size={13} /> {t('subscription.plan')} <strong style={{ textTransform: 'capitalize' }}>{sub.plan}</strong>
                     </span>
                     <span style={{ fontSize: 13, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <Clock size={13} /> {sub.daysLeft} day{sub.daysLeft !== 1 ? 's' : ''} remaining
+                      <Clock size={13} /> {sub.daysLeft} {sub.daysLeft !== 1 ? t('subscription.days') : t('subscription.day')} {t('subscription.remaining')}
                     </span>
                   </div>
                 ) : (
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Redeem a prepaid code to access all features
+                    {t('subscription.redeemForFeatures')}
                   </div>
                 )}
               </div>
@@ -93,13 +95,17 @@ export default function SubscriptionPage() {
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', gap: 16 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Expires On</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {t('subscription.expiresOn')}
+                    </div>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>
                       {new Date(sub.expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                     </div>
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Progress</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {t('subscription.progress')}
+                    </div>
                     <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                       <div style={{
                         height: '100%',
@@ -117,16 +123,16 @@ export default function SubscriptionPage() {
 
         {/* Redeem Code */}
         <div className="card">
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Redeem a Code</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{t('subscription.redeemTitle')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
-            Enter the prepaid code you received after subscribing. Codes are case-insensitive.
+            {t('subscription.redeemDesc')}
           </p>
 
           <form onSubmit={handleSubmit(onRedeem)} style={{ display: 'flex', gap: 10 }}>
             <input
               {...register('code', { required: true })}
               className="form-input"
-              placeholder="e.g. ABCD-EFGH-JKLM-NPQR"
+              placeholder={t('subscription.redeemPlaceholder')}
               style={{ flex: 1, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'monospace' }}
               maxLength={20}
             />
@@ -136,15 +142,13 @@ export default function SubscriptionPage() {
               disabled={redeeming || code.trim().length < 6}
               style={{ flexShrink: 0 }}
             >
-              {redeeming ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <><ArrowRight size={15} /> Redeem</>}
+              {redeeming ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <><ArrowRight size={15} /> {t('subscription.redeemBtn')}</>}
             </button>
           </form>
 
           <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(99,102,241,0.06)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(99,102,241,0.15)' }}>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              💡 <strong>How it works:</strong> After purchasing a subscription plan externally, you'll receive a unique code.
-              Enter it here to activate your access. Codes can be stacked — if you already have an active subscription,
-              the new days will be added on top.
+              💡 <strong>{t('subscription.howItWorks')}</strong> {t('subscription.howItWorksText')}
             </p>
           </div>
         </div>

@@ -5,9 +5,11 @@ import { authApi, uploadsApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Camera, User, Phone, Save, GraduationCap, Hash } from 'lucide-react';
 import AppShell from '@/components/AppShell';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function ProfileView() {
   const { user, setUser } = useAuthStore();
+  const { t } = useTranslation();
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -55,7 +57,7 @@ export default function ProfileView() {
       
       const res = await authApi.updateProfile(dataToUpdate);
       setUser(res.data);
-      toast.success('Profile updated successfully');
+      toast.success(t('profile.saved'));
     } catch (err) {
       toast.error('Failed to update profile');
     } finally {
@@ -67,8 +69,8 @@ export default function ProfileView() {
     <AppShell>
       <div className="page-header">
         <div>
-          <h1 className="page-title">My Profile</h1>
-          <p className="page-subtitle">Manage your personal information</p>
+          <h1 className="page-title">{t('profile.title')}</h1>
+          <p className="page-subtitle">{t('profile.subtitle')}</p>
         </div>
       </div>
 
@@ -119,7 +121,7 @@ export default function ProfileView() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div className="form-group">
-              <label className="form-label">Full Name</label>
+              <label className="form-label">{t('profile.name')}</label>
               <div style={{ position: 'relative' }}>
                 <User size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
@@ -133,7 +135,7 @@ export default function ProfileView() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Phone Number</label>
+              <label className="form-label">{t('profile.phone')}</label>
               <div style={{ position: 'relative' }}>
                 <Phone size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
@@ -148,7 +150,7 @@ export default function ProfileView() {
 
             {user.role === 'student' && (
               <div className="form-group">
-                <label className="form-label">School Level</label>
+                <label className="form-label">{t('profile.level')}</label>
                 <div style={{ position: 'relative' }}>
                   <GraduationCap size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                   <select
@@ -168,7 +170,7 @@ export default function ProfileView() {
             )}
 
             <div className="form-group">
-              <label className="form-label">Your ID Code</label>
+              <label className="form-label">{t('profile.studentId')}</label>
               <div style={{ position: 'relative' }}>
                 <Hash size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input
@@ -188,7 +190,7 @@ export default function ProfileView() {
               style={{ marginTop: 12, padding: '12px', fontSize: 15 }}
               disabled={isLoading || isUploading}
             >
-              {isLoading ? <span className="spinner" /> : <><Save size={16} /> Save Changes</>}
+              {isLoading ? <span className="spinner" /> : <><Save size={16} /> {t('profile.saveChanges')}</>}
             </button>
           </div>
         </form>
