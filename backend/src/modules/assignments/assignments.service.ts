@@ -18,6 +18,8 @@ export class AssignmentsService {
     private questionsRepo: Repository<QuizQuestion>,
     @InjectRepository(CourseEnrollment)
     private enrollmentsRepo: Repository<CourseEnrollment>,
+    @InjectRepository(User)
+    private usersRepo: Repository<User>,
   ) {}
 
   // ─── TEACHER: get courses for their specialization ────────────────────────
@@ -38,19 +40,29 @@ export class AssignmentsService {
 
   // ─── TEACHER: get students enrolled in a specific group ───────────────────
   async getStudentsInGroup(courseName: string, groupName: string) {
+    // Step 1: get all enrollment rows (just the studentId column, no join needed)
     const enrollments = await this.enrollmentsRepo.find({
       where: { courseName, groupName },
-      relations: ['student'],
+      select: ['studentId'],
     });
+    const studentIds = enrollments.map((e) => e.studentId).filter(Boolean);
+    if (studentIds.length === 0) return [];
 
-    return enrollments.map((e) => ({
-      id: e.student?.id || e.studentId, // use student.id from relation to be safe
-      name: e.student?.name ?? null,
-      email: e.student?.email ?? null,
-      studentId: e.student?.studentId ?? null,
-      phone: e.student?.phone ?? null,
-      level: e.student?.level ?? null,
-    }));
+    // Step 2: directly fetch user rows by primary key — 100% reliable
+    const users = await this.usersRepo.findByIds(studentIds);
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return studentIds.map((sid) => {
+      const u = userMap.get(sid);
+      return {
+        id: sid,
+        name: u?.name ?? null,
+        email: u?.email ?? null,
+        studentId: u?.studentId ?? null,
+        phone: u?.phone ?? null,
+        level: u?.level ?? null,
+      };
+    });
   }
 
   // ─── TEACHER: create assignment ────────────────────────────────────────────
