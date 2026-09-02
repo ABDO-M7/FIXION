@@ -23,6 +23,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { HealthModule } from './health/health.module';
 import { AssignmentsModule } from './modules/assignments/assignments.module';
+import { AppointmentsModule } from './modules/appointments/appointments.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Question } from './modules/questions/entities/question.entity';
@@ -35,6 +36,7 @@ import { Assignment } from './modules/assignments/entities/assignment.entity';
 import { AssignmentSubmission } from './modules/assignments/entities/assignment-submission.entity';
 import { QuizQuestion } from './modules/assignments/entities/quiz-question.entity';
 import { Notification } from './modules/notifications/entities/notification.entity';
+import { Appointment } from './modules/appointments/entities/appointment.entity';
 
 @Module({
   imports: [
@@ -53,7 +55,7 @@ import { Notification } from './modules/notifications/entities/notification.enti
         type: 'postgres',
         url: config.get<string>('database.url'),
         ssl: config.get('database.ssl'),
-        entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Assignment, AssignmentSubmission, QuizQuestion, Notification],
+        entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Assignment, AssignmentSubmission, QuizQuestion, Notification, Appointment],
         synchronize: config.get('app.nodeEnv') !== 'production', // Use migrations in prod
         logging: config.get('app.nodeEnv') === 'development',
         extra: {
@@ -79,6 +81,7 @@ import { Notification } from './modules/notifications/entities/notification.enti
     UploadsModule,
     AdminModule,
     AssignmentsModule,
+    AppointmentsModule,
     HealthModule,
   ],
 })

@@ -179,3 +179,12 @@ export const uploadsApi = {
     return urls;
   },
 };
+
+export const appointmentsApi = {
+  create: (dto: { courseName: string; topic: string; message?: string; preferredTime?: string }) =>
+    api.post('/appointments', dto),
+  mine: () => api.get('/appointments/mine'),
+  teacherList: () => api.get('/appointments/teacher'),
+  reply: (id: string, dto: { status: string; teacherReply?: string; scheduledTime?: string }) =>
+    api.patch(`/appointments/${id}/reply`, dto),
+};

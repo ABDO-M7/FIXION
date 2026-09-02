@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
   LayoutDashboard, HelpCircle, Bell, LogOut,
   Search, Menu, X, Globe, BookOpen, User,
-  Users, BarChart2, Key, MessageSquare, GraduationCap,
+  Users, BarChart2, Key, MessageSquare, GraduationCap, Calendar,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -17,6 +17,7 @@ const studentNav = [
   { label: 'Dashboard',      href: '/student',                icon: LayoutDashboard },
   { label: 'My Questions',   href: '/student/questions',      icon: HelpCircle },
   { label: 'Courses',        href: '/student/courses',        icon: GraduationCap },
+  { label: 'Appointments',   href: '/student/appointments',   icon: Calendar },
   { label: 'Subscription',   href: '/student/subscription',   icon: Key },
   { label: 'Profile',        href: '/student/profile',        icon: User },
   { label: 'Notifications',  href: '/student/notifications',  icon: Bell },
@@ -25,6 +26,7 @@ const studentNav = [
 const teacherNav = [
   { label: 'Dashboard',      href: '/teacher',                icon: LayoutDashboard },
   { label: 'Courses',        href: '/teacher/courses',        icon: GraduationCap },
+  { label: 'Appointments',   href: '/teacher/appointments',   icon: Calendar },
   { label: 'Questions',      href: '/teacher/questions',      icon: HelpCircle },
   { label: 'Categories',     href: '/teacher/categories',     icon: BookOpen },
   { label: 'Profile',        href: '/teacher/profile',        icon: User },
