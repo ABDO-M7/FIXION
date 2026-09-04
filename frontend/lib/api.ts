@@ -119,6 +119,7 @@ export const assignmentsApi = {
   gradeMatrix: (courseName: string, groupName: string) =>
     api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/grades`),
   delete: (id: string) => api.delete(`/assignments/${id}`),
+  publish: (id: string) => api.patch(`/assignments/${id}/publish`),
   // Student
   myAssignments: (courseName: string, groupName: string) =>
     api.get(`/assignments/student/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}`),

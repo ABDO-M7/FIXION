@@ -56,6 +56,9 @@ export class Assignment {
   @Column({ type: 'int', default: 100 })
   maxGrade: number;
 
+  @Column({ default: false })
+  isPublished: boolean;
+
   @OneToMany(() => AssignmentSubmission, (s) => s.assignment)
   submissions: AssignmentSubmission[];
 

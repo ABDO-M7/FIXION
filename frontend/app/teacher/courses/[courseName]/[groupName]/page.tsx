@@ -430,6 +430,20 @@ export default function GroupDetailPage() {
     } catch { toast.error('Failed to delete'); }
   };
 
+  const handlePublish = async (a: any) => {
+    if (a.type === 'QUIZ') {
+      // Better to publish quizzes from Quiz Builder so validation is obvious, but we can allow it here too
+      // The backend will enforce it.
+    }
+    try {
+      await assignmentsApi.publish(a.id);
+      toast.success('Published successfully!');
+      fetchAssignments();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to publish');
+    }
+  };
+
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'QUIZ', label: 'Quiz', icon: ClipboardList },
     { id: 'HOMEWORK', label: 'Homework', icon: BookOpen },
@@ -533,7 +547,14 @@ export default function GroupDetailPage() {
                   : <BookOpen size={20} style={{ color: '#f59e0b' }} />}
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{a.title}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{a.title}</div>
+                  {a.isPublished ? (
+                    <span className="badge badge-answered" style={{ fontSize: 10, padding: '2px 6px' }}>Published</span>
+                  ) : (
+                    <span className="badge badge-pending" style={{ fontSize: 10, padding: '2px 6px' }}>Draft</span>
+                  )}
+                </div>
                 {a.description && (
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>
                     {a.description}
@@ -546,6 +567,14 @@ export default function GroupDetailPage() {
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {!a.isPublished && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={e => { e.stopPropagation(); handlePublish(a); }}
+                  >
+                    Publish
+                  </button>
+                )}
                 <span className="btn btn-secondary btn-sm" style={{ pointerEvents: 'none' }}>
                   View Submissions <ChevronRight size={13} />
                 </span>

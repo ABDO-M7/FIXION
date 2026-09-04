@@ -178,4 +178,11 @@ export class AssignmentsController {
   deleteAssignment(@Param('id') id: string, @CurrentUser('id') teacherId: string) {
     return this.assignmentsService.deleteAssignment(id, teacherId);
   }
+
+  // Teacher: publish assignment
+  @Patch(':id/publish')
+  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  publishAssignment(@Param('id') id: string, @CurrentUser('id') teacherId: string) {
+    return this.assignmentsService.publishAssignment(id, teacherId);
+  }
 }

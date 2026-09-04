@@ -153,48 +153,55 @@ export default function QuizAttemptPage() {
 
   // ── Result screen ──────────────────────────────────────────────────────────
   if (result) {
-    const pct = result.maxGrade > 0 ? Math.round((result.grade / result.maxGrade) * 100) : 0;
+    const isPending = result.grade === null;
+    const pct = (!isPending && result.maxGrade > 0) ? Math.round((result.grade / result.maxGrade) * 100) : 0;
     const passed = pct >= 50;
     return (
       <AppShell>
         <div style={{ maxWidth: 540, margin: '60px auto', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
           <div style={{
             width: 120, height: 120, borderRadius: '50%',
-            background: passed ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-            border: `3px solid ${passed ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
+            background: isPending ? 'rgba(99,102,241,0.15)' : (passed ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'),
+            border: `3px solid ${isPending ? 'rgba(99,102,241,0.4)' : (passed ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)')}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            {passed
-              ? <CheckCircle size={52} style={{ color: '#10b981' }} />
-              : <AlertCircle size={52} style={{ color: '#ef4444' }} />}
+            {isPending
+              ? <AlertCircle size={52} style={{ color: '#6366f1' }} />
+              : (passed
+                  ? <CheckCircle size={52} style={{ color: '#10b981' }} />
+                  : <AlertCircle size={52} style={{ color: '#ef4444' }} />)}
           </div>
 
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 6 }}>
-              {passed ? 'Great job! 🎉' : 'Keep practicing 💪'}
+              {isPending ? 'Submitted Successfully! 🎉' : (passed ? 'Great job! 🎉' : 'Keep practicing 💪')}
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>
-              Your quiz has been submitted and graded automatically.
+              {isPending 
+                ? 'Your quiz contains text questions and is pending manual grading by your teacher.' 
+                : 'Your quiz has been submitted and graded automatically.'}
             </p>
           </div>
 
           {/* Score */}
-          <div className="card" style={{ width: '100%', textAlign: 'center', padding: 28 }}>
-            <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: -2, color: passed ? '#10b981' : '#ef4444', marginBottom: 8 }}>
-              {result.grade} <span style={{ fontSize: 24, color: 'var(--text-muted)', fontWeight: 400 }}>/ {result.maxGrade}</span>
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>Your Score</div>
+          {!isPending && (
+            <div className="card" style={{ width: '100%', textAlign: 'center', padding: 28 }}>
+              <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: -2, color: passed ? '#10b981' : '#ef4444', marginBottom: 8 }}>
+                {result.grade} <span style={{ fontSize: 24, color: 'var(--text-muted)', fontWeight: 400 }}>/ {result.maxGrade}</span>
+              </div>
+              <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>Your Score</div>
 
-            {/* Progress bar */}
-            <div style={{ height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', borderRadius: 99, width: `${pct}%`,
-                background: passed ? 'var(--gradient-success)' : 'linear-gradient(90deg, #ef4444, #f87171)',
-                transition: 'width 1s ease',
-              }} />
+              {/* Progress bar */}
+              <div style={{ height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 99, width: `${pct}%`,
+                  background: passed ? 'var(--gradient-success)' : 'linear-gradient(90deg, #ef4444, #f87171)',
+                  transition: 'width 1s ease',
+                }} />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{pct}%</div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{pct}%</div>
-          </div>
+          )}
 
           <Link href={`/student/courses/${id}`} className="btn btn-primary">
             <ArrowLeft size={15} /> Back to Course

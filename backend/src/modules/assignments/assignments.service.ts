@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Assignment, AssignmentType } from './entities/assignment.entity';
@@ -177,7 +177,12 @@ export class AssignmentsService {
     // Auto-grade
     let earnedPoints = 0;
     let totalPoints = 0;
+    let hasTextQuestion = false;
+
     for (const q of questions) {
+      if (q.type === 'TEXT') {
+        hasTextQuestion = true;
+      }
       totalPoints += q.points;
       if (q.correctAnswer && answers[q.id] !== undefined) {
         const studentAns = answers[q.id].trim().toLowerCase();
@@ -187,9 +192,14 @@ export class AssignmentsService {
     }
 
     // Convert to grade out of maxGrade
-    const grade = totalPoints > 0
+    let grade: number | null = totalPoints > 0
       ? Math.round((earnedPoints / totalPoints) * assignment.maxGrade)
       : 0;
+
+    // If there's a text question, the grade remains pending (null) until teacher manually grades it
+    if (hasTextQuestion) {
+      grade = null;
+    }
 
     const content = JSON.stringify(answers); // store answers as JSON string
 
@@ -249,7 +259,9 @@ export class AssignmentsService {
 
   // ─── STUDENT: get their assignments for a course/group ────────────────────
   async getStudentAssignments(studentId: string, courseName: string, groupName: string) {
-    const assignments = await this.getAssignments(courseName, groupName);
+    const allAssignments = await this.getAssignments(courseName, groupName);
+    const assignments = allAssignments.filter(a => a.isPublished); // Only show published to students
+
     const submissions = await this.submissionsRepo.find({
       where: { studentId },
     });
@@ -262,6 +274,24 @@ export class AssignmentsService {
 
   async getStudentSubmission(assignmentId: string, studentId: string) {
     return this.submissionsRepo.findOne({ where: { assignmentId, studentId } });
+  }
+
+  // ─── TEACHER: publish assignment ───────────────────────────────────────────
+  async publishAssignment(id: string, teacherId: string) {
+    const a = await this.assignmentsRepo.findOne({ where: { id } });
+    if (!a) throw new NotFoundException('Assignment not found');
+    if (a.teacherId !== teacherId) throw new ForbiddenException();
+
+    if (a.type === 'QUIZ') {
+      const questions = await this.questionsRepo.find({ where: { assignmentId: id } });
+      const missingAnswers = questions.some(q => q.type === 'MULTIPLE_CHOICE' && !q.correctAnswer);
+      if (missingAnswers) {
+        throw new BadRequestException('Cannot publish: All multiple-choice questions must have a correct answer assigned');
+      }
+    }
+
+    await this.assignmentsRepo.update(id, { isPublished: true });
+    return { message: 'Published successfully' };
   }
 
   // ─── TEACHER: delete assignment ────────────────────────────────────────────

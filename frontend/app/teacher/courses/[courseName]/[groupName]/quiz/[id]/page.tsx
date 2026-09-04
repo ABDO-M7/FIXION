@@ -6,7 +6,7 @@ import { assignmentsApi, uploadsApi } from '@/lib/api';
 import {
   ArrowLeft, Plus, Trash2, X, Save, Eye, EyeOff,
   Image as ImageIcon, Type, CheckCircle, GripVertical,
-  ChevronUp, ChevronDown, BookOpen,
+  ChevronUp, ChevronDown, BookOpen, Edit3, Send
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -79,6 +79,7 @@ export default function QuizBuilderPage() {
   const [selected, setSelected] = useState(0);
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [imgUploading, setImgUploading] = useState<string | null>(null);
   const imgRef = useRef<HTMLInputElement>(null);
   const optImgRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -193,6 +194,28 @@ export default function QuizBuilderPage() {
     }
   };
 
+  const publishQuiz = async () => {
+    // Basic frontend validation to save a request
+    const missingAnswers = questions.some(q => q.type === 'MULTIPLE_CHOICE' && !q.correctAnswer);
+    if (missingAnswers) {
+      toast.error('Cannot publish: All multiple-choice questions must have a correct answer assigned.');
+      return;
+    }
+    
+    setPublishing(true);
+    try {
+      // Ensure it is saved first
+      await saveQuiz();
+      await assignmentsApi.publish(id);
+      setAssignment((prev: any) => ({ ...prev, isPublished: true }));
+      toast.success('Quiz published successfully! It is now visible to students. 🎉');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to publish quiz');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const totalPoints = questions.reduce((s, q) => s + (q.points || 1), 0);
 
   return (
@@ -214,18 +237,38 @@ export default function QuizBuilderPage() {
             {questions.length} question{questions.length !== 1 ? 's' : ''} · {totalPoints} total points · Max grade: {assignment?.maxGrade ?? 100}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {assignment?.isPublished && (
+            <span className="badge badge-answered" style={{ padding: '6px 12px', fontSize: 13, marginRight: 8 }}>
+              Published
+            </span>
+          )}
           <button
             className="btn btn-secondary"
             onClick={() => setPreview(p => !p)}
           >
-            {preview ? <EyeOff size={15} /> : <Eye size={15} />}
+            {preview ? <Edit3 size={15} /> : <Eye size={15} />}
             {preview ? 'Edit' : 'Preview'}
           </button>
-          <button className="btn btn-primary" onClick={saveAll} disabled={saving}>
-            {saving ? <span className="spinner" style={{ width: 15, height: 15, borderWidth: 2 }} /> : <Save size={15} />}
-            Save Quiz
+          <button
+            className="btn btn-secondary"
+            onClick={saveQuiz}
+            disabled={saving || publishing}
+          >
+            {saving ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> : <Save size={15} />}
+            Save
           </button>
+          {!assignment?.isPublished && (
+            <button
+              className="btn btn-primary"
+              onClick={publishQuiz}
+              disabled={publishing || saving}
+              title="Publish so students can see it"
+            >
+              {publishing ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> : <Send size={15} />}
+              Publish Quiz
+            </button>
+          )}
         </div>
       </div>
 
