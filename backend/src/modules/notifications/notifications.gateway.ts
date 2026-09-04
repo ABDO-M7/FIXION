@@ -33,11 +33,22 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   async handleConnection(client: Socket) {
     try {
-      const token =
+      let token =
         client.handshake.auth?.token ||
-        client.handshake.headers?.authorization?.replace('Bearer ', '');
+        client.handshake.headers?.authorization?.replace('Bearer ', '') ||
+        (client.handshake.query?.token as string);
+
+      if (!token && client.handshake.headers.cookie) {
+        const cookies = client.handshake.headers.cookie.split(';').reduce((res: any, item: string) => {
+          const parts = item.trim().split('=');
+          if (parts.length === 2) res[parts[0]] = parts[1];
+          return res;
+        }, {});
+        token = cookies['accessToken'] || cookies['access_token'];
+      }
 
       if (!token) {
+        this.logger.warn(`[WS] Connection rejected: No auth token for socket ${client.id}`);
         client.disconnect();
         return;
       }
@@ -55,7 +66,8 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
       this.userSocketMap.get(payload.sub)!.add(client.id);
 
       this.logger.log(`Client connected: ${client.id} (user: ${payload.sub})`);
-    } catch {
+    } catch (err: any) {
+      this.logger.warn(`[WS] Auth failed for socket ${client.id}: ${err?.message || err}`);
       client.disconnect();
     }
   }

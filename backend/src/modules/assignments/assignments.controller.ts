@@ -80,6 +80,13 @@ export class AssignmentsController {
     return this.assignmentsService.submitAssignment(id, student, dto);
   }
 
+  // ── Student: get own submission for an assignment ──────────────────────────
+  @Get(':id/my-submission')
+  @Roles(UserRole.STUDENT)
+  getMySubmission(@Param('id') id: string, @CurrentUser('id') studentId: string) {
+    return this.assignmentsService.getStudentSubmission(id, studentId);
+  }
+
   // ── Student: submit a quiz (auto-graded) ──────────────────────────────────
   @Post(':id/quiz-submit')
   @Roles(UserRole.STUDENT)

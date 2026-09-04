@@ -62,10 +62,27 @@ export default function QuizAttemptPage() {
   useEffect(() => {
     Promise.all([
       assignmentsApi.getQuestions(assignmentId),
-      // Get assignment info via student endpoint (fetched from enrollment)
-    ]).then(([qRes]) => {
+      assignmentsApi.mySubmission(assignmentId).catch(() => null),
+    ]).then(([qRes, subRes]) => {
       const qs = (qRes.data as Question[]).sort((a, b) => a.orderIndex - b.orderIndex);
       setQuestions(qs);
+
+      if (subRes?.data) {
+        const sub = subRes.data;
+        if (sub.content) {
+          try {
+            setAnswers(JSON.parse(sub.content));
+          } catch {}
+        }
+        if (sub.grade !== null && sub.grade !== undefined) {
+          setResult({
+            grade: sub.grade,
+            maxGrade: 100,
+            correct: 0,
+            total: qs.length,
+          });
+        }
+      }
     }).catch(() => toast.error('Failed to load quiz'))
       .finally(() => setLoading(false));
   }, [assignmentId]);
@@ -87,7 +104,7 @@ export default function QuizAttemptPage() {
       setResult({
         grade: data.grade,
         maxGrade: data.maxGrade ?? 100,
-        correct: 0, // we could compute from answer comparison
+        correct: 0,
         total: questions.length,
       });
       toast.success('Quiz submitted!');
@@ -103,6 +120,32 @@ export default function QuizAttemptPage() {
       <AppShell>
         <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
           <span className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
+        </div>
+      </AppShell>
+    );
+  }
+
+  // ── Empty state screen ──────────────────────────────────────────────────────
+  if (questions.length === 0 && !result) {
+    return (
+      <AppShell>
+        <div style={{ maxWidth: 540, margin: '80px auto', textAlign: 'center' }}>
+          <div className="card" style={{ padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 72, height: 72, borderRadius: '50%',
+              background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f87171'
+            }}>
+              <AlertCircle size={36} />
+            </div>
+            <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Quiz Not Available</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0, lineHeight: 1.6 }}>
+              This quiz has no questions published yet by your teacher, or could not be loaded.
+            </p>
+            <Link href={`/student/courses/${id}`} className="btn btn-primary" style={{ marginTop: 12 }}>
+              <ArrowLeft size={15} /> Back to Course
+            </Link>
+          </div>
         </div>
       </AppShell>
     );

@@ -260,6 +260,10 @@ export class AssignmentsService {
     }));
   }
 
+  async getStudentSubmission(assignmentId: string, studentId: string) {
+    return this.submissionsRepo.findOne({ where: { assignmentId, studentId } });
+  }
+
   // ─── TEACHER: delete assignment ────────────────────────────────────────────
   async deleteAssignment(id: string, teacherId: string) {
     const a = await this.assignmentsRepo.findOne({ where: { id } });

@@ -122,6 +122,7 @@ export const assignmentsApi = {
   // Student
   myAssignments: (courseName: string, groupName: string) =>
     api.get(`/assignments/student/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}`),
+  mySubmission: (id: string) => api.get(`/assignments/${id}/my-submission`),
   submit: (id: string, data: any) => api.post(`/assignments/${id}/submissions`, data),
   quizSubmit: (id: string, answers: Record<string, string>) =>
     api.post(`/assignments/${id}/quiz-submit`, { answers }),
