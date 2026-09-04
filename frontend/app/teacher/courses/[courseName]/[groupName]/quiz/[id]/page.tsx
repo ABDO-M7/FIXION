@@ -205,7 +205,7 @@ export default function QuizBuilderPage() {
     setPublishing(true);
     try {
       // Ensure it is saved first
-      await saveQuiz();
+      await saveAll();
       await assignmentsApi.publish(id);
       setAssignment((prev: any) => ({ ...prev, isPublished: true }));
       toast.success('Quiz published successfully! It is now visible to students. 🎉');
@@ -252,7 +252,7 @@ export default function QuizBuilderPage() {
           </button>
           <button
             className="btn btn-secondary"
-            onClick={saveQuiz}
+            onClick={saveAll}
             disabled={saving || publishing}
           >
             {saving ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> : <Save size={15} />}
