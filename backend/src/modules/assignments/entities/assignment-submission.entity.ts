@@ -41,7 +41,7 @@ export class AssignmentSubmission {
   attachments: string[];
 
   @Column({ type: 'float', nullable: true })
-  grade: number;
+  grade: number | null;
 
   @Column({ type: 'text', nullable: true })
   feedback: string;
