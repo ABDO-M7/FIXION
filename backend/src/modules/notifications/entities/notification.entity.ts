@@ -3,12 +3,15 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('notifications')
+@Index(['userId', 'isRead'])
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -17,6 +20,7 @@ export class Notification {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Index()
   @Column()
   userId: string;
 
@@ -32,6 +36,10 @@ export class Notification {
   @Column({ default: false })
   isRead: boolean;
 
+  @Index()
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

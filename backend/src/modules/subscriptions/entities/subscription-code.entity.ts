@@ -3,8 +3,10 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { SubscriptionPlan } from './subscription.entity';
@@ -14,12 +16,14 @@ export class SubscriptionCode {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @Column({ unique: true, length: 32 })
   code: string;
 
   @Column({ type: 'enum', enum: SubscriptionPlan })
   plan: SubscriptionPlan;
 
+  @Index()
   @Column({ default: false })
   isUsed: boolean;
 
@@ -54,4 +58,7 @@ export class SubscriptionCode {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

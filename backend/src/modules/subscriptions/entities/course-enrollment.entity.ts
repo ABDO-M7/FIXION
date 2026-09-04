@@ -3,8 +3,10 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { SubscriptionCode } from './subscription-code.entity';
@@ -18,9 +20,11 @@ export class CourseEnrollment {
   @JoinColumn({ name: 'student_id' })
   student: User;
 
+  @Index()
   @Column()
   studentId: string;
 
+  @Index()
   @Column()
   courseName: string;
 
@@ -39,4 +43,7 @@ export class CourseEnrollment {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

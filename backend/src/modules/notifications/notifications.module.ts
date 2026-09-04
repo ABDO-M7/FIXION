@@ -22,6 +22,6 @@ import { User } from '../users/entities/user.entity';
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationsGateway, EmailService],
-  exports: [NotificationsService, EmailService],
+  exports: [NotificationsService, EmailService, NotificationsGateway],
 })
 export class NotificationsModule {}

@@ -3,8 +3,10 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
@@ -22,6 +24,7 @@ export class Subscription {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Index()
   @Column()
   userId: string;
 
@@ -34,6 +37,7 @@ export class Subscription {
   @Column({ type: 'timestamptz' })
   expiresAt: Date;
 
+  @Index()
   @Column({ default: true })
   isActive: boolean;
 
@@ -42,4 +46,7 @@ export class Subscription {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

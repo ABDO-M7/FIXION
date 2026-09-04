@@ -7,6 +7,7 @@ import {
   OneToMany,
   BeforeInsert,
   BeforeUpdate,
+  Index,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 
@@ -21,6 +22,7 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @Column({ unique: true, length: 255 })
   email: string;
 
@@ -37,6 +39,7 @@ export class User {
   @Column({ nullable: true, length: 30 })
   phone: string;
 
+  @Index()
   @Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })
   role: UserRole;
 
@@ -59,10 +62,12 @@ export class User {
   @Column({ default: false })
   isVerified: boolean;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', nullable: true, select: false })
+  @Exclude()
   emailVerificationToken: string | null;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', nullable: true, select: false })
+  @Exclude()
   refreshTokenHash: string | null;
 
   // Teacher specialization: list of course names they can answer

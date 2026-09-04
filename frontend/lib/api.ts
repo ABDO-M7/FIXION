@@ -152,6 +152,7 @@ export const notificationsApi = {
 
 export const adminApi = {
   overview: () => api.get('/admin/analytics/overview'),
+  health: () => api.get('/health/detailed'),
   users: (params?: any) => api.get('/users', { params }),
   updateUserStatus: (id: string, isActive: boolean) => api.patch(`/users/${id}/status`, { isActive }),
   updateUserRole: (id: string, role: string) => api.patch(`/users/${id}/role`, { role }),

@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Question } from '../../questions/entities/question.entity';
@@ -19,6 +20,7 @@ export class Answer {
   @JoinColumn({ name: 'question_id' })
   question: Question;
 
+  @Index()
   @Column()
   questionId: string;
 
@@ -26,6 +28,7 @@ export class Answer {
   @JoinColumn({ name: 'teacher_id' })
   teacher: User;
 
+  @Index()
   @Column()
   teacherId: string;
 

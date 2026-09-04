@@ -7,6 +7,7 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Category } from '../../categories/entities/category.entity';
@@ -27,12 +28,14 @@ export class Question {
   @JoinColumn({ name: 'student_id' })
   student: User;
 
+  @Index()
   @Column()
   studentId: string;
 
   @Column({ type: 'text' })
   content: string;
 
+  @Index()
   @Column({ nullable: true })
   courseName: string;
 
@@ -51,6 +54,7 @@ export class Question {
   @Column({ type: 'jsonb', nullable: true, default: [] })
   attachments: string[];
 
+  @Index()
   @Column({
     type: 'enum',
     enum: QuestionStatus,
@@ -62,6 +66,7 @@ export class Question {
   @JoinColumn({ name: 'category_id' })
   category: Category;
 
+  @Index()
   @Column({ nullable: true })
   categoryId: string;
 
@@ -81,6 +86,7 @@ export class Question {
   })
   searchVector: any;
 
+  @Index()
   @CreateDateColumn()
   createdAt: Date;
 

@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Assignment } from './assignment.entity';
 
@@ -29,6 +30,7 @@ export class QuizQuestion {
   @JoinColumn({ name: 'assignment_id' })
   assignment: Assignment;
 
+  @Index()
   @Column()
   assignmentId: string;
 

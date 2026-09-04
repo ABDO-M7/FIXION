@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
@@ -24,6 +25,7 @@ export class Appointment {
   @JoinColumn({ name: 'student_id' })
   student: User;
 
+  @Index()
   @Column()
   studentId: string;
 
@@ -32,6 +34,7 @@ export class Appointment {
   @JoinColumn({ name: 'teacher_id' })
   teacher: User;
 
+  @Index()
   @Column({ nullable: true })
   teacherId: string;
 
@@ -51,6 +54,7 @@ export class Appointment {
   @Column({ nullable: true })
   preferredTime: string;
 
+  @Index()
   @Column({ type: 'enum', enum: AppointmentStatus, default: AppointmentStatus.PENDING })
   status: AppointmentStatus;
 

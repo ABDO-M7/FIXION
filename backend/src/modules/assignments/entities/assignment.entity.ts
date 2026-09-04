@@ -7,6 +7,7 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { AssignmentSubmission } from './assignment-submission.entity';
@@ -21,9 +22,11 @@ export class Assignment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @Column()
   courseName: string;
 
+  @Index()
   @Column()
   groupName: string;
 
@@ -31,6 +34,7 @@ export class Assignment {
   @JoinColumn({ name: 'teacher_id' })
   teacher: User;
 
+  @Index()
   @Column()
   teacherId: string;
 

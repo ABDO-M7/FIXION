@@ -6,11 +6,14 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
+  Unique,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Assignment } from './assignment.entity';
 
 @Entity('assignment_submissions')
+@Unique(['assignmentId', 'studentId'])
 export class AssignmentSubmission {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -19,6 +22,7 @@ export class AssignmentSubmission {
   @JoinColumn({ name: 'assignment_id' })
   assignment: Assignment;
 
+  @Index()
   @Column()
   assignmentId: string;
 
@@ -26,6 +30,7 @@ export class AssignmentSubmission {
   @JoinColumn({ name: 'student_id' })
   student: User;
 
+  @Index()
   @Column()
   studentId: string;
 

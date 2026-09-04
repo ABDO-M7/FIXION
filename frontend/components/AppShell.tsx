@@ -6,6 +6,7 @@ import {
   LayoutDashboard, HelpCircle, Bell, LogOut,
   Search, Menu, X, Globe, BookOpen, User,
   Users, BarChart2, Key, MessageSquare, GraduationCap, Calendar,
+  Activity,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -40,6 +41,7 @@ const adminNav = [
   { key: 'nav.allQuestions', href: '/admin/questions',  icon: MessageSquare },
   { key: 'nav.codes',        href: '/admin/codes',      icon: Key },
   { key: 'nav.analytics',    href: '/admin/analytics',  icon: BarChart2 },
+  { key: 'nav.health',       href: '/admin/health',     icon: Activity },
 ];
 
 interface AppShellProps { children: React.ReactNode; }
