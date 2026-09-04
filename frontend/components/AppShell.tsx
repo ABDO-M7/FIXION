@@ -102,11 +102,10 @@ export default function AppShell({ children }: AppShellProps) {
 
         {/* Logo */}
         <div className="sidebar-logo">
-          <Image
-            src="/logo.png"
+          <img
+            src="/logo.jpg"
             alt="Fixion"
-            width={32} height={32}
-            style={{ borderRadius: 8, flexShrink: 0 }}
+            className="logo-img"
           />
           {sidebarOpen && <span className="logo-text">Fixion</span>}
         </div>

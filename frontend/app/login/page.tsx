@@ -7,10 +7,8 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store';
-import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
-import Image from 'next/image';
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Globe } from 'lucide-react';
 import Link from 'next/link';
-import type { Metadata } from 'next';
 
 const schema = z.object({
   email: z.string().email('Invalid email address'),
@@ -19,11 +17,41 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+const strings = {
+  en: {
+    welcome: 'Welcome back',
+    sub: 'Sign in to your Fixion account',
+    email: 'Email Address',
+    password: 'Password',
+    forgot: 'Forgot password?',
+    signin: 'Sign In',
+    orWith: 'or continue with',
+    google: 'Continue with Google',
+    noAccount: "Don't have an account?",
+    create: 'Create one free',
+  },
+  ar: {
+    welcome: 'مرحباً بعودتك',
+    sub: 'سجّل دخولك إلى حساب فيكسيون',
+    email: 'البريد الإلكتروني',
+    password: 'كلمة المرور',
+    forgot: 'نسيت كلمة المرور؟',
+    signin: 'تسجيل الدخول',
+    orWith: 'أو تابع بـ',
+    google: 'المتابعة بـ Google',
+    noAccount: 'ليس لديك حساب؟',
+    create: 'أنشئ حساباً مجاناً',
+  },
+};
+
 export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [lang, setLang] = useState<'en' | 'ar'>('en');
   const router = useRouter();
   const { setUser } = useAuthStore();
+  const t = strings[lang];
+  const isRtl = lang === 'ar';
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -34,11 +62,7 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(data);
       const { user, accessToken } = res.data;
-
-      // Store token in localStorage for api.ts Bearer header
       if (accessToken) localStorage.setItem('accessToken', accessToken);
-
-      // Set token as cookie on Vercel's domain so middleware can read it
       if (accessToken) {
         await fetch('/api/auth/set-token', {
           method: 'POST',
@@ -46,20 +70,14 @@ export default function LoginPage() {
           body: JSON.stringify({ token: accessToken }),
         });
       }
-
       setUser(user);
       toast.success(`Welcome back, ${user.name}!`);
-
       const role = user.role;
       const missingData = !user.phone || (role === 'student' && !user.level);
-      
-      if (missingData) {
-        router.push('/onboarding');
-      } else {
-        if (role === 'admin') router.push('/admin');
-        else if (role === 'teacher') router.push('/teacher');
-        else router.push('/student');
-      }
+      if (missingData) router.push('/onboarding');
+      else if (role === 'admin') router.push('/admin');
+      else if (role === 'teacher') router.push('/teacher');
+      else router.push('/student');
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {
@@ -68,29 +86,49 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
+    <div className="auth-container" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* Floating orbs */}
+      <div style={{ position: 'absolute', top: '15%', left: '10%', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(30,58,138,0.15) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', bottom: '10%', right: '8%', width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(14,165,233,0.1) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
+
+      {/* Language Toggle */}
+      <button
+        onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+        style={{
+          position: 'absolute', top: 24, right: 24, zIndex: 10,
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'var(--glass-bg)', backdropFilter: 'blur(12px)',
+          border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-pill)',
+          padding: '7px 16px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)',
+          cursor: 'pointer', transition: 'var(--transition)',
+        }}
+        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
+        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'}
+      >
+        <Globe size={14} />
+        {lang === 'en' ? 'عربي' : 'English'}
+      </button>
+
+      <div className="auth-card animate-fade-in-up">
+        {/* Logo */}
         <div className="auth-logo">
-          <Image src="/logo.png" alt="Fixion" width={40} height={40} style={{ borderRadius: 10 }} />
-          <span style={{ fontSize: 22, fontWeight: 800, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Fixion
-          </span>
+          <img src="/logo.jpg" alt="Fixion" className="auth-logo-img" />
         </div>
 
-        <h1 className="auth-title">Welcome back</h1>
-        <p className="auth-subtitle">Sign in to your account to continue</p>
+        <h1 className="auth-title">{t.welcome}</h1>
+        <p className="auth-subtitle">{t.sub}</p>
 
         <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="form-group">
-            <label className="form-label">Email Address</label>
+            <label className="form-label">{t.email}</label>
             <div style={{ position: 'relative' }}>
-              <Mail size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <Mail size={16} style={{ position: 'absolute', left: isRtl ? 'auto' : 12, right: isRtl ? 12 : 'auto', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 {...register('email')}
                 type="email"
                 className={`form-input ${errors.email ? 'error' : ''}`}
                 placeholder="your@email.com"
-                style={{ paddingLeft: 36 }}
+                style={{ paddingLeft: isRtl ? 14 : 38, paddingRight: isRtl ? 38 : 14 }}
               />
             </div>
             {errors.email && <span className="form-error">{errors.email.message}</span>}
@@ -98,22 +136,22 @@ export default function LoginPage() {
 
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <label className="form-label">Password</label>
-              <Link href="/forgot-password" style={{ fontSize: 12, color: 'var(--primary-light)' }}>Forgot password?</Link>
+              <label className="form-label">{t.password}</label>
+              <Link href="/forgot-password" style={{ fontSize: 12, color: '#7dd3fc' }}>{t.forgot}</Link>
             </div>
             <div style={{ position: 'relative' }}>
-              <Lock size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <Lock size={16} style={{ position: 'absolute', left: isRtl ? 'auto' : 12, right: isRtl ? 12 : 'auto', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 {...register('password')}
                 type={showPass ? 'text' : 'password'}
                 className={`form-input ${errors.password ? 'error' : ''}`}
-                placeholder="Your password"
-                style={{ paddingLeft: 36, paddingRight: 40 }}
+                placeholder="••••••••"
+                style={{ paddingLeft: isRtl ? 40 : 38, paddingRight: isRtl ? 38 : 40 }}
               />
               <button
                 type="button"
                 onClick={() => setShowPass(!showPass)}
-                style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{ position: 'absolute', right: isRtl ? 'auto' : 12, left: isRtl ? 12 : 'auto', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -124,11 +162,11 @@ export default function LoginPage() {
           <button type="submit" className="btn btn-primary btn-full btn-lg" disabled={isLoading} style={{ marginTop: 8 }}>
             {isLoading
               ? <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
-              : <>Sign In <ArrowRight size={16} /></>}
+              : <>{t.signin} <ArrowRight size={16} /></>}
           </button>
         </form>
 
-        <div className="auth-divider">or continue with</div>
+        <div className="auth-divider">{t.orWith}</div>
 
         <button onClick={() => authApi.googleLogin()} className="btn btn-secondary btn-full" style={{ gap: 10 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -137,12 +175,12 @@ export default function LoginPage() {
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
           </svg>
-          Continue with Google
+          {t.google}
         </button>
 
         <p className="auth-footer">
-          Don&apos;t have an account?{' '}
-          <Link href="/register" className="auth-link">Create one free</Link>
+          {t.noAccount}{' '}
+          <Link href="/register" className="auth-link">{t.create}</Link>
         </p>
       </div>
     </div>
