@@ -157,7 +157,7 @@ export default function QuizBuilderPage() {
   // Save all questions to backend
   const saveAll = async () => {
     if (questions.some(q => !q.questionText.trim())) {
-      toast.error('All questions need text');
+      toast.error('Please enter a question prompt (text) for all questions.');
       return;
     }
     setSaving(true);
@@ -198,7 +198,7 @@ export default function QuizBuilderPage() {
     // Basic frontend validation to save a request
     const missingAnswers = questions.some(q => q.type === 'MULTIPLE_CHOICE' && !q.correctAnswer);
     if (missingAnswers) {
-      toast.error('Cannot publish: All multiple-choice questions must have a correct answer assigned.');
+      toast.error('Cannot publish: Please select the correct answer (click the circle) for all multiple-choice questions.');
       return;
     }
     
