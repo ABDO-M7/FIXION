@@ -6,7 +6,7 @@ import { assignmentsApi } from '@/lib/api';
 import {
   ArrowLeft, GraduationCap, Users, Plus, Trash2, X,
   ClipboardList, BookOpen, BarChart2, ChevronDown, ChevronRight,
-  CheckCircle, Clock, Upload
+  CheckCircle, Clock, Upload, Edit3
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -125,237 +125,7 @@ function CreateModal({
   );
 }
 
-// ── Submissions Detail Panel ────────────────────────────────────────────────
-function SubmissionsPanel({
-  assignment, courseName, groupName, onClose,
-}: {
-  assignment: any;
-  courseName: string;
-  groupName: string;
-  onClose: () => void;
-}) {
-  const [data, setData] = useState<any>(null);
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [grades, setGrades] = useState<Record<string, { grade: string; feedback: string }>>({});
-  const [saving, setSaving] = useState<string | null>(null);
-  const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    const promises: Promise<any>[] = [
-      assignmentsApi.submissions(assignment.id, courseName, groupName),
-    ];
-    if (assignment.type === 'QUIZ') {
-      promises.push(assignmentsApi.getQuestions(assignment.id));
-    }
-    Promise.all(promises)
-      .then(([subRes, qRes]) => {
-        setData(subRes.data);
-        if (qRes) {
-          const qs = (qRes.data as any[]).sort((a, b) => a.orderIndex - b.orderIndex);
-          setQuestions(qs);
-        }
-        const init: Record<string, { grade: string; feedback: string }> = {};
-        for (const row of subRes.data.studentRows || []) {
-          if (row.submission) {
-            init[row.student.id] = {
-              grade: row.submission.grade ?? '',
-              feedback: row.submission.feedback || '',
-            };
-          } else {
-            init[row.student.id] = { grade: '', feedback: '' };
-          }
-        }
-        setGrades(init);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [assignment.id, assignment.type, courseName, groupName]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const saveGrade = async (submissionId: string, studentId: string) => {
-    const g = grades[studentId];
-    if (!g || g.grade === '') { toast.error('Enter a grade'); return; }
-    setSaving(submissionId);
-    try {
-      await assignmentsApi.grade(submissionId, +g.grade, g.feedback);
-      toast.success('Grade saved!');
-      load();
-    } catch {
-      toast.error('Failed to save grade');
-    } finally { setSaving(null); }
-  };
-
-  const maxGrade = assignment.maxGrade ?? 100;
-
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20,
-    }}>
-      <div className="card" style={{ width: '100%', maxWidth: 800, maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexShrink: 0 }}>
-          <div>
-            <h3 style={{ fontWeight: 700, fontSize: 16 }}>{assignment.title}</h3>
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <span className={`badge ${assignment.type === 'QUIZ' ? 'badge-active' : 'badge-pending'}`} style={{ fontSize: 11 }}>
-                {assignment.type}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Max grade: {maxGrade}</span>
-            </div>
-          </div>
-          <button onClick={onClose} className="icon-btn" style={{ width: 28, height: 28 }}><X size={14} /></button>
-        </div>
-
-        {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
-            <span className="spinner" />
-          </div>
-        ) : (
-          <div style={{ overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {(data?.studentRows || []).map((row: any) => {
-              const studentId = row.student.id;
-              const isExpanded = expandedStudent === studentId;
-              const g = grades[studentId];
-              let parsedAnswers: Record<string, string> = {};
-              if (assignment.type === 'QUIZ' && row.submission?.content) {
-                try { parsedAnswers = JSON.parse(row.submission.content); } catch {}
-              }
-
-              return (
-                <div key={studentId} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  {/* Student row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', flexWrap: 'wrap' }}>
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 140 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{row.student.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.student.email}</div>
-                      {row.student.studentId && (
-                        <div style={{ fontSize: 11, color: 'var(--primary-light)', fontWeight: 600 }}>ID: {row.student.studentId}</div>
-                      )}
-                    </div>
-
-                    {/* Status */}
-                    <div>
-                      {row.submitted
-                        ? <span className="badge badge-answered" style={{ fontSize: 11 }}><CheckCircle size={10} style={{ marginRight: 3 }} />Submitted</span>
-                        : <span className="badge badge-pending" style={{ fontSize: 11 }}><Clock size={10} style={{ marginRight: 3 }} />Not yet</span>}
-                    </div>
-
-                    {/* Grade input */}
-                    {row.submitted && (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <input
-                            type="number"
-                            min={0} max={maxGrade}
-                            className="form-input"
-                            style={{ width: 70, fontSize: 13, padding: '5px 8px' }}
-                            value={g?.grade ?? ''}
-                            onChange={e => setGrades(prev => ({ ...prev, [studentId]: { ...prev[studentId], grade: e.target.value } }))}
-                            placeholder={`/ ${maxGrade}`}
-                          />
-                          <input
-                            className="form-input"
-                            style={{ width: 130, fontSize: 12, padding: '5px 8px' }}
-                            value={g?.feedback ?? ''}
-                            onChange={e => setGrades(prev => ({ ...prev, [studentId]: { ...prev[studentId], feedback: e.target.value } }))}
-                            placeholder="Feedback..."
-                          />
-                          <button
-                            className="btn btn-primary btn-sm"
-                            disabled={saving === row.submission?.id}
-                            onClick={() => saveGrade(row.submission.id, studentId)}
-                          >
-                            {saving === row.submission?.id
-                              ? <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
-                              : 'Save'}
-                          </button>
-                        </div>
-
-                        {/* Expand answers button (only for QUIZ) */}
-                        {assignment.type === 'QUIZ' && (
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => setExpandedStudent(isExpanded ? null : studentId)}
-                            style={{ fontSize: 11 }}
-                          >
-                            {isExpanded ? 'Hide Answers ▲' : 'View Answers ▼'}
-                          </button>
-                        )}
-
-                        {/* Homework attachments */}
-                        {assignment.type !== 'QUIZ' && row.submission?.content && (
-                          <div style={{ width: '100%', marginTop: 4, fontSize: 12, color: 'var(--text-secondary)', wordBreak: 'break-word' }}>
-                            {row.submission.content}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {/* Quiz answers expanded */}
-                  {isExpanded && assignment.type === 'QUIZ' && questions.length > 0 && (
-                    <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(0,0,0,0.15)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                        Student Answers
-                      </div>
-                      {questions.map((q: any, i: number) => {
-                        const studentAnswer = parsedAnswers[q.id];
-                        const isCorrect = q.type === 'MULTIPLE_CHOICE' && q.correctAnswer && studentAnswer === q.correctAnswer;
-                        const isWrong = q.type === 'MULTIPLE_CHOICE' && q.correctAnswer && studentAnswer && studentAnswer !== q.correctAnswer;
-
-                        // Find option text for MCQ
-                        let answerLabel = studentAnswer || '—';
-                        if (q.type === 'MULTIPLE_CHOICE' && q.options) {
-                          const opt = q.options.find((o: any) => o.id === studentAnswer);
-                          answerLabel = opt ? `(${opt.id}) ${opt.text}` : (studentAnswer || '—');
-                        }
-
-                        return (
-                          <div key={q.id} style={{
-                            padding: '10px 12px', borderRadius: 8,
-                            background: 'rgba(255,255,255,0.03)',
-                            borderLeft: `3px solid ${q.type === 'TEXT' ? 'rgba(99,102,241,0.4)' : isCorrect ? 'rgba(16,185,129,0.5)' : isWrong ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                          }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>
-                              Q{i + 1}: {q.questionText}
-                            </div>
-                            <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                              {q.type === 'TEXT' ? (
-                                <span style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', flex: 1, wordBreak: 'break-word' }}>
-                                  {studentAnswer || <em style={{ color: 'var(--text-muted)' }}>No answer</em>}
-                                </span>
-                              ) : (
-                                <>
-                                  <span style={{ color: isCorrect ? '#10b981' : isWrong ? '#ef4444' : 'var(--text-muted)' }}>
-                                    {isCorrect ? '✓' : isWrong ? '✗' : '—'} {answerLabel}
-                                  </span>
-                                  {isWrong && q.correctAnswer && (
-                                    <span style={{ fontSize: 11, color: '#10b981' }}>
-                                      · Correct: {(() => { const co = q.options?.find((o: any) => o.id === q.correctAnswer); return co ? `(${co.id}) ${co.text}` : q.correctAnswer; })()}
-                                    </span>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 
 // ── Grade Matrix Tab ────────────────────────────────────────────────────────
@@ -426,8 +196,16 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
                 background: 'var(--bg-surface)',
                 borderLeft: (i === 0 || (i === quizzes.length && homeworks.length > 0)) ? '2px solid var(--border)' : '1px solid var(--border)',
               }}>
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>{a.title}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>/ {a.maxGrade ?? 100}</div>
+                <Link
+                  href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/submissions/${a.id}`}
+                  style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
+                  title="Click to view submissions"
+                >
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100, color: 'var(--primary-light)' }}>
+                    {a.title} ↗
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>/ {a.maxGrade ?? 100}</div>
+                </Link>
               </th>
             ))}
           </tr>
@@ -475,7 +253,6 @@ export default function GroupDetailPage() {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [createType, setCreateType] = useState<'QUIZ' | 'HOMEWORK' | null>(null);
-  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const fetchAssignments = useCallback(() => {
     setLoading(true);
@@ -603,8 +380,7 @@ export default function GroupDetailPage() {
             <div
               key={a.id}
               className="card"
-              style={{ display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }}
-              onClick={() => setSelectedAssignment(a)}
+              style={{ display: 'flex', alignItems: 'center', gap: 16 }}
             >
               <div style={{
                 width: 44, height: 44, borderRadius: 10,
@@ -636,20 +412,32 @@ export default function GroupDetailPage() {
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {a.type === 'QUIZ' && (
+                  <Link
+                    href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/quiz/${a.id}`}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <Edit3 size={13} /> Edit Quiz
+                  </Link>
+                )}
                 {!a.isPublished && (
                   <button
                     className="btn btn-primary btn-sm"
-                    onClick={e => { e.stopPropagation(); handlePublish(a); }}
+                    onClick={() => handlePublish(a)}
                   >
                     Publish
                   </button>
                 )}
-                <span className="btn btn-secondary btn-sm" style={{ pointerEvents: 'none' }}>
+                <Link
+                  href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/submissions/${a.id}`}
+                  className="btn btn-primary btn-sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                >
                   View Submissions <ChevronRight size={13} />
-                </span>
+                </Link>
                 <button
                   className="btn btn-danger btn-sm"
-                  onClick={e => { e.stopPropagation(); handleDelete(a.id); }}
+                  onClick={() => handleDelete(a.id)}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -667,16 +455,6 @@ export default function GroupDetailPage() {
           groupName={decodedGroup}
           onClose={() => setCreateType(null)}
           onCreated={fetchAssignments}
-        />
-      )}
-
-      {/* Submissions Panel */}
-      {selectedAssignment && (
-        <SubmissionsPanel
-          assignment={selectedAssignment}
-          courseName={decoded}
-          groupName={decodedGroup}
-          onClose={() => setSelectedAssignment(null)}
         />
       )}
     </AppShell>
