@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Assignment, AssignmentType } from './entities/assignment.entity';
@@ -208,13 +208,17 @@ export class AssignmentsService {
     });
 
     if (existing) {
-      await this.submissionsRepo.update(existing.id, { content, grade });
-      return this.submissionsRepo.findOne({ where: { id: existing.id } });
+      throw new ConflictException('You have already submitted this quiz.');
     }
 
-    return this.submissionsRepo.save(
+    const saved = await this.submissionsRepo.save(
       this.submissionsRepo.create({ assignmentId, studentId: student.id, content, grade }),
     );
+
+    return {
+      ...saved,
+      maxGrade: assignment.maxGrade,
+    };
   }
 
   // ─── TEACHER: grade a submission ──────────────────────────────────────────
@@ -273,7 +277,10 @@ export class AssignmentsService {
   }
 
   async getStudentSubmission(assignmentId: string, studentId: string) {
-    return this.submissionsRepo.findOne({ where: { assignmentId, studentId } });
+    const submission = await this.submissionsRepo.findOne({ where: { assignmentId, studentId } });
+    if (!submission) return null;
+    const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
+    return { ...submission, maxGrade: assignment?.maxGrade ?? 100 };
   }
 
   // ─── TEACHER: publish assignment ───────────────────────────────────────────

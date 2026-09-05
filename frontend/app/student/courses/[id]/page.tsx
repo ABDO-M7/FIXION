@@ -329,8 +329,13 @@ function AssignmentCard({
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Your Submission
             </div>
-            {sub.content && (
+            {sub.content && assignment.type !== 'QUIZ' && (
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>{sub.content}</p>
+            )}
+            {sub.content && assignment.type === 'QUIZ' && (
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+                <em>Answers saved. Click "View Results" to see details.</em>
+              </p>
             )}
             {sub.attachments?.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -371,7 +376,7 @@ function AssignmentCard({
               className={`btn ${sub ? 'btn-secondary' : 'btn-primary'} btn-sm`}
             >
               <ClipboardList size={13} />
-              {sub ? 'Retake Quiz' : 'Take Quiz'}
+              {sub ? 'View Results' : 'Take Quiz'}
             </Link>
           ) : (
             <button

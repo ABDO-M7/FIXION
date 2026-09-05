@@ -135,17 +135,29 @@ function SubmissionsPanel({
   onClose: () => void;
 }) {
   const [data, setData] = useState<any>(null);
+  const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [grades, setGrades] = useState<Record<string, { grade: string; feedback: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    assignmentsApi.submissions(assignment.id, courseName, groupName)
-      .then(r => {
-        setData(r.data);
+    const promises: Promise<any>[] = [
+      assignmentsApi.submissions(assignment.id, courseName, groupName),
+    ];
+    if (assignment.type === 'QUIZ') {
+      promises.push(assignmentsApi.getQuestions(assignment.id));
+    }
+    Promise.all(promises)
+      .then(([subRes, qRes]) => {
+        setData(subRes.data);
+        if (qRes) {
+          const qs = (qRes.data as any[]).sort((a, b) => a.orderIndex - b.orderIndex);
+          setQuestions(qs);
+        }
         const init: Record<string, { grade: string; feedback: string }> = {};
-        for (const row of r.data.studentRows || []) {
+        for (const row of subRes.data.studentRows || []) {
           if (row.submission) {
             init[row.student.id] = {
               grade: row.submission.grade ?? '',
@@ -159,7 +171,7 @@ function SubmissionsPanel({
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [assignment.id, courseName, groupName]);
+  }, [assignment.id, assignment.type, courseName, groupName]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -176,18 +188,24 @@ function SubmissionsPanel({
     } finally { setSaving(null); }
   };
 
+  const maxGrade = assignment.maxGrade ?? 100;
+
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20,
     }}>
-      <div className="card" style={{ width: '100%', maxWidth: 720, maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div className="card" style={{ width: '100%', maxWidth: 800, maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, flexShrink: 0 }}>
           <div>
             <h3 style={{ fontWeight: 700, fontSize: 16 }}>{assignment.title}</h3>
-            <span className={`badge ${assignment.type === 'QUIZ' ? 'badge-active' : 'badge-pending'}`} style={{ fontSize: 11 }}>
-              {assignment.type}
-            </span>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <span className={`badge ${assignment.type === 'QUIZ' ? 'badge-active' : 'badge-pending'}`} style={{ fontSize: 11 }}>
+                {assignment.type}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Max grade: {maxGrade}</span>
+            </div>
           </div>
           <button onClick={onClose} className="icon-btn" style={{ width: 28, height: 28 }}><X size={14} /></button>
         </div>
@@ -197,97 +215,148 @@ function SubmissionsPanel({
             <span className="spinner" />
           </div>
         ) : (
-          <div style={{ overflow: 'auto', flex: 1 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'var(--bg-elevated)' }}>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Student</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Status</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Submission</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Grade / 100</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600 }}>Feedback</th>
-                  <th style={{ padding: '10px 12px' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.studentRows || []).map((row: any) => (
-                  <tr key={row.student.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '10px 12px', fontSize: 13, minWidth: 160 }}>
-                      <div style={{ fontWeight: 600 }}>{row.student.name}</div>
+          <div style={{ overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {(data?.studentRows || []).map((row: any) => {
+              const studentId = row.student.id;
+              const isExpanded = expandedStudent === studentId;
+              const g = grades[studentId];
+              let parsedAnswers: Record<string, string> = {};
+              if (assignment.type === 'QUIZ' && row.submission?.content) {
+                try { parsedAnswers = JSON.parse(row.submission.content); } catch {}
+              }
+
+              return (
+                <div key={studentId} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {/* Student row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', flexWrap: 'wrap' }}>
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{row.student.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.student.email}</div>
                       {row.student.studentId && (
-                        <div style={{ fontSize: 11, color: 'var(--primary-light)', fontWeight: 600, marginTop: 2 }}>
-                          ID: {row.student.studentId}
-                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--primary-light)', fontWeight: 600 }}>ID: {row.student.studentId}</div>
                       )}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
+                    </div>
+
+                    {/* Status */}
+                    <div>
                       {row.submitted
                         ? <span className="badge badge-answered" style={{ fontSize: 11 }}><CheckCircle size={10} style={{ marginRight: 3 }} />Submitted</span>
                         : <span className="badge badge-pending" style={{ fontSize: 11 }}><Clock size={10} style={{ marginRight: 3 }} />Not yet</span>}
-                    </td>
-                    <td style={{ padding: '10px 12px', fontSize: 12, maxWidth: 180 }}>
-                      {row.submission?.content && (
-                        <div style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {row.submission.content}
+                    </div>
+
+                    {/* Grade input */}
+                    {row.submitted && (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="number"
+                            min={0} max={maxGrade}
+                            className="form-input"
+                            style={{ width: 70, fontSize: 13, padding: '5px 8px' }}
+                            value={g?.grade ?? ''}
+                            onChange={e => setGrades(prev => ({ ...prev, [studentId]: { ...prev[studentId], grade: e.target.value } }))}
+                            placeholder={`/ ${maxGrade}`}
+                          />
+                          <input
+                            className="form-input"
+                            style={{ width: 130, fontSize: 12, padding: '5px 8px' }}
+                            value={g?.feedback ?? ''}
+                            onChange={e => setGrades(prev => ({ ...prev, [studentId]: { ...prev[studentId], feedback: e.target.value } }))}
+                            placeholder="Feedback..."
+                          />
+                          <button
+                            className="btn btn-primary btn-sm"
+                            disabled={saving === row.submission?.id}
+                            onClick={() => saveGrade(row.submission.id, studentId)}
+                          >
+                            {saving === row.submission?.id
+                              ? <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
+                              : 'Save'}
+                          </button>
                         </div>
-                      )}
-                      {row.submission?.attachments?.length > 0 && (
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                          {row.submission.attachments.map((url: string, i: number) => (
-                            <a key={i} href={url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--primary-light)' }}>
-                              📎 File {i + 1}
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                      {!row.submitted && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <input
-                        type="number"
-                        min={0} max={100}
-                        className="form-input"
-                        style={{ width: 70, fontSize: 13, padding: '5px 8px' }}
-                        value={grades[row.student.id]?.grade ?? ''}
-                        onChange={e => setGrades(prev => ({ ...prev, [row.student.id]: { ...prev[row.student.id], grade: e.target.value } }))}
-                        placeholder="0-100"
-                        disabled={!row.submitted}
-                      />
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <input
-                        className="form-input"
-                        style={{ width: 130, fontSize: 12, padding: '5px 8px' }}
-                        value={grades[row.student.id]?.feedback ?? ''}
-                        onChange={e => setGrades(prev => ({ ...prev, [row.student.id]: { ...prev[row.student.id], feedback: e.target.value } }))}
-                        placeholder="Feedback..."
-                        disabled={!row.submitted}
-                      />
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      {row.submission && (
-                        <button
-                          className="btn btn-primary btn-sm"
-                          disabled={saving === row.submission.id}
-                          onClick={() => saveGrade(row.submission.id, row.student.id)}
-                        >
-                          {saving === row.submission.id
-                            ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                            : 'Save'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+                        {/* Expand answers button (only for QUIZ) */}
+                        {assignment.type === 'QUIZ' && (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => setExpandedStudent(isExpanded ? null : studentId)}
+                            style={{ fontSize: 11 }}
+                          >
+                            {isExpanded ? 'Hide Answers ▲' : 'View Answers ▼'}
+                          </button>
+                        )}
+
+                        {/* Homework attachments */}
+                        {assignment.type !== 'QUIZ' && row.submission?.content && (
+                          <div style={{ width: '100%', marginTop: 4, fontSize: 12, color: 'var(--text-secondary)', wordBreak: 'break-word' }}>
+                            {row.submission.content}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Quiz answers expanded */}
+                  {isExpanded && assignment.type === 'QUIZ' && questions.length > 0 && (
+                    <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(0,0,0,0.15)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                        Student Answers
+                      </div>
+                      {questions.map((q: any, i: number) => {
+                        const studentAnswer = parsedAnswers[q.id];
+                        const isCorrect = q.type === 'MULTIPLE_CHOICE' && q.correctAnswer && studentAnswer === q.correctAnswer;
+                        const isWrong = q.type === 'MULTIPLE_CHOICE' && q.correctAnswer && studentAnswer && studentAnswer !== q.correctAnswer;
+
+                        // Find option text for MCQ
+                        let answerLabel = studentAnswer || '—';
+                        if (q.type === 'MULTIPLE_CHOICE' && q.options) {
+                          const opt = q.options.find((o: any) => o.id === studentAnswer);
+                          answerLabel = opt ? `(${opt.id}) ${opt.text}` : (studentAnswer || '—');
+                        }
+
+                        return (
+                          <div key={q.id} style={{
+                            padding: '10px 12px', borderRadius: 8,
+                            background: 'rgba(255,255,255,0.03)',
+                            borderLeft: `3px solid ${q.type === 'TEXT' ? 'rgba(99,102,241,0.4)' : isCorrect ? 'rgba(16,185,129,0.5)' : isWrong ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                          }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>
+                              Q{i + 1}: {q.questionText}
+                            </div>
+                            <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {q.type === 'TEXT' ? (
+                                <span style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', flex: 1, wordBreak: 'break-word' }}>
+                                  {studentAnswer || <em style={{ color: 'var(--text-muted)' }}>No answer</em>}
+                                </span>
+                              ) : (
+                                <>
+                                  <span style={{ color: isCorrect ? '#10b981' : isWrong ? '#ef4444' : 'var(--text-muted)' }}>
+                                    {isCorrect ? '✓' : isWrong ? '✗' : '—'} {answerLabel}
+                                  </span>
+                                  {isWrong && q.correctAnswer && (
+                                    <span style={{ fontSize: 11, color: '#10b981' }}>
+                                      · Correct: {(() => { const co = q.options?.find((o: any) => o.id === q.correctAnswer); return co ? `(${co.id}) ${co.text}` : q.correctAnswer; })()}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
     </div>
   );
 }
+
 
 // ── Grade Matrix Tab ────────────────────────────────────────────────────────
 function GradesTab({ courseName, groupName }: { courseName: string; groupName: string }) {
