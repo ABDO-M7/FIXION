@@ -39,7 +39,7 @@ export function CourseVideoPlayer({ video }: { video: CourseVideo }) {
             src={`https://www.youtube-nocookie.com/embed/${video.youtubeVideoId}?enablejsapi=1&controls=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&fs=0`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
+            style={{ position: 'absolute', inset: '-7% -6%', width: '112%', height: '114%', border: 0 }}
           />
         ) : (
           <button
@@ -53,8 +53,9 @@ export function CourseVideoPlayer({ video }: { video: CourseVideo }) {
         {started && (
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2 }}>
             {/* Covers the provider's title/watermark areas with the app's own chrome. */}
-            <div style={{ position: 'absolute', inset: '0 0 auto', height: 42, background: 'linear-gradient(rgba(0,0,0,.62), transparent)' }} />
-            <div style={{ position: 'absolute', inset: 'auto 0 0', height: 62, background: 'linear-gradient(transparent, rgba(0,0,0,.88))' }} />
+            <div style={{ position: 'absolute', inset: '0 0 auto', height: 74, background: 'linear-gradient(#080d15 0%, #080d15 72%, rgba(8,13,21,.96) 86%, transparent 100%)' }} />
+            <div style={{ position: 'absolute', inset: 'auto 0 0', height: 92, background: 'linear-gradient(transparent, #080d15 34%, #080d15 100%)' }} />
+            <div style={{ position: 'absolute', left: 18, top: 16, color: 'rgba(255,255,255,.88)', fontSize: 12, fontWeight: 700, letterSpacing: '.03em' }}>FIXION • {video.title}</div>
             <div style={{ position: 'absolute', left: 14, right: 14, bottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 className="icon-btn"
