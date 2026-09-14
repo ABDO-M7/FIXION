@@ -3,10 +3,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi } from '@/lib/api';
+import TeacherVideosTab from '@/components/TeacherVideosTab';
 import {
   ArrowLeft, GraduationCap, Users, Plus, Trash2, X,
   ClipboardList, BookOpen, BarChart2, ChevronDown, ChevronRight,
-  CheckCircle, Clock, Upload, Edit3
+  CheckCircle, Clock, Upload, Edit3, Video
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -20,7 +21,7 @@ const COURSE_COLORS: Record<string, string> = {
   'برمجه':  '#8b5cf6',
 };
 
-type Tab = 'QUIZ' | 'HOMEWORK' | 'GRADES';
+type Tab = 'QUIZ' | 'HOMEWORK' | 'VIDEOS' | 'GRADES';
 
 // ── Create Assignment Modal ─────────────────────────────────────────────────
 function CreateModal({
@@ -256,7 +257,7 @@ export default function GroupDetailPage() {
 
   const fetchAssignments = useCallback(() => {
     setLoading(true);
-    const type = tab === 'GRADES' ? undefined : tab;
+    const type = tab === 'GRADES' || tab === 'VIDEOS' ? undefined : tab;
     (type ? assignmentsApi.list(decoded, decodedGroup, type) : Promise.resolve({ data: [] }))
       .then(r => setAssignments(Array.isArray(r.data) ? r.data : []))
       .catch(() => {})
@@ -264,7 +265,7 @@ export default function GroupDetailPage() {
   }, [decoded, decodedGroup, tab]);
 
   useEffect(() => {
-    if (tab !== 'GRADES') fetchAssignments();
+    if (tab !== 'GRADES' && tab !== 'VIDEOS') fetchAssignments();
   }, [tab, fetchAssignments]);
 
   const handleDelete = async (id: string) => {
@@ -293,6 +294,7 @@ export default function GroupDetailPage() {
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'QUIZ', label: 'Quiz', icon: ClipboardList },
     { id: 'HOMEWORK', label: 'Homework', icon: BookOpen },
+    { id: 'VIDEOS', label: 'Videos', icon: Video },
     { id: 'GRADES', label: 'Student Grades', icon: BarChart2 },
   ];
 
@@ -321,7 +323,7 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
-        {tab !== 'GRADES' && (
+        {tab !== 'GRADES' && tab !== 'VIDEOS' && (
           <button
             onClick={() => setCreateType(tab as 'QUIZ' | 'HOMEWORK')}
             className="btn btn-primary"
@@ -357,6 +359,8 @@ export default function GroupDetailPage() {
       {/* Tab Content */}
       {tab === 'GRADES' ? (
         <GradesTab courseName={decoded} groupName={decodedGroup} />
+      ) : tab === 'VIDEOS' ? (
+        <TeacherVideosTab courseName={decoded} groupName={decodedGroup} />
       ) : loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 50 }}>
           <span className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />

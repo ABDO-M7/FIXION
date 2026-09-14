@@ -3,10 +3,11 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { enrollmentsApi, assignmentsApi, uploadsApi } from '@/lib/api';
+import StudentVideosTab from '@/components/StudentVideosTab';
 import {
   GraduationCap, User, Users, ArrowLeft, BookOpen,
   ClipboardList, Upload, X, FileText, Image, CheckCircle,
-  Clock, Loader2, ExternalLink, Star, BarChart2, TrendingUp,
+  Clock, Loader2, ExternalLink, Star, BarChart2, TrendingUp, Video,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -579,7 +580,7 @@ export default function CourseDetailPage() {
   const [enrollment, setEnrollment] = useState<any>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'homework' | 'quiz' | 'grades'>('homework');
+  const [tab, setTab] = useState<'homework' | 'quiz' | 'videos' | 'grades'>('homework');
 
   const loadAssignments = useCallback(async (courseName: string, groupName: string) => {
     const res = await assignmentsApi.myAssignments(courseName, groupName);
@@ -701,6 +702,13 @@ export default function CourseDetailPage() {
           )}
         </button>
         <button
+          className={`tab-btn ${tab === 'videos' ? 'active' : ''}`}
+          onClick={() => setTab('videos')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <Video size={15} /> Videos
+        </button>
+        <button
           className={`tab-btn ${tab === 'quiz' ? 'active' : ''}`}
           onClick={() => setTab('quiz')}
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
@@ -724,6 +732,8 @@ export default function CourseDetailPage() {
       {/* Content */}
       {tab === 'grades' ? (
         <GradesTab assignments={assignments} />
+      ) : tab === 'videos' ? (
+        <StudentVideosTab courseName={enrollment.courseName} groupName={enrollment.groupName} />
       ) : filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '60px 24px' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>{tab === 'homework' ? '📚' : '📝'}</div>

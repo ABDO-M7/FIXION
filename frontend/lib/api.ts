@@ -138,6 +138,13 @@ export const assignmentsApi = {
     api.patch(`/assignments/${id}/questions/reorder`, { orderedIds }),
 };
 
+export const videosApi = {
+  create: (data: { courseName: string; groupName: string; title: string; description?: string; youtubeUrl: string }) => api.post('/videos', data),
+  teacherList: (courseName: string, groupName: string) => api.get(`/videos/teacher/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`),
+  studentList: (courseName: string, groupName: string) => api.get(`/videos/student/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`),
+  delete: (id: string) => api.delete(`/videos/${id}`),
+};
+
 
 export const categoriesApi = {
   list: (subject?: string) => api.get('/categories', { params: { subject } }),
