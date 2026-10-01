@@ -17,8 +17,8 @@ import { useTranslation } from '@/hooks/useTranslation';
 
 const studentNav = [
   { key: 'nav.dashboard',      href: '/student',                icon: LayoutDashboard },
-  { key: 'nav.questions',      href: '/student/questions',      icon: HelpCircle },
   { key: 'nav.courses',        href: '/student/courses',        icon: GraduationCap },
+  { key: 'nav.questions',      href: '/student/questions',      icon: HelpCircle },
   { key: 'nav.appointments',   href: '/student/appointments',   icon: Calendar },
   { key: 'nav.subscription',   href: '/student/subscription',   icon: Key },
   { key: 'nav.profile',        href: '/student/profile',        icon: User },
@@ -28,8 +28,8 @@ const studentNav = [
 const teacherNav = [
   { key: 'nav.dashboard',      href: '/teacher',                icon: LayoutDashboard },
   { key: 'nav.courses',        href: '/teacher/courses',        icon: GraduationCap },
-  { key: 'nav.appointments',   href: '/teacher/appointments',   icon: Calendar },
   { key: 'nav.allQuestions',   href: '/teacher/questions',      icon: HelpCircle },
+  { key: 'nav.appointments',   href: '/teacher/appointments',   icon: Calendar },
   { key: 'nav.categories',     href: '/teacher/categories',     icon: BookOpen },
   { key: 'nav.profile',        href: '/teacher/profile',        icon: User },
   { key: 'nav.notifications',  href: '/teacher/notifications',  icon: Bell },
@@ -105,7 +105,7 @@ export default function AppShell({ children }: AppShellProps) {
         {/* Logo */}
         <div className="sidebar-logo">
           <img
-            src="/logo.jpg"
+            src="/brand/icon.png"
             alt="Fixion"
             className="logo-img"
           />
@@ -178,7 +178,7 @@ export default function AppShell({ children }: AppShellProps) {
 
             <div className="topbar-search">
               <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-              <input placeholder={t('common.search')} />
+              <input placeholder={t('common.search')} aria-label={t('common.search')} />
             </div>
           </div>
 

@@ -71,7 +71,7 @@ export default function OnboardingPage() {
     <div className="auth-container">
       <div className="auth-card" style={{ maxWidth: 440 }}>
         <div className="auth-logo">
-          <Image src="/logo.png" alt="Fixion" width={40} height={40} style={{ borderRadius: 10 }} />
+          <Image src="/brand/icon.png" alt="FIXION" width={40} height={40} style={{ borderRadius: 10 }} />
           <span style={{ fontSize: 22, fontWeight: 800, background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             Fixion
           </span>

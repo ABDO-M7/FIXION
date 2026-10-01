@@ -112,7 +112,7 @@ export default function LoginPage() {
       <div className="auth-card animate-fade-in-up">
         {/* Logo */}
         <div className="auth-logo">
-          <img src="/logo.jpg" alt="Fixion" className="auth-logo-img" />
+          <img src="/brand/icon.png" alt="FIXION" className="auth-logo-img" />
         </div>
 
         <h1 className="auth-title">{t.welcome}</h1>
