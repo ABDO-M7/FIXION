@@ -98,7 +98,7 @@ function ReviewScreen({
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
               {isPending
-                ? 'Your quiz has text questions that require manual grading by your teacher. Your score will appear once graded.'
+                ? 'Your quiz has text questions that require manual grading by a team member. Your score will appear once graded.'
                 : 'Your quiz has been automatically graded. Review your answers below.'}
             </p>
           </div>
@@ -340,7 +340,7 @@ export default function QuizAttemptPage() {
             </div>
             <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Quiz Not Available</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0, lineHeight: 1.6 }}>
-              This quiz has no questions published yet by your teacher.
+              This quiz has no questions published yet by a team member.
             </p>
             <Link href={`/student/courses/${id}`} className="btn btn-primary" style={{ marginTop: 12 }}>
               <ArrowLeft size={15} /> Back to Course

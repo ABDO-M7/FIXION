@@ -108,7 +108,7 @@ export default function StudentCoursesPage() {
                     {enrollment.teacherName && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
                         <User size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                        {enrollment.teacherName}
+                        <><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Teacher:</span> {enrollment.teacherName}</>
                       </div>
                     )}
                     {enrollment.groupName && (

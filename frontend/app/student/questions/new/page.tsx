@@ -74,7 +74,7 @@ export default function NewQuestionPage() {
         content: data.content,
         attachments: uploadedUrls
       });
-      toast.success('Question submitted! A teacher will answer soon.');
+      toast.success('Question submitted! A team member will answer soon.');
       router.push(`/student/questions/${res.data.id}`);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to submit question');
@@ -91,7 +91,7 @@ export default function NewQuestionPage() {
             <ArrowLeft size={14} /> Back
           </Link>
           <h1 className="page-title">Ask a Question</h1>
-          <p className="page-subtitle">Our teachers will answer your academic question</p>
+          <p className="page-subtitle">Our team members will answer your academic question</p>
         </div>
       </div>
 

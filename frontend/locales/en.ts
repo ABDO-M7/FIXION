@@ -16,7 +16,7 @@ export const en = {
   },
   roles: {
     student: 'Student',
-    teacher: 'Teacher',
+    teacher: 'Team member',
     admin: 'Admin',
   },
   common: {
@@ -55,7 +55,7 @@ export const en = {
     closed: 'Closed',
     accepted: 'Accepted & Scheduled',
     declined: 'Declined',
-    pendingReview: 'Pending Teacher Review',
+    pendingReview: 'Pending Team Member Review',
   },
   questions: {
     title: 'My Questions',
@@ -101,14 +101,14 @@ export const en = {
   },
   appointments: {
     title: 'Explanation Appointments',
-    subtitle: 'Request 1-on-1 explanation sessions with your specialized teachers.',
+    subtitle: 'Request 1-on-1 explanation sessions with our specialized team members.',
     requestBtn: 'Request Appointment',
     noAppointments: 'No Appointment Requests Yet',
-    noAppointmentsText: 'Stuck on a tricky topic? Request an appointment and a specialized teacher will reach out to explain it to you.',
+    noAppointmentsText: 'Stuck on a tricky topic? Request an appointment and a specialized team member will reach out to explain it to you.',
     requestFirst: 'Request Your First Appointment',
     preferredTime: 'Preferred Time',
     yourNote: 'Your Note:',
-    teacherReply: 'Teacher Reply',
+    teacherReply: 'Team Member Reply',
     modalTitle: 'Request 1-on-1 Explanation',
     selectCourse: 'Select Course / Subject *',
     selectCoursePlaceholder: '-- Select a course --',
@@ -119,7 +119,7 @@ export const en = {
     detailsLabel: 'Details / Specific Questions (Optional)',
     detailsPlaceholder: "Explain what specific part you're struggling with...",
     sendRequest: 'Send Request',
-    sentSuccess: 'Appointment request sent to teachers! 🚀',
+    sentSuccess: 'Appointment request sent to team members! 🚀',
     failedLoad: 'Failed to load appointments',
     failedSubmit: 'Failed to submit request',
     selectCourseError: 'Please select or enter a course name',
@@ -161,7 +161,7 @@ export const en = {
       redeemCode: 'Redeem Code',
       recentQuestions: 'Recent Questions',
       noQuestions: 'No questions yet',
-      askFirstPrompt: 'Ask your first academic question and get answers from qualified teachers.',
+      askFirstPrompt: 'Ask your first academic question and get answers from qualified team members.',
       answers: 'answer',
       answersPlural: 'answers',
     }

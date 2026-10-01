@@ -180,7 +180,7 @@ export default function AppShell({ children }: AppShellProps) {
               <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
               <input placeholder={t('common.search')} aria-label={t('common.search')} />
             </div>
-            <span className="workspace-context">{user?.role === 'admin' ? 'Control center' : user?.role === 'teacher' ? 'Teaching workspace' : 'Learning workspace'}</span>
+            <span className="workspace-context">{user?.role === 'admin' ? 'Control center' : user?.role === 'teacher' ? 'Team workspace' : 'Learning workspace'}</span>
           </div>
 
           <div className="topbar-actions">

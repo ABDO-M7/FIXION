@@ -18,7 +18,7 @@ export const ar: Dictionary = {
   },
   roles: {
     student: 'طالب',
-    teacher: 'معلم',
+    teacher: 'عضو الفريق',
     admin: 'مشرف',
   },
   common: {
@@ -57,7 +57,7 @@ export const ar: Dictionary = {
     closed: 'مغلق',
     accepted: 'مقبول ومجدول',
     declined: 'مرفوض',
-    pendingReview: 'بانتظار مراجعة المعلم',
+    pendingReview: 'بانتظار مراجعة عضو الفريق',
   },
   questions: {
     title: 'أسئلتي',
@@ -103,14 +103,14 @@ export const ar: Dictionary = {
   },
   appointments: {
     title: 'مواعيد الشرح',
-    subtitle: 'اطلب جلسات شرح فردية مع معلميك المتخصصين.',
+    subtitle: 'اطلب جلسات شرح فردية مع أعضاء فريقنا المتخصصين.',
     requestBtn: 'طلب موعد',
     noAppointments: 'لا توجد طلبات مواعيد بعد',
-    noAppointmentsText: 'عالق في موضوع صعب؟ اطلب موعداً وسيتواصل معك معلم متخصص لشرحه.',
+    noAppointmentsText: 'عالق في موضوع صعب؟ اطلب موعداً وسيتواصل معك عضو فريق متخصص لشرحه.',
     requestFirst: 'اطلب موعدك الأول',
     preferredTime: 'الوقت المفضّل',
     yourNote: 'ملاحظتك:',
-    teacherReply: 'رد المعلم',
+    teacherReply: 'رد عضو الفريق',
     modalTitle: 'طلب شرح فردي',
     selectCourse: 'اختر الدورة / المادة *',
     selectCoursePlaceholder: '-- اختر دورة --',
@@ -121,7 +121,7 @@ export const ar: Dictionary = {
     detailsLabel: 'التفاصيل / أسئلة محددة (اختياري)',
     detailsPlaceholder: 'اشرح الجزء الذي تجد صعوبة فيه تحديداً...',
     sendRequest: 'إرسال الطلب',
-    sentSuccess: 'تم إرسال طلب الموعد للمعلمين! 🚀',
+    sentSuccess: 'تم إرسال طلب الموعد لأعضاء الفريق! 🚀',
     failedLoad: 'فشل تحميل المواعيد',
     failedSubmit: 'فشل إرسال الطلب',
     selectCourseError: 'يرجى اختيار أو إدخال اسم الدورة',
@@ -163,7 +163,7 @@ export const ar: Dictionary = {
       redeemCode: 'استرداد كود',
       recentQuestions: 'أحدث الأسئلة',
       noQuestions: 'لا توجد أسئلة بعد',
-      askFirstPrompt: 'اطرح سؤالك الأكاديمي الأول واحصل على إجابات من معلمين مؤهلين.',
+      askFirstPrompt: 'اطرح سؤالك الأكاديمي الأول واحصل على إجابات من أعضاء فريق مؤهلين.',
       answers: 'إجابة',
       answersPlural: 'إجابات',
     }

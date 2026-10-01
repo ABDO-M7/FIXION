@@ -130,7 +130,7 @@ export default function QuestionDetailPage() {
           {answers.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>⏳</div>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Waiting for a teacher to answer...</div>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Waiting for a team member to answer...</div>
               <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>You'll get a notification when your question is answered.</div>
             </div>
           ) : (
@@ -144,7 +144,7 @@ export default function QuestionDetailPage() {
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>
                         <GraduationCap size={13} style={{ display: 'inline', marginRight: 4, color: 'var(--primary-light)' }} />
-                        {answer.teacher?.name || 'Teacher'}
+                        {answer.teacher?.name || 'Team member'}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                         {formatDistanceToNow(new Date(answer.createdAt), { addSuffix: true })}

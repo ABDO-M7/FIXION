@@ -176,7 +176,7 @@ function SubmitModal({
           <label className="form-label">Add a note (optional)</label>
           <textarea
             className="form-input form-textarea"
-            placeholder="Write anything you want to tell your teacher…"
+            placeholder="Write anything you want to tell your team member…"
             value={content}
             onChange={e => setContent(e.target.value)}
             style={{ minHeight: 90 }}
@@ -362,7 +362,7 @@ function AssignmentCard({
             )}
             {sub.feedback && (
               <div style={{ background: 'rgba(99,102,241,0.06)', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: 'var(--text-secondary)', borderLeft: '3px solid rgba(99,102,241,0.4)' }}>
-                <span style={{ fontWeight: 600, color: 'var(--primary-light)' }}>Teacher feedback: </span>
+                <span style={{ fontWeight: 600, color: 'var(--primary-light)' }}>Team member feedback: </span>
                 {sub.feedback}
               </div>
             )}
@@ -657,7 +657,7 @@ export default function CourseDetailPage() {
               <div style={{ display: 'flex', gap: 16, fontSize: 13, color: 'var(--text-muted)' }}>
                 {enrollment.teacherName && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <User size={12} /> {enrollment.teacherName}
+                    <User size={12} /> <span><strong>Teacher:</strong> {enrollment.teacherName}</span>
                   </span>
                 )}
                 {enrollment.groupName && (
@@ -741,7 +741,7 @@ export default function CourseDetailPage() {
             No {tab === 'homework' ? 'homework' : 'quizzes'} yet
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-            Your teacher hasn't posted any {tab === 'homework' ? 'homework' : 'quizzes'} for this course yet.
+            Your team member hasn't posted any {tab === 'homework' ? 'homework' : 'quizzes'} for this course yet.
           </p>
         </div>
       ) : (

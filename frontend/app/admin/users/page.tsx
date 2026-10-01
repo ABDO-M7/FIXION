@@ -7,6 +7,12 @@ import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
 const ROLE_FILTERS = ['all', 'student', 'teacher', 'admin'] as const;
+const ROLE_LABELS: Record<(typeof ROLE_FILTERS)[number], string> = {
+  all: 'All',
+  student: 'Student',
+  teacher: 'Team member',
+  admin: 'Admin',
+};
 const COURSES = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
 
 export default function AdminUsersPage() {
@@ -82,7 +88,7 @@ export default function AdminUsersPage() {
 
   const roleBadge = (r: string) => {
     if (r === 'admin') return <span className="badge badge-admin">Admin</span>;
-    if (r === 'teacher') return <span className="badge badge-teacher">Teacher</span>;
+    if (r === 'teacher') return <span className="badge badge-teacher">Team member</span>;
     return <span className="badge badge-student">Student</span>;
   };
 
@@ -104,7 +110,7 @@ export default function AdminUsersPage() {
           {ROLE_FILTERS.map(r => (
             <button key={r} className={`tab-btn ${role === r ? 'active' : ''}`}
               onClick={() => { setRole(r); setPage(1); }} style={{ textTransform: 'capitalize', flex: 'none', padding: '7px 14px' }}>
-              {r}
+              {ROLE_LABELS[r]}
             </button>
           ))}
         </div>
@@ -217,8 +223,8 @@ export default function AdminUsersPage() {
               <button onClick={() => setSubjectsModal(null)} className="icon-btn" style={{ width: 30, height: 30 }}><X size={15} /></button>
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-              Teacher: <strong>{subjectsModal.user.name}</strong><br />
-              Select which courses this teacher can see and answer. Leave all unselected to allow all subjects.
+              Team member: <strong>{subjectsModal.user.name}</strong><br />
+              Select which courses this team member can see and answer. Leave all unselected to allow all subjects.
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
               {COURSES.map(c => {

@@ -23,7 +23,7 @@ type FormData = z.infer<typeof schema>;
 const strings = {
   en: {
     title: 'Create your account',
-    sub: 'Start learning with expert teacher support',
+    sub: 'Start learning with expert team member support',
     name: 'Full Name', namePh: 'Your full name',
     email: 'Email Address',
     password: 'Password', passPh: 'Min. 8 characters',
@@ -38,7 +38,7 @@ const strings = {
   },
   ar: {
     title: 'أنشئ حسابك',
-    sub: 'ابدأ رحلتك التعليمية مع دعم المعلمين المتخصصين',
+    sub: 'ابدأ رحلتك التعليمية مع دعم أعضاء الفريق المتخصصين',
     name: 'الاسم الكامل', namePh: 'اسمك الكامل',
     email: 'البريد الإلكتروني',
     password: 'كلمة المرور', passPh: '8 أحرف على الأقل',

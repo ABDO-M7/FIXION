@@ -102,7 +102,7 @@ export default function TeacherDashboard() {
     <AppShell>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Teacher Panel</h1>
+          <h1 className="page-title">Team Member Panel</h1>
           <p className="page-subtitle">Welcome, {user?.name} — answer student questions</p>
         </div>
       </div>

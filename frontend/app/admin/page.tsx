@@ -34,7 +34,7 @@ export default function AdminDashboard() {
 
   const pieData = overview ? [
     { name: 'Students', value: overview.users?.students || 0 },
-    { name: 'Teachers', value: overview.users?.teachers || 0 },
+    { name: 'Team members', value: overview.users?.teachers || 0 },
   ] : [];
 
   const questionData = overview ? [
@@ -63,7 +63,7 @@ export default function AdminDashboard() {
           <div className="stat-value">{overview?.users?.total?.toLocaleString()}</div>
           <div className="stat-label">Total Users</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {overview?.users?.students} students · {overview?.users?.teachers} teachers
+            {overview?.users?.students} students · {overview?.users?.teachers} team members
           </div>
         </div>
         <div className="stat-card purple">
