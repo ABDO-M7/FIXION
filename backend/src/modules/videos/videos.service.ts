@@ -2,15 +2,40 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { CourseVideo } from './entities/course-video.entity';
+import { VideoCheckpoint, VideoCheckpointOption, VideoCheckpointType } from './entities/video-checkpoint.entity';
+import { VideoResponse } from './entities/video-response.entity';
 
 type CreateVideoDto = {
   courseName: string;
   groupName: string;
   title: string;
   description?: string;
-  youtubeUrl: string;
+  provider?: string;
+  sourceUrl?: string;
+  videoUrl?: string;
+  youtubeUrl?: string;
+};
+
+type CheckpointDto = {
+  timestampSeconds?: number;
+  prompt?: string;
+  type?: VideoCheckpointType | string;
+  options?: VideoCheckpointOption[];
+  correctAnswer?: string;
+  solutionText?: string;
+  solutionUrl?: string;
+  requireSolutionUpload?: boolean;
+  showSolutionAfterAnswer?: boolean;
+  orderIndex?: number;
+};
+
+type AnswerDto = { answerText?: string; answer?: string; attachments?: string[] };
+
+type ParsedSource = {
+  provider: 'youtube' | 'vimeo' | 'wistia' | 'bunny';
+  providerVideoId: string;
 };
 
 @Injectable()
@@ -18,6 +43,8 @@ export class VideosService {
   constructor(
     @InjectRepository(CourseVideo) private readonly videosRepo: Repository<CourseVideo>,
     @InjectRepository(CourseEnrollment) private readonly enrollmentsRepo: Repository<CourseEnrollment>,
+    @InjectRepository(VideoCheckpoint) private readonly checkpointsRepo: Repository<VideoCheckpoint>,
+    @InjectRepository(VideoResponse) private readonly responsesRepo: Repository<VideoResponse>,
   ) {}
 
   async create(dto: CreateVideoDto, teacher: User) {
@@ -25,49 +52,286 @@ export class VideosService {
     if (!dto.courseName?.trim() || !dto.groupName?.trim() || !title) {
       throw new BadRequestException('Course, group, and title are required');
     }
-    const youtubeVideoId = this.extractYoutubeId(dto.youtubeUrl);
+    const source = this.parseVideoSource(dto.sourceUrl || dto.videoUrl || dto.youtubeUrl, dto.provider);
     return this.videosRepo.save(this.videosRepo.create({
       courseName: dto.courseName.trim(),
       groupName: dto.groupName.trim(),
       title,
       description: dto.description?.trim() || null,
-      youtubeVideoId,
+      provider: source.provider,
+      providerVideoId: source.providerVideoId,
+      youtubeVideoId: source.provider === 'youtube' ? source.providerVideoId : null,
       teacherId: teacher.id,
     }));
   }
 
   async listForTeacher(courseName: string, groupName: string, teacherId: string) {
-    return this.videosRepo.find({
+    const videos = await this.videosRepo.find({
       where: { courseName, groupName, teacherId },
       order: { createdAt: 'DESC' },
     });
+    return Promise.all(videos.map(video => this.withCheckpointSummary(video)));
   }
 
   async listForStudent(courseName: string, groupName: string, studentId: string) {
     const enrollment = await this.enrollmentsRepo.findOne({ where: { courseName, groupName, studentId } });
     if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
-    return this.videosRepo.find({ where: { courseName, groupName }, order: { createdAt: 'DESC' } });
+    const videos = await this.videosRepo.find({ where: { courseName, groupName }, order: { createdAt: 'DESC' } });
+    return Promise.all(videos.map(async video => {
+      const checkpoints = await this.checkpointsRepo.find({ where: { videoId: video.id }, order: { orderIndex: 'ASC', timestampSeconds: 'ASC' } });
+      const responses = checkpoints.length ? await this.responsesRepo.find({ where: { videoId: video.id, studentId } }) : [];
+      return {
+        ...this.publicVideo(video),
+        checkpointCount: checkpoints.length,
+        completedCheckpointCount: responses.filter(response => response.isCorrect).length,
+      };
+    }));
   }
 
-  async remove(id: string, teacherId: string) {
+  async getTeacherCheckpoints(videoId: string, actor: User) {
+    const video = await this.getOwnedVideo(videoId, actor);
+    return this.checkpointsRepo.find({
+      where: { videoId: video.id },
+      order: { orderIndex: 'ASC', timestampSeconds: 'ASC' },
+    });
+  }
+
+  async createCheckpoint(videoId: string, dto: CheckpointDto, actor: User) {
+    const video = await this.getOwnedVideo(videoId, actor);
+    const input = this.validateCheckpoint(dto);
+    const orderIndex = dto.orderIndex ?? await this.checkpointsRepo.count({ where: { videoId } });
+    return this.checkpointsRepo.save(this.checkpointsRepo.create({ videoId: video.id, ...input, orderIndex }));
+  }
+
+  async updateCheckpoint(videoId: string, checkpointId: string, dto: CheckpointDto, actor: User) {
+    await this.getOwnedVideo(videoId, actor);
+    const checkpoint = await this.checkpointsRepo.findOne({ where: { id: checkpointId, videoId } });
+    if (!checkpoint) throw new NotFoundException('Checkpoint not found');
+    Object.assign(checkpoint, this.validateCheckpoint(dto, checkpoint));
+    if (dto.orderIndex !== undefined) checkpoint.orderIndex = dto.orderIndex;
+    return this.checkpointsRepo.save(checkpoint);
+  }
+
+  async removeCheckpoint(videoId: string, checkpointId: string, actor: User) {
+    await this.getOwnedVideo(videoId, actor);
+    const checkpoint = await this.checkpointsRepo.findOne({ where: { id: checkpointId, videoId } });
+    if (!checkpoint) throw new NotFoundException('Checkpoint not found');
+    await this.checkpointsRepo.delete(checkpoint.id);
+    return { message: 'Checkpoint deleted' };
+  }
+
+  async getStudentExperience(videoId: string, student: User) {
+    const video = await this.videosRepo.findOne({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    await this.assertEnrollment(video.courseName, video.groupName, student.id);
+    const checkpoints = await this.checkpointsRepo.find({
+      where: { videoId },
+      order: { orderIndex: 'ASC', timestampSeconds: 'ASC' },
+    });
+    const responses = checkpoints.length ? await this.responsesRepo.find({ where: { videoId, studentId: student.id } }) : [];
+    const responseMap = new Map(responses.map(response => [response.checkpointId, response]));
+    return {
+      video: this.publicVideo(video),
+      checkpoints: checkpoints.map(checkpoint => {
+        const response = responseMap.get(checkpoint.id);
+        const solved = Boolean(response?.isCorrect);
+        return {
+          id: checkpoint.id,
+          timestampSeconds: checkpoint.timestampSeconds,
+          orderIndex: checkpoint.orderIndex,
+          prompt: checkpoint.prompt,
+          type: checkpoint.type,
+          options: checkpoint.options || [],
+          requireSolutionUpload: checkpoint.requireSolutionUpload,
+          showSolutionAfterAnswer: checkpoint.showSolutionAfterAnswer,
+          solutionText: solved && checkpoint.showSolutionAfterAnswer ? checkpoint.solutionText : null,
+          solutionUrl: solved && checkpoint.showSolutionAfterAnswer ? checkpoint.solutionUrl : null,
+          response: response ? { isCorrect: response.isCorrect, attempts: response.attempts, submittedAt: response.submittedAt } : null,
+        };
+      }),
+    };
+  }
+
+  async answerCheckpoint(videoId: string, checkpointId: string, student: User, dto: AnswerDto) {
+    const video = await this.videosRepo.findOne({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    await this.assertEnrollment(video.courseName, video.groupName, student.id);
+    const checkpoint = await this.checkpointsRepo.findOne({ where: { id: checkpointId, videoId } });
+    if (!checkpoint) throw new NotFoundException('Checkpoint not found');
+
+    const checkpoints = await this.checkpointsRepo.find({ where: { videoId }, order: { orderIndex: 'ASC', timestampSeconds: 'ASC' } });
+    const currentIndex = checkpoints.findIndex(item => item.id === checkpoint.id);
+    if (currentIndex > 0) {
+      const previous = checkpoints[currentIndex - 1];
+      const previousResponse = await this.responsesRepo.findOne({ where: { checkpointId: previous.id, studentId: student.id } });
+      if (!previousResponse?.isCorrect) throw new ForbiddenException('Complete the previous checkpoint first');
+    }
+
+    const answerText = (dto.answerText ?? dto.answer ?? '').trim();
+    const attachments = Array.isArray(dto.attachments) ? dto.attachments.filter(Boolean).slice(0, 10) : [];
+    const existing = await this.responsesRepo.findOne({ where: { checkpointId, studentId: student.id } });
+    const attempts = (existing?.attempts || 0) + 1;
+    let isCorrect = false;
+    if (checkpoint.type === VideoCheckpointType.MCQ) {
+      isCorrect = Boolean(answerText && checkpoint.correctAnswer && answerText === checkpoint.correctAnswer);
+    } else {
+      isCorrect = Boolean(answerText || attachments.length > 0);
+      if (checkpoint.requireSolutionUpload && attachments.length === 0) isCorrect = false;
+    }
+
+    const response = existing || this.responsesRepo.create({ checkpointId, videoId, studentId: student.id });
+    response.answerText = answerText || null;
+    response.attachments = attachments;
+    response.attempts = attempts;
+    response.isCorrect = isCorrect;
+    await this.responsesRepo.save(response);
+
+    if (!isCorrect) {
+      return {
+        correct: false,
+        canContinue: false,
+        attempts,
+        message: checkpoint.type === VideoCheckpointType.MCQ
+          ? 'That answer is not correct. Try again.'
+          : checkpoint.requireSolutionUpload
+            ? 'Submit a written answer and upload your solution to continue.'
+            : 'Write an answer to continue.',
+      };
+    }
+
+    const next = checkpoints[currentIndex + 1];
+    return {
+      correct: true,
+      canContinue: true,
+      attempts,
+      nextCheckpointId: next?.id || null,
+      completed: !next,
+      solution: checkpoint.showSolutionAfterAnswer ? { text: checkpoint.solutionText, url: checkpoint.solutionUrl } : null,
+    };
+  }
+
+  async remove(id: string, actor: User) {
     const video = await this.videosRepo.findOne({ where: { id } });
     if (!video) throw new NotFoundException('Video not found');
-    if (video.teacherId !== teacherId) throw new ForbiddenException('You can only delete your own videos');
+    if (actor.role !== UserRole.ADMIN && video.teacherId !== actor.id) {
+      throw new ForbiddenException('You can only delete your own videos');
+    }
     await this.videosRepo.delete(id);
     return { message: 'Video deleted' };
   }
 
-  private extractYoutubeId(value: string): string {
-    if (!value?.trim()) throw new BadRequestException('A YouTube link is required');
-    let url: URL;
-    try { url = new URL(value.trim()); } catch { throw new BadRequestException('Enter a valid YouTube link'); }
-    const host = url.hostname.toLowerCase().replace(/^www\./, '');
-    let id: string | null = null;
-    if (host === 'youtu.be') id = url.pathname.split('/').filter(Boolean)[0] || null;
-    if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
-      id = url.searchParams.get('v') || (url.pathname.match(/^\/(?:embed|shorts|live)\/([^/?]+)/)?.[1] ?? null);
+  private async getOwnedVideo(videoId: string, actor: User) {
+    const video = await this.videosRepo.findOne({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    if (actor.role !== UserRole.ADMIN && video.teacherId !== actor.id) {
+      throw new ForbiddenException('You can only manage your own videos');
     }
-    if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) throw new BadRequestException('Enter a valid YouTube video link');
-    return id;
+    return video;
+  }
+
+  private async withCheckpointSummary(video: CourseVideo) {
+    const checkpoints = await this.checkpointsRepo.find({ where: { videoId: video.id }, order: { orderIndex: 'ASC', timestampSeconds: 'ASC' } });
+    return { ...this.publicVideo(video), checkpoints };
+  }
+
+  private publicVideo(video: CourseVideo) {
+    return {
+      id: video.id,
+      courseName: video.courseName,
+      groupName: video.groupName,
+      title: video.title,
+      description: video.description,
+      provider: video.provider || 'youtube',
+      providerVideoId: video.providerVideoId || video.youtubeVideoId,
+      createdAt: video.createdAt,
+      updatedAt: video.updatedAt,
+    };
+  }
+
+  private async assertEnrollment(courseName: string, groupName: string, studentId: string) {
+    const enrollment = await this.enrollmentsRepo.findOne({ where: { courseName, groupName, studentId } });
+    if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
+  }
+
+  private validateCheckpoint(dto: CheckpointDto, current?: VideoCheckpoint) {
+    const timestampSeconds = Number(dto.timestampSeconds ?? current?.timestampSeconds);
+    const prompt = (dto.prompt ?? current?.prompt ?? '').trim();
+    const type = (dto.type ?? current?.type ?? VideoCheckpointType.MCQ) as VideoCheckpointType;
+    if (!Number.isFinite(timestampSeconds) || timestampSeconds < 0) throw new BadRequestException('A valid timestamp is required');
+    if (!prompt) throw new BadRequestException('Question text is required');
+    if (![VideoCheckpointType.MCQ, VideoCheckpointType.ESSAY].includes(type)) {
+      throw new BadRequestException('Question type must be MCQ or ESSAY');
+    }
+
+    const options = Array.isArray(dto.options)
+      ? dto.options.map((option, index) => ({
+          id: String(option.id || String.fromCharCode(65 + index)).trim(),
+          text: String(option.text || '').trim(),
+        })).filter(option => option.text)
+      : (current?.options || []);
+    const correctAnswer = (dto.correctAnswer ?? current?.correctAnswer ?? '').trim() || null;
+    if (type === VideoCheckpointType.MCQ) {
+      if (options.length < 2) throw new BadRequestException('MCQ requires at least two options');
+      if (!correctAnswer || !options.some(option => option.id === correctAnswer)) {
+        throw new BadRequestException('Choose a correct MCQ option');
+      }
+    }
+
+    return {
+      timestampSeconds: Math.floor(timestampSeconds),
+      prompt,
+      type,
+      options: type === VideoCheckpointType.MCQ ? options : [],
+      correctAnswer: type === VideoCheckpointType.MCQ ? correctAnswer : null,
+      solutionText: (dto.solutionText ?? current?.solutionText ?? '').trim() || null,
+      solutionUrl: (dto.solutionUrl ?? current?.solutionUrl ?? '').trim() || null,
+      requireSolutionUpload: Boolean(dto.requireSolutionUpload ?? current?.requireSolutionUpload),
+      showSolutionAfterAnswer: dto.showSolutionAfterAnswer ?? current?.showSolutionAfterAnswer ?? true,
+    };
+  }
+
+  private parseVideoSource(value: string | undefined, requestedProvider?: string): ParsedSource {
+    if (!value?.trim()) throw new BadRequestException('A video link is required');
+    let url: URL;
+    try { url = new URL(value.trim()); } catch { throw new BadRequestException('Enter a valid video link'); }
+
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    const providerHint = requestedProvider?.toLowerCase();
+    let provider: ParsedSource['provider'] | null = null;
+    let providerVideoId: string | null = null;
+
+    if (host === 'youtu.be' || host.endsWith('youtube.com')) {
+      provider = 'youtube';
+      providerVideoId = host === 'youtu.be'
+        ? url.pathname.split('/').filter(Boolean)[0] || null
+        : url.searchParams.get('v') || (url.pathname.match(/^\/(?:embed|shorts|live)\/([^/?]+)/)?.[1] ?? null);
+    } else if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+      provider = 'vimeo';
+      providerVideoId = url.pathname.match(/(?:video\/)?([0-9]+)/)?.[1] || null;
+    } else if (host.endsWith('wistia.com') || host === 'fast.wistia.net') {
+      provider = 'wistia';
+      providerVideoId = url.pathname.match(/(?:medias|iframe|embed)\/([^/?]+)/)?.[1] || null;
+    } else if (host === 'iframe.mediadelivery.net' || host === 'player.mediadelivery.net' || host.endsWith('bunnycdn.com')) {
+      provider = 'bunny';
+      const parts = url.pathname.split('/').filter(Boolean);
+      const embedIndex = parts.indexOf('embed');
+      const playIndex = parts.indexOf('play');
+      if (embedIndex >= 0 && parts[embedIndex + 2]) {
+        providerVideoId = parts[embedIndex + 1] + '/' + parts[embedIndex + 2];
+      } else if (playIndex >= 0 && parts[playIndex + 2]) {
+        providerVideoId = parts[playIndex + 1] + '/' + parts[playIndex + 2];
+      }
+    }
+
+    if (!provider || !providerVideoId || (providerHint && providerHint !== provider)) {
+      throw new BadRequestException('Use a valid YouTube, Vimeo, Wistia, or Bunny Stream link');
+    }
+    if (provider === 'youtube' && !/^[A-Za-z0-9_-]{11}$/.test(providerVideoId)) {
+      throw new BadRequestException('Enter a valid YouTube video link');
+    }
+    if (provider === 'bunny' && !/^[^/]+\/[^/]+$/.test(providerVideoId)) {
+      throw new BadRequestException('Bunny Stream links must include library and video ids');
+    }
+    return { provider, providerVideoId };
   }
 }

@@ -139,7 +139,13 @@ export const assignmentsApi = {
 };
 
 export const videosApi = {
-  create: (data: { courseName: string; groupName: string; title: string; description?: string; youtubeUrl: string }) => api.post('/videos', data),
+  teacherCheckpoints: (videoId: string) => api.get('/videos/' + videoId + '/checkpoints'),
+  createCheckpoint: (videoId: string, data: any) => api.post('/videos/' + videoId + '/checkpoints', data),
+  updateCheckpoint: (videoId: string, checkpointId: string, data: any) => api.patch('/videos/' + videoId + '/checkpoints/' + checkpointId, data),
+  deleteCheckpoint: (videoId: string, checkpointId: string) => api.delete('/videos/' + videoId + '/checkpoints/' + checkpointId),
+  studentExperience: (videoId: string) => api.get('/videos/student/video/' + videoId + '/experience'),
+  answerCheckpoint: (videoId: string, checkpointId: string, data: any) => api.post('/videos/' + videoId + '/checkpoints/' + checkpointId + '/answer', data),
+  create: (data: { courseName: string; groupName: string; title: string; description?: string; provider?: string; sourceUrl?: string; youtubeUrl?: string }) => api.post('/videos', data),
   teacherList: (courseName: string, groupName: string) => api.get(`/videos/teacher/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`),
   studentList: (courseName: string, groupName: string) => api.get(`/videos/student/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`),
   delete: (id: string) => api.delete(`/videos/${id}`),

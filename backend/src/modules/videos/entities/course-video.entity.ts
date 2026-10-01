@@ -37,9 +37,16 @@ export class CourseVideo {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  // Store only the normalized YouTube id, never an arbitrary embed URL.
-  @Column({ length: 20 })
-  youtubeVideoId: string;
+  // Store provider + normalized id, never an arbitrary source URL.
+  // youtubeVideoId is kept for backwards compatibility with existing rows.
+  @Column({ type: 'varchar', length: 30, default: 'youtube' })
+  provider: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  providerVideoId: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  youtubeVideoId: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

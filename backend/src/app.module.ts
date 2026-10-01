@@ -39,6 +39,8 @@ import { QuizQuestion } from './modules/assignments/entities/quiz-question.entit
 import { Notification } from './modules/notifications/entities/notification.entity';
 import { Appointment } from './modules/appointments/entities/appointment.entity';
 import { CourseVideo } from './modules/videos/entities/course-video.entity';
+import { VideoCheckpoint } from './modules/videos/entities/video-checkpoint.entity';
+import { VideoResponse } from './modules/videos/entities/video-response.entity';
 
 @Module({
   imports: [
@@ -57,8 +59,10 @@ import { CourseVideo } from './modules/videos/entities/course-video.entity';
         type: 'postgres',
         url: config.get<string>('database.url'),
         ssl: config.get('database.ssl'),
-        entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Assignment, AssignmentSubmission, QuizQuestion, Notification, Appointment, CourseVideo],
+        entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Assignment, AssignmentSubmission, QuizQuestion, Notification, Appointment, CourseVideo, VideoCheckpoint, VideoResponse],
         synchronize: config.get('app.nodeEnv') !== 'production', // Use migrations in prod
+        migrations: [__dirname + '/migrations/*{.js,.ts}'],
+        migrationsRun: config.get('app.nodeEnv') === 'production',
         logging: config.get('app.nodeEnv') === 'development',
         extra: {
           max: 10, // connection pool

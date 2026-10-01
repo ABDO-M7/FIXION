@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi } from '@/lib/api';
-import TeacherVideosTab from '@/components/TeacherVideosTab';
+import TeacherVideosTab from '@/components/TeacherVideosTabV2';
 import {
   ArrowLeft, GraduationCap, Users, Plus, Trash2, X,
   ClipboardList, BookOpen, BarChart2, ChevronDown, ChevronRight,
