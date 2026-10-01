@@ -92,7 +92,7 @@ export default function AppShell({ children }: AppShellProps) {
       : pathname.startsWith(href);
 
   return (
-    <div className={`app-layout ${!sidebarOpen ? 'collapsed' : ''}`}>
+    <div className={`app-layout role-${user?.role || 'guest'} ${!sidebarOpen ? 'collapsed' : ''}`}>
       {/* ── Mobile Sidebar Overlay ───────────────────────────────── */}
       <div 
         className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
@@ -180,6 +180,7 @@ export default function AppShell({ children }: AppShellProps) {
               <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
               <input placeholder={t('common.search')} aria-label={t('common.search')} />
             </div>
+            <span className="workspace-context">{user?.role === 'admin' ? 'Control center' : user?.role === 'teacher' ? 'Teaching workspace' : 'Learning workspace'}</span>
           </div>
 
           <div className="topbar-actions">
