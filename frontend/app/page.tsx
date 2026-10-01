@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store';
 import {
   ArrowUpRight, BarChart3, Bell, BookOpen, CalendarDays, Check,
   ClipboardCheck, Globe2, GraduationCap, Menu, MessageCircle, PlayCircle,
@@ -36,14 +34,11 @@ const copy = {
 };
 
 export default function HomePage() {
-  const { user } = useAuthStore();
-  const router = useRouter();
   const [lang, setLang] = useState<Language>('ar');
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const t = copy[lang];
 
-  useEffect(() => { if (user) router.replace(user.role === 'admin' ? '/admin' : user.role === 'teacher' ? '/teacher' : '/student'); }, [router, user]);
   useEffect(() => { const onScroll = () => setScrolled(window.scrollY > 16); window.addEventListener('scroll', onScroll, { passive: true }); return () => window.removeEventListener('scroll', onScroll); }, []);
 
   return (
