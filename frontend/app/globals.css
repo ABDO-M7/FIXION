@@ -1496,3 +1496,24 @@ td { border-bottom-color: rgba(168, 208, 229, .08); }
   .filter-bar .tabs { width: 100%; overflow-x: auto; }
   .filter-bar .tab-btn { min-width: 74px; }
 }
+
+/* Final mobile layout guard: keep the fixed sidebar out of the grid flow. */
+@media (max-width: 768px) {
+  .app-layout,
+  .app-layout.collapsed {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .app-layout > div:last-child,
+  .main-content {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .main-content {
+    padding: 22px 18px 42px;
+    max-height: none;
+    overflow-x: hidden;
+  }
+}
