@@ -236,6 +236,12 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         } else {
           sendPlayerCommand('getCurrentTime');
         }
+      } else if (provider === 'wistia') {
+        const time = Number(providerPlayerRef.current?.time?.());
+        if (Number.isFinite(time)) {
+          setCurrentTime(time);
+          checkForCheckpoint(time);
+        }
       }
     }, 450);
     return () => {
@@ -264,6 +270,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         player.on('play', () => setPlaying(true));
         player.on('pause', () => setPlaying(false));
       } else {
+        if (providerPlayerRef.current) return;
         const wistia = (window as any)._wq || [];
         (window as any)._wq = wistia;
         wistia.push({
@@ -271,6 +278,9 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
           onReady: (player: any) => {
             providerPlayerRef.current = player;
             player.bind('timechange', (time: number) => {
+              if (Number.isFinite(time)) { setCurrentTime(time); checkForCheckpoint(time); }
+            });
+            player.bind('secondchange', (time: number) => {
               if (Number.isFinite(time)) { setCurrentTime(time); checkForCheckpoint(time); }
             });
             player.bind('play', () => setPlaying(true));
@@ -287,7 +297,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     script.async = true;
     script.src = provider === 'bunny'
       ? 'https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js'
-      : 'https://fast.wistia.net/assets/external/E-v1.js';
+      : 'https://fast.wistia.com/assets/external/E-v1.js';
     script.onload = attach;
     document.body.appendChild(script);
   }, [checkForCheckpoint, preview, provider, started, video.providerVideoId]);

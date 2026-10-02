@@ -733,7 +733,7 @@ export default function CourseDetailPage() {
       {tab === 'grades' ? (
         <GradesTab assignments={assignments} />
       ) : tab === 'videos' ? (
-        <StudentVideosTab courseName={enrollment.courseName} groupName={enrollment.groupName} />
+        <StudentVideosTab courseName={enrollment.courseName} groupName={enrollment.groupName} enrollmentId={id} />
       ) : filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '60px 24px' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>{tab === 'homework' ? '📚' : '📝'}</div>
