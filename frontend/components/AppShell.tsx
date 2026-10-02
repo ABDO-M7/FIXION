@@ -6,7 +6,7 @@ import {
   LayoutDashboard, HelpCircle, Bell, LogOut,
   Search, Menu, X, Globe, BookOpen, User,
   Users, BarChart2, Key, MessageSquare, GraduationCap, Calendar,
-  Activity,
+  Activity, ChevronLeft, ChevronRight, Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -101,20 +101,30 @@ export default function AppShell({ children }: AppShellProps) {
 
       {/* ── Sidebar ──────────────────────────────────────────── */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
-
-        {/* Logo */}
         <div className="sidebar-logo">
           <img
             src="/brand/icon.png"
             alt="Fixion"
             className="logo-img"
           />
-          {sidebarOpen && <span className="logo-text">Fixion</span>}
+          {sidebarOpen && (
+            <div className="sidebar-brand-copy">
+              <span className="logo-text">Fixion</span>
+              <span className="sidebar-brand-status"><i /> Learning workspace</span>
+            </div>
+          )}
+          <button
+            className="sidebar-collapse-button"
+            onClick={toggleSidebar}
+            title={sidebarOpen ? t('common.collapseSidebar') : t('common.expandSidebar')}
+            aria-label={sidebarOpen ? t('common.collapseSidebar') : t('common.expandSidebar')}
+          >
+            {sidebarOpen ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
+          </button>
         </div>
 
-        {/* Navigation */}
         <nav className="sidebar-nav">
-          {sidebarOpen && <span className="nav-section-label">{t('nav.navigation')}</span>}
+          {sidebarOpen && <div className="sidebar-nav-heading"><span>{t('nav.navigation')}</span><Sparkles size={13} /></div>}
 
           {nav.map((item) => {
             const Icon = item.icon;
@@ -125,9 +135,10 @@ export default function AppShell({ children }: AppShellProps) {
                 href={item.href}
                 className={`nav-item ${active ? 'active' : ''}`}
                 title={!sidebarOpen ? t(item.key) : undefined}
+                aria-current={active ? 'page' : undefined}
               >
-                <Icon size={17} style={{ flexShrink: 0 }} />
-                {sidebarOpen && <span style={{ flex: 1 }}>{t(item.key)}</span>}
+                <span className="nav-item-icon"><Icon size={17} /></span>
+                {sidebarOpen && <span className="nav-item-label">{t(item.key)}</span>}
                 {sidebarOpen && item.key === 'nav.notifications' && unreadCount > 0 && (
                   <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
                 )}
@@ -136,18 +147,16 @@ export default function AppShell({ children }: AppShellProps) {
           })}
         </nav>
 
-        {/* User */}
         <div className="sidebar-user">
-          {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt="Avatar" className="user-avatar" style={{ objectFit: 'cover' }} />
-          ) : (
-            <div className="user-avatar">{initial}</div>
-          )}
+          <div className="sidebar-user-avatar">
+            {user?.avatarUrl ? <img src={user.avatarUrl} alt="Avatar" className="user-avatar" style={{ objectFit: 'cover' }} /> : <div className="user-avatar">{initial}</div>}
+            <span className="sidebar-user-presence" />
+          </div>
           {sidebarOpen && (
             <>
               <div className="user-info">
                 <div className="user-name">{user?.name}</div>
-                <div className="user-role">{user?.role ? t(`roles.${user.role}`) : ''}</div>
+                <div className="user-role">{user?.role ? t(`roles.${user.role}`) : ''} <span>•</span> Online</div>
               </div>
               <button
                 onClick={handleLogout}
