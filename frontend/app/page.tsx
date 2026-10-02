@@ -7,6 +7,7 @@ import {
   ShieldCheck, Users, X,
 } from 'lucide-react';
 import Link from 'next/link';
+import GradientWaves from '@/components/GradientWaves';
 
 type Language = 'ar' | 'en';
 
@@ -50,7 +51,7 @@ export default function HomePage() {
       </nav>
 
       <main>
-        <section className="landing-hero"><div className="landing-hero-copy"><div className="landing-eyebrow"><span className="landing-eyebrow-dot" />{t.eyebrow}</div><h1>{t.title.split('\n').map((line, index) => <span key={line} className={index === 1 ? 'accent-line' : ''}>{line}</span>)}</h1><p>{t.body}</p><div className="landing-hero-actions"><Link href="/register" className="landing-primary-button">{t.primary}<ArrowUpRight size={18} /></Link><a href="#platform" className="landing-secondary-button"><PlayCircle size={18} />{t.secondary}</a></div><div className="landing-signal"><Check size={15} />{t.signal}</div></div>
+        <section className="landing-hero"><div className="landing-hero-waves"><GradientWaves /></div><div className="landing-hero-copy"><div className="landing-eyebrow"><span className="landing-eyebrow-dot" />{t.eyebrow}</div><h1>{t.title.split('\n').map((line, index) => <span key={line} className={index === 1 ? 'accent-line' : ''}>{line}</span>)}</h1><p>{t.body}</p><div className="landing-hero-actions"><Link href="/register" className="landing-primary-button">{t.primary}<ArrowUpRight size={18} /></Link><a href="#platform" className="landing-secondary-button"><PlayCircle size={18} />{t.secondary}</a></div><div className="landing-signal"><Check size={15} />{t.signal}</div></div>
           <div className="landing-hero-visual" aria-label={t.visualTitle}><div className="hero-orbit hero-orbit-one" /><div className="hero-orbit hero-orbit-two" /><div className="hero-product-card"><div className="hero-product-topline"><span className="hero-product-kicker">FIXION / 01</span><span className="hero-product-live"><span /> Live workspace</span></div><div className="hero-product-heading"><div><span>{t.visualTitle}</span><strong>{t.visualSub}</strong></div><img src="/brand/icon.png" alt="" /></div><div className="hero-product-grid"><div className="hero-product-main-card"><div className="hero-card-icon"><PlayCircle size={18} /></div><span>Course spotlight</span><strong>Physics / Unit 04</strong><div className="hero-progress"><span style={{ width: '72%' }} /></div><small>72% complete</small></div><div className="hero-product-side-card"><span>Weekly focus</span><strong>4.8h</strong><div className="hero-bars"><i /><i /><i /><i /><i /><i /><i /></div><small>+18% this week</small></div></div><div className="hero-product-list">{t.cards.map((item) => { const Icon = item.icon; return <div className="hero-list-item" key={item.label}><span className="hero-list-icon"><Icon size={15} /></span><span>{item.label}</span><strong>{item.value}</strong></div>; })}</div></div><div className="hero-float-note hero-float-note-one"><Bell size={14} /><span>New feedback<br /><strong>from your teacher</strong></span></div><div className="hero-float-note hero-float-note-two"><CalendarDays size={14} /><span>Next session<br /><strong>Tomorrow, 6:00 PM</strong></span></div></div>
         </section>
 
