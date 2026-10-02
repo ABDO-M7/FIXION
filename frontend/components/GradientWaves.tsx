@@ -21,10 +21,10 @@ const hexToRgb = (hex: string) => {
 export default function GradientWaves({
   horizonColor = '#06101b',
   waveColor = '#1769ff',
-  crestColor = '#25d6d1',
+  crestColor = '#55f5ee',
   speed = 0.18,
-  amplitude = 1.5,
-  opacity = 0.72,
+  amplitude = 1.8,
+  opacity = 0.9,
 }: GradientWavesProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -69,8 +69,8 @@ export default function GradientWaves({
         field += wave(p, t, 2.2, 5.2, 0.035 * uAmplitude);
         float y = horizon + field + (1.0 - uv.x) * 0.06;
         float band = smoothstep(0.0, 0.18, y - uv.y);
-        float foam = smoothstep(0.018, 0.0, abs(uv.y - y));
-        float glow = smoothstep(0.32, 0.0, abs(uv.y - y)) * 0.3;
+        float foam = smoothstep(0.032, 0.0, abs(uv.y - y));
+        float glow = smoothstep(0.38, 0.0, abs(uv.y - y)) * 0.42;
         vec3 color = mix(uHorizon, uWave, smoothstep(0.0, 0.88, uv.y));
         color = mix(color, uWave, band * 0.35);
         color = mix(color, uCrest, clamp(foam + glow, 0.0, 1.0));
