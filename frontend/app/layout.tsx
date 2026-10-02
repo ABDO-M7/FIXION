@@ -7,6 +7,11 @@ export const metadata: Metadata = {
   description: 'A complete learning platform for students and teachers: courses, video lessons, quizzes, assignments, support, and progress.',
   keywords: ['education', 'courses', 'video lessons', 'quizzes', 'students', 'teachers'],
   authors: [{ name: 'FIXION' }],
+  icons: {
+    icon: '/brand/icon.png',
+    shortcut: '/brand/icon.png',
+    apple: '/brand/icon.png',
+  },
   openGraph: {
     title: 'FIXION | Learning has no limits',
     description: 'Courses, video lessons, assessments, teacher support, and progress in one place.',
