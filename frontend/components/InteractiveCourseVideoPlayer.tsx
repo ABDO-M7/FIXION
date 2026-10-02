@@ -51,6 +51,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const wistiaElementRef = useRef<HTMLElement>(null);
   const providerPlayerRef = useRef<any>(null);
+  const checkpointPauseLockRef = useRef(false);
   const [started, setStarted] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [experience, setExperience] = useState<Experience | null>(null);
@@ -106,6 +107,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   };
 
   const start = async () => {
+    checkpointPauseLockRef.current = false;
     setStarted(true);
     setPlaying(true);
     if (!preview) await loadExperience();
@@ -127,7 +129,10 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   }, [playing, provider, sendPlayerCommand, started]);
 
   const pauseForCheckpoint = useCallback((checkpoint: VideoCheckpoint) => {
+    checkpointPauseLockRef.current = true;
     sendPlayerCommand('pauseVideo');
+    window.setTimeout(() => sendPlayerCommand('pauseVideo'), 0);
+    window.setTimeout(() => sendPlayerCommand('pauseVideo'), 120);
     setPlaying(false);
     setPending(checkpoint);
     setAnswer('');
@@ -174,6 +179,11 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
           },
           onStateChange: (event: any) => {
             if (cancelled) return;
+            if (checkpointPauseLockRef.current && event?.data === 1) {
+              player.pauseVideo?.();
+              setPlaying(false);
+              return;
+            }
             setPlaying(event?.data === 1);
             const time = Number(player?.getCurrentTime?.());
             if (Number.isFinite(time)) {
@@ -302,7 +312,14 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         checkpointHandlerRef.current(time);
       }
     };
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => {
+      if (checkpointPauseLockRef.current) {
+        element.pause?.();
+        setPlaying(false);
+        return;
+      }
+      setPlaying(true);
+    };
     const onPause = () => setPlaying(false);
     const onReady = () => {
       if (cancelled) return;
@@ -383,6 +400,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
           : item),
       } : previous);
       setPending(null);
+      checkpointPauseLockRef.current = false;
       setFeedback('');
       setPlaying(true);
       sendPlayerCommand('playVideo');
