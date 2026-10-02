@@ -66,6 +66,11 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const solvedIds = useMemo(() => new Set(checkpoints.filter(item => item.response?.isCorrect).map(item => item.id)), [checkpoints]);
 
   const sendPlayerCommand = useCallback((command: string) => {
+    if (provider === 'youtube' && providerPlayerRef.current) {
+      if (command === 'playVideo') providerPlayerRef.current.playVideo?.();
+      if (command === 'pauseVideo') providerPlayerRef.current.pauseVideo?.();
+      return;
+    }
     if (provider === 'wistia' && providerPlayerRef.current) {
       if (command === 'playVideo') providerPlayerRef.current.play?.();
       if (command === 'pauseVideo') providerPlayerRef.current.pause?.();
@@ -134,6 +139,70 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     if (checkpoint) pauseForCheckpoint(checkpoint);
   }, [checkpoints, experience, pauseForCheckpoint, pending, solvedIds]);
 
+  const checkpointHandlerRef = useRef(checkForCheckpoint);
+  useEffect(() => {
+    checkpointHandlerRef.current = checkForCheckpoint;
+  }, [checkForCheckpoint]);
+
+  // The YouTube postMessage protocol does not reliably emit current-time
+  // events in every browser until its listener handshake has completed.
+  // Attach the official player object as a reliable time source instead.
+  useEffect(() => {
+    if (!started || provider !== 'youtube' || !video.providerVideoId) return;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const attach = () => {
+      if (cancelled || providerPlayerRef.current || !iframeRef.current) return;
+      const YT = (window as any).YT;
+      if (!YT?.Player) return;
+      let player: any;
+      player = new YT.Player(iframeRef.current, {
+        events: {
+          onReady: () => {
+            if (!cancelled) {
+              providerPlayerRef.current = player;
+              player.playVideo?.();
+            }
+          },
+          onStateChange: (event: any) => {
+            if (cancelled) return;
+            setPlaying(event?.data === 1);
+            const time = Number(player?.getCurrentTime?.());
+            if (Number.isFinite(time)) {
+              setCurrentTime(time);
+              checkpointHandlerRef.current(time);
+            }
+          },
+        },
+      });
+    };
+
+    if ((window as any).YT?.Player) {
+      attach();
+    } else {
+      if (!document.getElementById('fixion-youtube-iframe-api')) {
+        const script = document.createElement('script');
+        script.id = 'fixion-youtube-iframe-api';
+        script.src = 'https://www.youtube.com/iframe_api';
+        script.async = true;
+        document.head.appendChild(script);
+      }
+      timer = window.setInterval(() => {
+        if ((window as any).YT?.Player) {
+          window.clearInterval(timer);
+          attach();
+        }
+      }, 100);
+    }
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearInterval(timer);
+      providerPlayerRef.current = null;
+    };
+  }, [provider, started, video.providerVideoId]);
+
   useEffect(() => {
     if (!started) return;
     const handleMessage = (event: MessageEvent) => {
@@ -153,7 +222,15 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     const timer = window.setInterval(() => {
       if (!playing) return;
       if (provider === 'vimeo') sendPlayerCommand('getCurrentTime');
-      else if (provider === 'youtube') sendPlayerCommand('getCurrentTime');
+      else if (provider === 'youtube') {
+        const time = Number(providerPlayerRef.current?.getCurrentTime?.());
+        if (Number.isFinite(time)) {
+          setCurrentTime(time);
+          checkForCheckpoint(time);
+        } else {
+          sendPlayerCommand('getCurrentTime');
+        }
+      }
     }, 450);
     return () => {
       window.removeEventListener('message', handleMessage);
