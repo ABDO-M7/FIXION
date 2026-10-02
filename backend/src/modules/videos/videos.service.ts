@@ -292,11 +292,21 @@ export class VideosService {
 
   private parseVideoSource(value: string | undefined, requestedProvider?: string): ParsedSource {
     if (!value?.trim()) throw new BadRequestException('A video link is required');
+    const raw = value.trim();
+    const providerHint = requestedProvider?.toLowerCase();
+
+    // Wistia supplies several embed formats (iframe, script, and
+    // wistia_async_* divs). Store only the media id; never persist raw HTML.
+    const wistiaEmbedId = raw.match(/(?:wistia_async_|data-wistia-id=["']|\/(?:medias|iframe)\/|\/embed\/(?:medias\/|iframe\/)?)([A-Za-z0-9_-]+)/i)?.[1];
+    if (wistiaEmbedId && (providerHint === 'wistia' || /wistia/i.test(raw))) {
+      return { provider: 'wistia', providerVideoId: wistiaEmbedId };
+    }
+
+    const urlText = raw.match(/https?:\/\/[^\s"'<>]+/i)?.[0]?.replace(/[),;]+$/, '') || raw;
     let url: URL;
-    try { url = new URL(value.trim()); } catch { throw new BadRequestException('Enter a valid video link'); }
+    try { url = new URL(urlText); } catch { throw new BadRequestException('Enter a valid video link or embed code'); }
 
     const host = url.hostname.toLowerCase().replace(/^www\./, '');
-    const providerHint = requestedProvider?.toLowerCase();
     let provider: ParsedSource['provider'] | null = null;
     let providerVideoId: string | null = null;
 
@@ -310,7 +320,9 @@ export class VideosService {
       providerVideoId = url.pathname.match(/(?:video\/)?([0-9]+)/)?.[1] || null;
     } else if (host.endsWith('wistia.com') || host === 'fast.wistia.net') {
       provider = 'wistia';
-      providerVideoId = url.pathname.match(/(?:medias|iframe|embed)\/([^/?]+)/)?.[1] || null;
+      providerVideoId = url.pathname.match(/\/(?:medias|iframe)\/([^/?#.]+)/)?.[1]
+        || url.pathname.match(/\/embed\/(?:medias\/|iframe\/)?([^/?#.]+)/)?.[1]
+        || null;
     } else if (host === 'iframe.mediadelivery.net' || host === 'player.mediadelivery.net' || host.endsWith('bunnycdn.com')) {
       provider = 'bunny';
       const parts = url.pathname.split('/').filter(Boolean);
