@@ -1255,10 +1255,12 @@ body {
 .landing-nav-cta:hover, .landing-primary-button:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(42, 215, 212, .2); }
 .landing-menu-button { display: none; color: #fff; padding: 8px; }
 .landing-hero { position: relative; isolation: isolate; overflow: hidden; width: 100%; margin: auto; min-height: 820px; padding: 124px clamp(24px, 6vw, 96px) 80px; display: grid; grid-template-columns: minmax(0, .92fr) minmax(500px, 1.08fr); align-items: center; gap: clamp(44px, 7vw, 104px); }
-.landing-hero-waves { position: absolute; z-index: 0; inset: 0; pointer-events: none; opacity: .78; }
-.landing-hero-waves::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(6, 16, 27, .92) 0%, rgba(6, 16, 27, .6) 46%, rgba(6, 16, 27, .18) 100%), linear-gradient(180deg, rgba(6, 16, 27, .18), #06101b 94%); }
+.landing-hero-waves { position: absolute; z-index: 0; inset: 0; overflow: hidden; pointer-events: none; opacity: .9; background: radial-gradient(ellipse 75% 70% at 76% 18%, rgba(23, 105, 255, .42), transparent 62%), radial-gradient(ellipse 58% 55% at 48% 46%, rgba(37, 214, 209, .2), transparent 68%), #06101b; }
+.landing-hero-waves::before { content: ''; position: absolute; z-index: 0; width: 125%; height: 66%; left: -12%; bottom: -14%; border-radius: 50% 50% 0 0; background: linear-gradient(115deg, rgba(23, 105, 255, .38), rgba(37, 214, 209, .18) 45%, rgba(6, 16, 27, 0) 78%); filter: blur(22px); transform: rotate(-4deg); animation: landing-wave-drift 14s ease-in-out infinite alternate; }
+.landing-hero-waves::after { content: ''; position: absolute; z-index: 2; inset: 0; background: linear-gradient(90deg, rgba(6, 16, 27, .84) 0%, rgba(6, 16, 27, .4) 48%, rgba(6, 16, 27, .08) 100%), linear-gradient(180deg, rgba(6, 16, 27, .1), #06101b 96%); }
 .gradient-waves { width: 100%; height: 100%; }
 .gradient-waves canvas { display: block; width: 100%; height: 100%; }
+@keyframes landing-wave-drift { from { transform: translate3d(-3%, 2%, 0) rotate(-4deg) scale(1); } to { transform: translate3d(4%, -3%, 0) rotate(2deg) scale(1.08); } }
 .landing-hero-copy, .landing-hero-visual { position: relative; z-index: 1; }
 .landing-hero-copy { max-width: 600px; }
 .landing-eyebrow { display: inline-flex; align-items: center; gap: 9px; color: #62d9dd; font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
