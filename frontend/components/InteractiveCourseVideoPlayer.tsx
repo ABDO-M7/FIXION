@@ -1,7 +1,7 @@
 'use client';
 
 import { CheckCircle2, FileUp, Pause, Play, Send, Volume2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { uploadsApi, videosApi } from '@/lib/api';
 
@@ -49,6 +49,7 @@ function playerOrigin(provider: string) {
 
 export default function InteractiveCourseVideoPlayer({ video, preview = false }: { video: InteractiveCourseVideo; preview?: boolean }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const wistiaElementRef = useRef<HTMLElement>(null);
   const providerPlayerRef = useRef<any>(null);
   const [started, setStarted] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -237,7 +238,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
           sendPlayerCommand('getCurrentTime');
         }
       } else if (provider === 'wistia') {
-        const time = Number(providerPlayerRef.current?.time?.());
+        const time = Number(providerPlayerRef.current?.currentTime ?? providerPlayerRef.current?.time?.());
         if (Number.isFinite(time)) {
           setCurrentTime(time);
           checkForCheckpoint(time);
@@ -252,8 +253,8 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
 
   useEffect(() => {
     if (!started || !video.providerVideoId) return;
-    const scriptId = provider === 'bunny' ? 'fixion-bunny-playerjs' : 'fixion-wistia-player';
-    if (provider !== 'bunny' && provider !== 'wistia') return;
+    const scriptId = 'fixion-bunny-playerjs';
+    if (provider !== 'bunny') return;
 
     const attach = () => {
       if (provider === 'bunny') {
@@ -269,24 +270,6 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         });
         player.on('play', () => setPlaying(true));
         player.on('pause', () => setPlaying(false));
-      } else {
-        if (providerPlayerRef.current) return;
-        const wistia = (window as any)._wq || [];
-        (window as any)._wq = wistia;
-        wistia.push({
-          id: video.providerVideoId,
-          onReady: (player: any) => {
-            providerPlayerRef.current = player;
-            player.bind('timechange', (time: number) => {
-              if (Number.isFinite(time)) { setCurrentTime(time); checkForCheckpoint(time); }
-            });
-            player.bind('secondchange', (time: number) => {
-              if (Number.isFinite(time)) { setCurrentTime(time); checkForCheckpoint(time); }
-            });
-            player.bind('play', () => setPlaying(true));
-            player.bind('pause', () => setPlaying(false));
-          },
-        });
       }
     };
 
@@ -295,12 +278,76 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     const script = document.createElement('script');
     script.id = scriptId;
     script.async = true;
-    script.src = provider === 'bunny'
-      ? 'https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js'
-      : 'https://fast.wistia.com/assets/external/E-v1.js';
+    script.src = 'https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js';
     script.onload = attach;
     document.body.appendChild(script);
-  }, [checkForCheckpoint, preview, provider, started, video.providerVideoId]);
+  }, [checkForCheckpoint, provider, started, video.providerVideoId]);
+
+  useEffect(() => {
+    if (!started || provider !== 'wistia' || !video.providerVideoId) return;
+    const element = wistiaElementRef.current as any;
+    if (!element) return;
+    let cancelled = false;
+    const onTimeUpdate = () => {
+      const time = Number(element.currentTime);
+      if (Number.isFinite(time)) {
+        setCurrentTime(time);
+        checkpointHandlerRef.current(time);
+      }
+    };
+    const onSecondChange = (event: any) => {
+      const time = Number(event?.detail?.second ?? element.currentTime);
+      if (Number.isFinite(time)) {
+        setCurrentTime(time);
+        checkpointHandlerRef.current(time);
+      }
+    };
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    const onReady = () => {
+      if (cancelled) return;
+      providerPlayerRef.current = element;
+      setPlayerError(null);
+      element.play?.();
+    };
+    element.addEventListener('api-ready', onReady);
+    element.addEventListener('time-update', onTimeUpdate);
+    element.addEventListener('second-change', onSecondChange);
+    element.addEventListener('play', onPlay);
+    element.addEventListener('pause', onPause);
+
+    const embedScriptId = 'fixion-wistia-embed-' + video.providerVideoId;
+    const playerScriptId = 'fixion-wistia-player';
+    const addScript = (id: string, src: string, type?: string) => {
+      if (document.getElementById(id)) return;
+      const script = document.createElement('script');
+      script.id = id;
+      script.src = src;
+      script.async = true;
+      if (type) script.type = type;
+      document.head.appendChild(script);
+    };
+    addScript(embedScriptId, 'https://fast.wistia.com/embed/' + video.providerVideoId + '.js', 'module');
+    addScript(playerScriptId, 'https://fast.wistia.com/player.js');
+    if ((element as any).readyState === 'interactive' || (element as any).readyState === 'complete') onReady();
+    const readyTimer = window.setInterval(() => {
+      if (typeof element.play === 'function' && typeof element.currentTime === 'number') {
+        onReady();
+        window.clearInterval(readyTimer);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(readyTimer);
+      element.removeEventListener('api-ready', onReady);
+      element.removeEventListener('time-update', onTimeUpdate);
+      element.removeEventListener('second-change', onSecondChange);
+      element.removeEventListener('play', onPlay);
+      element.removeEventListener('pause', onPause);
+      if (providerPlayerRef.current === element) providerPlayerRef.current = null;
+    };
+  }, [provider, started, video.providerVideoId]);
 
   const uploadAnswer = async (file: File) => {
     try {
@@ -349,7 +396,11 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   return (
     <article className="card" style={{ overflow: 'hidden', padding: 0 }}>
       <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#09090b', overflow: 'hidden', isolation: 'isolate' }}>
-        {started ? (
+        {started ? provider === 'wistia' ? (
+          <div style={{ position: 'absolute', inset: 0, background: '#000' }}>
+            {createElement('wistia-player', { ref: wistiaElementRef, 'media-id': video.providerVideoId, style: { display: 'block', width: '100%', height: '100%' } })}
+          </div>
+        ) : (
           <iframe ref={iframeRef} title={video.title} src={providerUrl(video)} allow="autoplay; encrypted-media; picture-in-picture" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, zIndex: 0 }} />
         ) : (
           <button
@@ -362,10 +413,9 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         )}
         {started && (
           <div style={{ position: 'absolute', inset: 0, pointerEvents: pending ? 'auto' : 'none', zIndex: 2 }}>
-            <div style={{ position: 'absolute', inset: '0 0 auto', height: 64, background: 'linear-gradient(#080d15 0%, #080d15 72%, transparent 100%)' }} />
-            <div style={{ position: 'absolute', inset: 'auto 0 0', height: 86, background: '#080d15' }} />
+            <div style={{ position: 'absolute', inset: '0 0 auto', height: 40, background: 'linear-gradient(#080d15 0%, rgba(8,13,21,.72) 68%, transparent 100%)' }} />
             <div style={{ position: 'absolute', left: 18, top: 16, color: 'rgba(255,255,255,.88)', fontSize: 12, fontWeight: 700 }}>FIXION · {video.title}</div>
-            {!pending && (
+            {!pending && provider !== 'wistia' && (
               <div style={{ position: 'absolute', left: 14, right: 14, bottom: 12, display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto' }}>
                 <button className="icon-btn" onClick={() => { const next = !playing; setPlaying(next); sendPlayerCommand(next ? 'playVideo' : 'pauseVideo'); }} aria-label={playing ? 'Pause video' : 'Play video'} style={{ color: '#fff', background: 'rgba(0,0,0,.72)', border: '1px solid rgba(255,255,255,.25)' }}>{playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}</button>
                 <Volume2 size={16} style={{ color: '#fff' }} />
