@@ -36,7 +36,8 @@ function providerUrl(video: InteractiveCourseVideo) {
   if (provider === 'vimeo') return 'https://player.vimeo.com/video/' + id + '?api=1&background=1&controls=0&title=0&byline=0&portrait=0&dnt=1';
   if (provider === 'wistia') return 'https://fast.wistia.net/embed/iframe/' + id + '?controlsVisibleOnLoad=false&playbar=false&smallPlayButton=false&branding=false';
   if (provider === 'bunny') return 'https://player.mediadelivery.net/embed/' + id + '?autoplay=false&controls=false&responsive=true&preload=true';
-  return 'https://www.youtube-nocookie.com/embed/' + id + '?enablejsapi=1&controls=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&fs=0';
+  const origin = typeof window !== 'undefined' ? '&origin=' + encodeURIComponent(window.location.origin) : '';
+  return 'https://www.youtube.com/embed/' + id + '?enablejsapi=1&controls=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&fs=0' + origin;
 }
 
 function playerOrigin(provider: string) {
@@ -60,6 +61,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [solution, setSolution] = useState<{ text?: string | null; url?: string | null } | null>(null);
+  const [playerError, setPlayerError] = useState<string | null>(null);
 
   const provider = video.provider || 'youtube';
   const checkpoints = experience?.checkpoints || [];
@@ -162,8 +164,12 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
           onReady: () => {
             if (!cancelled) {
               providerPlayerRef.current = player;
+              setPlayerError(null);
               player.playVideo?.();
             }
+          },
+          onError: (event: any) => {
+            if (!cancelled) setPlayerError(String(event?.data || 'youtube-player-error'));
           },
           onStateChange: (event: any) => {
             if (cancelled) return;
@@ -384,6 +390,15 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
                 {submitting ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <><Send size={15} /> Submit and continue</>}
               </button>
               <div style={{ color: 'rgba(255,255,255,.52)', fontSize: 11, textAlign: 'center', marginTop: 9 }}>Answer this question to unlock the video.</div>
+            </div>
+          </div>
+        )}
+        {playerError && !pending && (
+          <div role="alert" style={{ position: 'absolute', inset: 12, zIndex: 4, display: 'grid', placeItems: 'center', padding: 20, textAlign: 'center', background: 'rgba(7,12,20,.96)', border: '1px solid rgba(248,113,113,.3)', borderRadius: 14, color: '#fff' }}>
+            <div>
+              <strong style={{ display: 'block', color: '#fca5a5', marginBottom: 8 }}>YouTube blocked this embedded playback</strong>
+              <span style={{ display: 'block', color: 'rgba(255,255,255,.7)', fontSize: 13, lineHeight: 1.5 }}>This video requires YouTube verification or does not allow embedded playback. The sign-in button inside the YouTube frame cannot authenticate your FIXION account.</span>
+              <a href={'https://www.youtube.com/watch?v=' + (video.providerVideoId || video.youtubeVideoId || '')} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', marginTop: 14 }}>Open on YouTube</a>
             </div>
           </div>
         )}
