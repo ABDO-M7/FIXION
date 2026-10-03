@@ -92,8 +92,8 @@ export const subscriptionsApi = {
 };
 
 export const codesApi = {
-  generate: (plan: string, quantity: number, expiresAt?: string, courseName?: string, teacherName?: string, groupName?: string) =>
-    api.post('/codes/generate', { plan, quantity, expiresAt, courseName, teacherName, groupName }),
+  generate: (plan: string, quantity: number, expiresAt?: string, courseName?: string, teacherName?: string, groupName?: string, minLength = 16, maxLength = 16, includeLetters = true) =>
+    api.post('/codes/generate', { plan, quantity, expiresAt, courseName, teacherName, groupName, minLength, maxLength, includeLetters }),
   list: (params?: any) => api.get('/codes', { params }),
   teacherUsage: (month?: string) => api.get('/codes/teacher-usage', { params: month ? { month } : {} }),
   revoke: (id: string) => api.delete(`/codes/${id}`),

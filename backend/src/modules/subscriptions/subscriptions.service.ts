@@ -3,14 +3,21 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { customAlphabet } from 'nanoid';
+import { randomInt } from 'crypto';
 import { addDays } from 'date-fns';
 import { Subscription, SubscriptionPlan } from './entities/subscription.entity';
 import { SubscriptionCode } from './entities/subscription-code.entity';
 import { CourseEnrollment } from './entities/course-enrollment.entity';
 import { User } from '../users/entities/user.entity';
 
-const generateCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 16);
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const DIGIT_ALPHABET = '0123456789';
+
+function generateRandomCode(minLength = 16, maxLength = 16, includeLetters = true) {
+  const length = randomInt(minLength, maxLength + 1);
+  const alphabet = includeLetters ? CODE_ALPHABET : DIGIT_ALPHABET;
+  return Array.from({ length }, () => alphabet[randomInt(0, alphabet.length)]).join('');
+}
 
 @Injectable()
 export class SubscriptionsService {
@@ -126,10 +133,26 @@ export class SubscriptionsService {
     courseName?: string,
     teacherName?: string,
     groupName?: string,
+    minLength = 16,
+    maxLength = 16,
+    includeLetters = true,
   ) {
+    if (!Number.isInteger(minLength) || !Number.isInteger(maxLength) || minLength < 4 || maxLength > 64 || minLength > maxLength) {
+      throw new BadRequestException('Code length range must be between 4 and 64, with minimum no greater than maximum');
+    }
     const codes: SubscriptionCode[] = [];
+    const generated = new Set<string>();
     for (let i = 0; i < Math.min(quantity, 500); i++) {
-      const code = generateCode();
+      let code = '';
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const candidate = generateRandomCode(minLength, maxLength, includeLetters);
+        if (!generated.has(candidate) && !(await this.codesRepo.findOne({ where: { code: candidate } }))) {
+          code = candidate;
+          break;
+        }
+      }
+      if (!code) throw new BadRequestException('Could not generate enough unique codes for this range');
+      generated.add(code);
       codes.push(
         this.codesRepo.create({ code, plan, createdById: admin.id, expiresAt, courseName, teacherName, groupName }),
       );

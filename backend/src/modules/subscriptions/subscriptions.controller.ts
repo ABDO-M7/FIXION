@@ -46,6 +46,9 @@ export class CodesController {
     @Body('teacherName') teacherName: string,
     @Body('groupName') groupName: string,
     @CurrentUser() admin: any,
+    @Body('minLength') minLength?: number,
+    @Body('maxLength') maxLength?: number,
+    @Body('includeLetters') includeLetters?: boolean,
   ) {
     return this.subscriptionsService.generateCodes(
       plan,
@@ -55,6 +58,9 @@ export class CodesController {
       courseName || undefined,
       teacherName || undefined,
       groupName || undefined,
+      minLength === undefined ? 16 : Number(minLength),
+      maxLength === undefined ? 16 : Number(maxLength),
+      includeLetters !== false,
     );
   }
 

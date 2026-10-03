@@ -24,6 +24,9 @@ export default function AdminCodesPage() {
     courseName: '',
     teacherName: '',
     groupName: '',
+    minLength: '16',
+    maxLength: '16',
+    includeLetters: true,
   });
   const LIMIT = 50;
 
@@ -57,6 +60,9 @@ export default function AdminCodesPage() {
         form.courseName || undefined,
         form.teacherName || undefined,
         form.groupName || undefined,
+        +form.minLength,
+        +form.maxLength,
+        form.includeLetters,
       );
       const generated = Array.isArray(res.data) ? res.data : [];
       setLastGenerated(generated);
@@ -184,6 +190,15 @@ export default function AdminCodesPage() {
             <div className="form-group">
               <label className="form-label">Code Expiry (optional)</label>
               <input type="date" value={form.expiresAt} onChange={e => setForm(p => ({ ...p, expiresAt: e.target.value }))} className="form-input" />
+            </div>
+            <div style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-light)', marginBottom: 10 }}>Code format</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label" style={{ fontSize: 12 }}>Minimum length</label><input type="number" min={4} max={64} value={form.minLength} onChange={e => setForm(p => ({ ...p, minLength: e.target.value }))} className="form-input" /></div>
+                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label" style={{ fontSize: 12 }}>Maximum length</label><input type="number" min={4} max={64} value={form.maxLength} onChange={e => setForm(p => ({ ...p, maxLength: e.target.value }))} className="form-input" /></div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}><input type="checkbox" checked={form.includeLetters} onChange={e => setForm(p => ({ ...p, includeLetters: e.target.checked }))} /> Use letters (otherwise digits only)</label>
+              <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 7 }}>Each generated code gets a random length between these values.</div>
             </div>
             <button onClick={generate} disabled={generating} className="btn btn-primary">
               {generating ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Generating...</> : <><Key size={14} /> Generate Codes</>}
