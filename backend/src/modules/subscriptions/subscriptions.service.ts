@@ -137,12 +137,14 @@ export class SubscriptionsService {
     maxLength = 16,
     includeLetters = true,
   ) {
+    const safeQuantity = Number(quantity);
+    if (!Number.isInteger(safeQuantity) || safeQuantity < 1) throw new BadRequestException('Quantity must be at least 1');
     if (!Number.isInteger(minLength) || !Number.isInteger(maxLength) || minLength < 4 || maxLength > 64 || minLength > maxLength) {
       throw new BadRequestException('Code length range must be between 4 and 64, with minimum no greater than maximum');
     }
     const codes: SubscriptionCode[] = [];
     const generated = new Set<string>();
-    for (let i = 0; i < Math.min(quantity, 500); i++) {
+    for (let i = 0; i < Math.min(safeQuantity, 500); i++) {
       let code = '';
       for (let attempt = 0; attempt < 20; attempt++) {
         const candidate = generateRandomCode(minLength, maxLength, includeLetters);

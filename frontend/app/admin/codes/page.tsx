@@ -51,24 +51,29 @@ export default function AdminCodesPage() {
   }, [usageMonth]);
 
   const generate = async () => {
+    const quantity = Number(form.quantity);
+    const minLength = Number(form.minLength);
+    const maxLength = Number(form.maxLength);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) { toast.error('Quantity must be between 1 and 500'); return; }
+    if (!Number.isInteger(minLength) || !Number.isInteger(maxLength) || minLength < 4 || maxLength > 64 || minLength > maxLength) { toast.error('Length must be between 4 and 64, with minimum no greater than maximum'); return; }
     setGenerating(true);
     try {
       const res = await codesApi.generate(
         form.plan,
-        +form.quantity,
+        quantity,
         form.expiresAt || undefined,
         form.courseName || undefined,
         form.teacherName || undefined,
         form.groupName || undefined,
-        +form.minLength,
-        +form.maxLength,
+        minLength,
+        maxLength,
         form.includeLetters,
       );
       const generated = Array.isArray(res.data) ? res.data : [];
       setLastGenerated(generated);
       toast.success(`${generated.length} codes generated!`);
       fetchCodes();
-    } catch { toast.error('Failed to generate codes'); } finally { setGenerating(false); }
+    } catch (error: any) { toast.error(error?.response?.data?.message || 'Failed to generate codes'); } finally { setGenerating(false); }
   };
 
   const exportWord = () => {
