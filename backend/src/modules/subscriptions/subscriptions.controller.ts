@@ -69,6 +69,12 @@ export class CodesController {
     return this.subscriptionsService.listCodes(+page, +limit, used);
   }
 
+  @Get('teacher-usage')
+  @Roles(UserRole.ADMIN)
+  teacherUsage(@Query('month') month?: string) {
+    return this.subscriptionsService.getTeacherCodeUsage(month);
+  }
+
   @Delete(':id')
   @Roles(UserRole.ADMIN)
   revoke(@Param('id') id: string) {

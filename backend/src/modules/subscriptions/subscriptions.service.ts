@@ -151,6 +151,27 @@ export class SubscriptionsService {
     return { data, total, page, limit };
   }
 
+  async getTeacherCodeUsage(month?: string) {
+    const parsed = month && /^\d{4}-\d{2}$/.test(month) ? new Date(`${month}-01T00:00:00.000Z`) : new Date();
+    const start = new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth() + 1, 1));
+    const rows = await this.codesRepo
+      .createQueryBuilder('c')
+      .select("COALESCE(NULLIF(TRIM(c.teacherName), ''), 'Unassigned')", 'teacherName')
+      .addSelect('COUNT(c.id)', 'usedCodes')
+      .where('c.isUsed = :isUsed', { isUsed: true })
+      .andWhere('c.usedAt >= :start AND c.usedAt < :end', { start, end })
+      .groupBy("COALESCE(NULLIF(TRIM(c.teacherName), ''), 'Unassigned')")
+      .orderBy('COUNT(c.id)', 'DESC')
+      .getRawMany();
+
+    return {
+      month: `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}`,
+      totalUsed: rows.reduce((sum, row) => sum + Number(row.usedCodes || 0), 0),
+      teachers: rows.map(row => ({ teacherName: row.teacherName, usedCodes: Number(row.usedCodes || 0) })),
+    };
+  }
+
   async revokeCode(id: string) {
     const code = await this.codesRepo.findOne({ where: { id } });
     if (!code) throw new NotFoundException('Code not found');

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { codesApi } from '@/lib/api';
-import { Key, Copy, Trash2, CheckCircle, Clock, GraduationCap, User, Users } from 'lucide-react';
+import { Key, Copy, Trash2, CheckCircle, Clock, GraduationCap, FileDown, Printer, BarChart3 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -13,6 +13,10 @@ export default function AdminCodesPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [generating, setGenerating] = useState(false);
+  const [lastGenerated, setLastGenerated] = useState<any[]>([]);
+  const [usageMonth, setUsageMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [teacherUsage, setTeacherUsage] = useState<{ teacherName: string; usedCodes: number }[]>([]);
+  const [usageTotal, setUsageTotal] = useState(0);
   const [form, setForm] = useState({
     plan: 'monthly',
     quantity: '10',
@@ -36,6 +40,13 @@ export default function AdminCodesPage() {
 
   useEffect(() => { fetchCodes(); }, [filter, page]);
 
+  useEffect(() => {
+    codesApi.teacherUsage(usageMonth).then(res => {
+      setTeacherUsage(res.data.teachers || []);
+      setUsageTotal(res.data.totalUsed || 0);
+    }).catch(() => { setTeacherUsage([]); setUsageTotal(0); });
+  }, [usageMonth]);
+
   const generate = async () => {
     setGenerating(true);
     try {
@@ -47,9 +58,30 @@ export default function AdminCodesPage() {
         form.teacherName || undefined,
         form.groupName || undefined,
       );
-      toast.success(`${res.data.length} codes generated!`);
+      const generated = Array.isArray(res.data) ? res.data : [];
+      setLastGenerated(generated);
+      toast.success(`${generated.length} codes generated!`);
       fetchCodes();
     } catch { toast.error('Failed to generate codes'); } finally { setGenerating(false); }
+  };
+
+  const exportWord = () => {
+    if (!lastGenerated.length) return;
+    const rows = lastGenerated.map(code => `<tr><td>${code.code}</td><td>${code.plan}</td><td>${code.expiresAt ? format(new Date(code.expiresAt), 'MMM d, yyyy') : 'No expiry'}</td></tr>`).join('');
+    const html = `<html><head><meta charset="utf-8"><style>body{font-family:Arial;color:#111}h1{font-size:20px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:8px;text-align:left}code{font-family:monospace;font-size:16px;letter-spacing:1px}</style></head><body><h1>FIXION Subscription Codes</h1><p>Generated: ${new Date().toLocaleString()}</p><table><thead><tr><th>Code</th><th>Plan</th><th>Expires</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const blob = new Blob([html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = `fixion-codes-${new Date().toISOString().slice(0, 10)}.doc`; link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const printPdf = () => {
+    if (!lastGenerated.length) return;
+    const rows = lastGenerated.map(code => `<div class="code"><strong>${code.code}</strong><span>${code.plan}${code.expiresAt ? ` · ${format(new Date(code.expiresAt), 'MMM d, yyyy')}` : ''}</span></div>`).join('');
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) return;
+    printWindow.document.write(`<html><head><title>FIXION Subscription Codes</title><style>body{font-family:Arial;padding:28px;color:#111}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.code{border:1px solid #bbb;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px}.code strong{font:700 20px monospace;letter-spacing:1px}.code span{font-size:12px;color:#555}@media print{button{display:none}}</style></head><body><h1>FIXION Subscription Codes</h1><p>Generated: ${new Date().toLocaleString()}</p><div class="grid">${rows}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
+    printWindow.document.close();
   };
 
   const copyCode = (code: string) => {
@@ -174,6 +206,28 @@ export default function AdminCodesPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {lastGenerated.length > 0 && (
+        <div className="card" style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220 }}><strong>{lastGenerated.length} new codes ready</strong><div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>Download a printable copy for distribution.</div></div>
+          <button onClick={exportWord} className="btn btn-secondary"><FileDown size={14} /> Word file</button>
+          <button onClick={printPdf} className="btn btn-primary"><Printer size={14} /> Print / Save PDF</button>
+        </div>
+      )}
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <BarChart3 size={17} style={{ color: 'var(--primary-light)' }} />
+          <div style={{ flex: 1 }}><h3 style={{ fontSize: 14, fontWeight: 700 }}>Teacher code usage</h3><p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>Used subscription codes grouped by teacher for the selected month.</p></div>
+          <input type="month" value={usageMonth} onChange={event => setUsageMonth(event.target.value)} className="form-input" style={{ width: 160 }} />
+          <span className="badge badge-active">{usageTotal.toLocaleString()} used</span>
+        </div>
+        {teacherUsage.length === 0 ? <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '10px 0' }}>No used codes recorded for this month.</div> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
+            {teacherUsage.map(teacher => <div key={teacher.teacherName} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)' }}><GraduationCap size={16} style={{ color: 'var(--primary-light)' }} /><span style={{ flex: 1, fontSize: 13 }}>{teacher.teacherName}</span><strong>{teacher.usedCodes}</strong></div>)}
+          </div>
+        )}
       </div>
 
       {/* Filter */}
