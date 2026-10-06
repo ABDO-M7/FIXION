@@ -184,6 +184,7 @@ export class SubscriptionsService {
     const qb = this.codesRepo
       .createQueryBuilder('c')
       .leftJoinAndSelect('c.usedBy', 'usedBy')
+      .leftJoinAndSelect('c.teacher', 'teacher')
       .orderBy('c.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -191,7 +192,15 @@ export class SubscriptionsService {
     if (isUsed !== undefined) qb.where('c.isUsed = :isUsed', { isUsed });
 
     const [data, total] = await qb.getManyAndCount();
-    return { data, total, page, limit };
+    return {
+      data: data.map(code => ({
+        ...code,
+        teacherName: code.teacherId ? code.teacher?.name ?? null : null,
+      })),
+      total,
+      page,
+      limit,
+    };
   }
 
   async getTeacherCodeUsage(month?: string) {
