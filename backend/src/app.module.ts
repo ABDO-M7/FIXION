@@ -60,9 +60,9 @@ import { VideoResponse } from './modules/videos/entities/video-response.entity';
         url: config.get<string>('database.url'),
         ssl: config.get('database.ssl'),
         entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Assignment, AssignmentSubmission, QuizQuestion, Notification, Appointment, CourseVideo, VideoCheckpoint, VideoResponse],
-        synchronize: config.get('app.nodeEnv') !== 'production', // Use migrations in prod
+        synchronize: !config.get<boolean>('app.isProduction'), // Never synchronize on hosted production services
         migrations: [__dirname + '/migrations/*{.js,.ts}'],
-        migrationsRun: config.get('app.nodeEnv') === 'production',
+        migrationsRun: config.get<boolean>('app.isProduction'),
         logging: config.get('app.nodeEnv') === 'development',
         extra: {
           max: 10, // connection pool

@@ -97,7 +97,7 @@ export class AuthService {
 
   async logout(userId: string, res: any) {
     await this.usersService.clearRefreshToken(userId);
-    const isProd = this.configService.get('app.nodeEnv') === 'production';
+    const isProd = this.configService.get<boolean>('app.isProduction') === true;
     const cookieOpts = {
       httpOnly: true,
       secure: isProd,
@@ -136,7 +136,7 @@ export class AuthService {
     const refreshHash = await bcrypt.hash(refreshToken, 10);
     await this.usersService.saveRefreshTokenHash(user.id, refreshHash);
 
-    const isProd = this.configService.get('app.nodeEnv') === 'production';
+    const isProd = this.configService.get<boolean>('app.isProduction') === true;
     const cookieOpts = {
       httpOnly: true,
       secure: isProd,

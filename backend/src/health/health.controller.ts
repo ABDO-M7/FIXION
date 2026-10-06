@@ -211,7 +211,7 @@ export class HealthController {
     const memUsage = process.memoryUsage();
     const server = {
       nodeVersion: process.version,
-      environment: this.configService.get<string>('app.nodeEnv') || 'unknown',
+      environment: this.configService.get<boolean>('app.isProduction') ? 'production' : 'development',
       uptime: Math.round(process.uptime()),
       uptimeFormatted: this.formatUptime(process.uptime()),
       memory: {
