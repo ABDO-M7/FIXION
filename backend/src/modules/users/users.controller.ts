@@ -8,6 +8,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from './entities/user.entity';
+import * as bcrypt from 'bcrypt';
 
 const CREATABLE_STAFF_ROLES = [UserRole.TEACHER, UserRole.TEAM_MEMBER, UserRole.ASSISTANT];
 
@@ -47,6 +48,8 @@ export class UsersController {
   @Roles(UserRole.ADMIN)
   async createStaff(@Body() body: {
     name?: string;
+    email?: string;
+    password?: string;
     role?: UserRole;
     subjects?: string[];
     assignedTeacherId?: string;
@@ -57,6 +60,18 @@ export class UsersController {
     if (!name) throw new BadRequestException('Name is required');
     if (!CREATABLE_STAFF_ROLES.includes(role)) {
       throw new BadRequestException('Invalid staff role');
+    }
+
+    const email = body.email?.trim().toLowerCase() || null;
+    const password = body.password;
+    if ((email && !password) || (!email && password)) {
+      throw new BadRequestException('Email and password must be provided together');
+    }
+    if (email && password && password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+    if (email && await this.usersService.findByEmail(email)) {
+      throw new BadRequestException('Email is already registered');
     }
 
     let assignedTeacherId: string | null = null;
@@ -84,10 +99,13 @@ export class UsersController {
 
     const staff = await this.usersService.create({
       name,
+      email,
+      passwordHash: password ? await bcrypt.hash(password, 12) : null,
       role,
       subjects,
       assignedTeacherId,
       isActive: true,
+      isVerified: Boolean(email),
     });
 
     const { passwordHash: _passwordHash, ...safeStaff } = staff;

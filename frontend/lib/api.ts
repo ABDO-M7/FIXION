@@ -172,7 +172,7 @@ export const adminApi = {
   health: () => api.get('/health/detailed'),
   users: (params?: any) => api.get('/users', { params }),
   createTeacher: (data: { name: string }) => api.post('/users/teachers', data),
-  createStaff: (data: { name: string; role: string; subjects?: string[]; assignedTeacherId?: string }) =>
+  createStaff: (data: { name: string; email: string; password: string; role: string; subjects?: string[]; assignedTeacherId?: string }) =>
     api.post('/users/staff', data),
   updateUserStatus: (id: string, isActive: boolean) => api.patch(`/users/${id}/status`, { isActive }),
   updateUserRole: (id: string, role: string) => api.patch(`/users/${id}/role`, { role }),

@@ -32,6 +32,8 @@ export default function AdminUsersPage() {
   const [teachers, setTeachers] = useState<any[]>([]);
   const [staffForm, setStaffForm] = useState({
     name: '',
+    email: '',
+    password: '',
     role: 'teacher' as (typeof STAFF_ROLES)[number],
     subjects: [] as string[],
     assignedTeacherId: '',
@@ -118,7 +120,7 @@ export default function AdminUsersPage() {
   };
 
   const openStaffModal = () => {
-    setStaffForm({ name: '', role: 'teacher', subjects: [], assignedTeacherId: '' });
+    setStaffForm({ name: '', email: '', password: '', role: 'teacher', subjects: [], assignedTeacherId: '' });
     setStaffModal(true);
     fetchTeachers();
   };
@@ -133,10 +135,16 @@ export default function AdminUsersPage() {
       toast.error('Choose the teacher this assistant works with');
       return;
     }
+    if (staffForm.password.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
     setCreatingStaff(true);
     try {
       await adminApi.createStaff({
         name: staffForm.name,
+        email: staffForm.email,
+        password: staffForm.password,
         role: staffForm.role,
         subjects: staffForm.role === 'team_member' ? staffForm.subjects : undefined,
         assignedTeacherId: staffForm.role === 'assistant' ? staffForm.assignedTeacherId : undefined,
@@ -341,7 +349,7 @@ export default function AdminUsersPage() {
               <button type="button" onClick={() => setStaffModal(false)} className="icon-btn" style={{ width: 30, height: 30 }} aria-label="Close"><X size={15} /></button>
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-              Choose the role first. Login details can be added later.
+              Create a login account for this staff member. They can use these credentials immediately.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="form-group">
@@ -360,6 +368,14 @@ export default function AdminUsersPage() {
                   <option value="assistant">Assistant</option>
                   <option value="team_member">Team member</option>
                 </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="staff-email">Login email</label>
+                <input id="staff-email" type="email" required value={staffForm.email} onChange={e => setStaffForm(p => ({ ...p, email: e.target.value }))} className="form-input" placeholder="staff@example.com" autoComplete="email" />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="staff-password">Temporary password</label>
+                <input id="staff-password" type="password" required minLength={8} value={staffForm.password} onChange={e => setStaffForm(p => ({ ...p, password: e.target.value }))} className="form-input" placeholder="At least 8 characters" autoComplete="new-password" />
               </div>
               {staffForm.role === 'teacher' && (
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
