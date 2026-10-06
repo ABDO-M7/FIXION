@@ -140,6 +140,9 @@ export class UsersController {
   async updatePermissions(@Param('id') id: string, @Body('permissions') permissions: Record<string, boolean>) {
     const user = await this.usersService.findById(id);
     if (!user) throw new BadRequestException('User not found');
+    if (user.role !== UserRole.TEACHER) {
+      throw new BadRequestException('Student services can only be managed for teachers');
+    }
     if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
       throw new BadRequestException('Permissions must be an object');
     }
