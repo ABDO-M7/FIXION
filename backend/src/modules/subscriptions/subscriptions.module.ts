@@ -5,9 +5,10 @@ import { SubscriptionsController, CodesController, EnrollmentsController } from 
 import { Subscription } from './entities/subscription.entity';
 import { SubscriptionCode } from './entities/subscription-code.entity';
 import { CourseEnrollment } from './entities/course-enrollment.entity';
+import { User } from '../users/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Subscription, SubscriptionCode, CourseEnrollment])],
+  imports: [TypeOrmModule.forFeature([Subscription, SubscriptionCode, CourseEnrollment, User])],
   controllers: [SubscriptionsController, CodesController, EnrollmentsController],
   providers: [SubscriptionsService],
   exports: [SubscriptionsService, TypeOrmModule],

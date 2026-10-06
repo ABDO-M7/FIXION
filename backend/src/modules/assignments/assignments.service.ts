@@ -33,7 +33,10 @@ export class AssignmentsService {
         qb.andWhere('1=0');
         return qb;
       }
-      qb.andWhere('e.teacherName = :teacherName', { teacherName: scope.teacherName });
+      qb.andWhere('(e.teacherId = :teacherId OR (e.teacherId IS NULL AND e.teacherName = :teacherName))', {
+        teacherId: scope.teacherId,
+        teacherName: scope.teacherName,
+      });
     } else if (scope.type === 'subjects' && scope.subjects.length > 0) {
       qb.andWhere('e.courseName IN (:...subjects)', { subjects: scope.subjects });
     } else if (scope.type === 'subjects') {

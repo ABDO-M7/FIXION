@@ -35,10 +35,12 @@ export class AppointmentsService {
       where: { studentId: student.id, courseName: dto.courseName, groupName: dto.groupName },
     });
     if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
-    if (!enrollment.teacherName) {
+    if (!enrollment.teacherId && !enrollment.teacherName) {
       throw new ForbiddenException('This course group has no assigned teacher');
     }
-    const teacher = await this.usersRepo.findOne({ where: { name: enrollment.teacherName, role: UserRole.TEACHER } });
+    const teacher = enrollment.teacherId
+      ? await this.usersRepo.findOne({ where: { id: enrollment.teacherId, role: UserRole.TEACHER } })
+      : await this.usersRepo.findOne({ where: { name: enrollment.teacherName, role: UserRole.TEACHER } });
     if (!teacher) throw new ForbiddenException('This course group has no valid teacher');
     if (!hasPermission(teacher, 'student_appointments')) {
       throw new ForbiddenException('Meeting requests are disabled for this course');
@@ -85,8 +87,8 @@ export class AppointmentsService {
         .innerJoin(
           CourseEnrollment,
           'e',
-          'e.studentId = a.studentId AND e.teacherName = :teacherName AND e.courseName = a.courseName AND e.groupName = a.groupName',
-          { teacherName: scope.teacherName },
+          'e.studentId = a.studentId AND (e.teacherId = :teacherId OR (e.teacherId IS NULL AND e.teacherName = :teacherName)) AND e.courseName = a.courseName AND e.groupName = a.groupName',
+          { teacherId: scope.teacherId, teacherName: scope.teacherName },
         )
         .orderBy('a.createdAt', 'DESC')
         .getMany();
@@ -119,12 +121,15 @@ export class AppointmentsService {
       const enrollment = await this.enrollmentsRepo.findOne({
         where: {
           studentId: appt.studentId,
-          teacherName: scope.teacherName,
           courseName: appt.courseName,
           groupName: appt.groupName,
         },
       });
-      if (!enrollment) throw new ForbiddenException('This appointment is not in your groups');
+      const matchesTeacher = enrollment && (
+        enrollment.teacherId === scope.teacherId ||
+        (!enrollment.teacherId && enrollment.teacherName === scope.teacherName)
+      );
+      if (!matchesTeacher) throw new ForbiddenException('This appointment is not in your groups');
     }
 
     appt.teacherId     = workOwnerId(scope, teacher);

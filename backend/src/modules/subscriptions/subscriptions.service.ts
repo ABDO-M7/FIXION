@@ -8,7 +8,7 @@ import { addDays } from 'date-fns';
 import { Subscription, SubscriptionPlan } from './entities/subscription.entity';
 import { SubscriptionCode } from './entities/subscription-code.entity';
 import { CourseEnrollment } from './entities/course-enrollment.entity';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const DIGIT_ALPHABET = '0123456789';
@@ -28,6 +28,8 @@ export class SubscriptionsService {
     private codesRepo: Repository<SubscriptionCode>,
     @InjectRepository(CourseEnrollment)
     private enrollmentsRepo: Repository<CourseEnrollment>,
+    @InjectRepository(User)
+    private usersRepo: Repository<User>,
   ) {}
 
   async redeemCode(code: string, student: User): Promise<{ subscription: Subscription; enrollment: CourseEnrollment | null }> {
@@ -85,6 +87,8 @@ export class SubscriptionsService {
           studentId: student.id,
           courseName: subCode.courseName,
           teacherName: subCode.teacherName,
+          teacherId: subCode.teacherId,
+          teacher: subCode.teacher,
           groupName: subCode.groupName,
           codeId: subCode.id,
         }),
@@ -131,7 +135,7 @@ export class SubscriptionsService {
     admin: User,
     expiresAt?: Date,
     courseName?: string,
-    teacherName?: string,
+    teacherId?: string,
     groupName?: string,
     minLength = 16,
     maxLength = 16,
@@ -141,6 +145,11 @@ export class SubscriptionsService {
     if (!Number.isInteger(safeQuantity) || safeQuantity < 1) throw new BadRequestException('Quantity must be at least 1');
     if (!Number.isInteger(minLength) || !Number.isInteger(maxLength) || minLength < 4 || maxLength > 64 || minLength > maxLength) {
       throw new BadRequestException('Code length range must be between 4 and 64, with minimum no greater than maximum');
+    }
+    let teacher: User | null = null;
+    if (teacherId) {
+      teacher = await this.usersRepo.findOne({ where: { id: teacherId, role: UserRole.TEACHER } });
+      if (!teacher) throw new BadRequestException('Selected teacher was not found');
     }
     const codes: SubscriptionCode[] = [];
     const generated = new Set<string>();
@@ -156,7 +165,16 @@ export class SubscriptionsService {
       if (!code) throw new BadRequestException('Could not generate enough unique codes for this range');
       generated.add(code);
       codes.push(
-        this.codesRepo.create({ code, plan, createdById: admin.id, expiresAt, courseName, teacherName, groupName }),
+        this.codesRepo.create({
+          code,
+          plan,
+          createdById: admin.id,
+          expiresAt,
+          courseName,
+          teacherId: teacher?.id,
+          teacherName: teacher?.name,
+          groupName,
+        }),
       );
     }
     return this.codesRepo.save(codes);
@@ -182,11 +200,13 @@ export class SubscriptionsService {
     const end = new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth() + 1, 1));
     const rows = await this.codesRepo
       .createQueryBuilder('c')
-      .select("COALESCE(NULLIF(TRIM(c.teacherName), ''), 'Unassigned')", 'teacherName')
+      .innerJoin(User, 'teacher', 'teacher.id = c.teacher_id AND teacher.role = :teacherRole', { teacherRole: UserRole.TEACHER })
+      .select('teacher.name', 'teacherName')
       .addSelect('COUNT(c.id)', 'usedCodes')
       .where('c.isUsed = :isUsed', { isUsed: true })
+      .andWhere('c.teacher_id IS NOT NULL')
       .andWhere('c.usedAt >= :start AND c.usedAt < :end', { start, end })
-      .groupBy("COALESCE(NULLIF(TRIM(c.teacherName), ''), 'Unassigned')")
+      .groupBy('teacher.name')
       .orderBy('COUNT(c.id)', 'DESC')
       .getRawMany();
 

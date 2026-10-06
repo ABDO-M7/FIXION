@@ -53,6 +53,14 @@ export class SubscriptionCode {
   @Column({ nullable: true })
   teacherName: string;
 
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'teacher_id' })
+  teacher: User | null;
+
+  @Index()
+  @Column({ nullable: true })
+  teacherId: string | null;
+
   @Column({ nullable: true })
   groupName: string;
 

@@ -23,7 +23,7 @@ export default function AdminCodesPage() {
     quantity: '10',
     expiresAt: '',
     courseName: '',
-    teacherName: '',
+    teacherId: '',
     groupName: '',
     minLength: '16',
     maxLength: '16',
@@ -70,7 +70,7 @@ export default function AdminCodesPage() {
         quantity,
         form.expiresAt || undefined,
         form.courseName || undefined,
-        form.teacherName || undefined,
+        form.teacherId || undefined,
         form.groupName || undefined,
         minLength,
         maxLength,
@@ -178,15 +178,15 @@ export default function AdminCodesPage() {
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: 12 }}>Teacher Name</label>
                     <select
-                      value={form.teacherName}
-                      onChange={e => setForm(p => ({ ...p, teacherName: e.target.value }))}
+                      value={form.teacherId}
+                      onChange={e => setForm(p => ({ ...p, teacherId: e.target.value }))}
                       className="form-input"
                       style={{ fontSize: 13 }}
                       aria-label="Teacher"
                     >
                       <option value="">— No teacher —</option>
                       {teachers
-                        .filter(teacher => !form.courseName || !teacher.subjects?.length || teacher.subjects.includes(form.courseName) || teacher.name === form.teacherName)
+                        .filter(teacher => !form.courseName || !teacher.subjects?.length || teacher.subjects.includes(form.courseName) || teacher.id === form.teacherId)
                         .map(teacher => <option key={teacher.id} value={teacher.name}>{teacher.name}</option>)}
                     </select>
                   </div>

@@ -70,12 +70,13 @@ export class QuestionsService {
             .select('1')
             .from(CourseEnrollment, 'e')
             .where('e.studentId = q.studentId')
-            .andWhere('e.teacherName = :scopeTeacherName')
+            .andWhere('(e.teacherId = :scopeTeacherId OR (e.teacherId IS NULL AND e.teacherName = :scopeTeacherName))')
             .andWhere('(q.courseName IS NULL OR e.courseName = q.courseName)')
             .getQuery();
           return `EXISTS ${sub}`;
         });
         qb.setParameter('scopeTeacherName', scope.teacherName);
+        qb.setParameter('scopeTeacherId', scope.teacherId);
       }
     }
 
