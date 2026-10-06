@@ -58,7 +58,7 @@ export class SubscriptionCode {
   teacher: User | null;
 
   @Index()
-  @Column({ nullable: true })
+  @Column({ name: 'teacher_id', nullable: true })
   teacherId: string | null;
 
   @Column({ nullable: true })
