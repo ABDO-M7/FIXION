@@ -28,7 +28,7 @@ export class CourseEnrollment {
   @Column()
   courseName: string;
 
-  @Column({ name: 'code_id', nullable: true })
+  @Column({ nullable: true })
   teacherName: string;
 
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
@@ -46,7 +46,7 @@ export class CourseEnrollment {
   @JoinColumn({ name: 'code_id' })
   code: SubscriptionCode;
 
-  @Column({ nullable: true })
+  @Column({ name: 'code_id', nullable: true })
   codeId: string;
 
   @CreateDateColumn()
