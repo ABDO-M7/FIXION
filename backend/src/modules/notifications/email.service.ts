@@ -51,7 +51,7 @@ export class EmailService {
   async sendAnswerNotification(studentId: string, questionId: string, message: string) {
     try {
       const user = await this.usersRepo.findOne({ where: { id: studentId } });
-      if (!user) return;
+      if (!user?.email) return;
 
       const frontendUrl = this.configService.get<string>('app.frontendUrl');
       const questionUrl = `${frontendUrl}/student/questions/${questionId}`;

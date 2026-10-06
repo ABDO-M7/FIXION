@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
-import { codesApi } from '@/lib/api';
+import { adminApi, codesApi } from '@/lib/api';
 import { Key, Copy, Trash2, CheckCircle, Clock, GraduationCap, FileDown, Printer, BarChart3 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -17,6 +17,7 @@ export default function AdminCodesPage() {
   const [usageMonth, setUsageMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [teacherUsage, setTeacherUsage] = useState<{ teacherName: string; usedCodes: number }[]>([]);
   const [usageTotal, setUsageTotal] = useState(0);
+  const [teachers, setTeachers] = useState<{ id: string; name: string; email: string; subjects?: string[] }[]>([]);
   const [form, setForm] = useState({
     plan: 'monthly',
     quantity: '10',
@@ -49,6 +50,12 @@ export default function AdminCodesPage() {
       setUsageTotal(res.data.totalUsed || 0);
     }).catch(() => { setTeacherUsage([]); setUsageTotal(0); });
   }, [usageMonth]);
+
+  useEffect(() => {
+    adminApi.users({ page: 1, limit: 100, role: 'teacher' })
+      .then(res => setTeachers(res.data.data || []))
+      .catch(() => setTeachers([]));
+  }, []);
 
   const generate = async () => {
     const quantity = Number(form.quantity);
@@ -170,13 +177,18 @@ export default function AdminCodesPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: 12 }}>Teacher Name</label>
-                    <input
+                    <select
                       value={form.teacherName}
                       onChange={e => setForm(p => ({ ...p, teacherName: e.target.value }))}
                       className="form-input"
-                      placeholder="e.g. Mr. Ahmed"
                       style={{ fontSize: 13 }}
-                    />
+                      aria-label="Teacher"
+                    >
+                      <option value="">— No teacher —</option>
+                      {teachers
+                        .filter(teacher => !form.courseName || !teacher.subjects?.length || teacher.subjects.includes(form.courseName) || teacher.name === form.teacherName)
+                        .map(teacher => <option key={teacher.id} value={teacher.name}>{teacher.name}</option>)}
+                    </select>
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: 12 }}>Group Name</label>

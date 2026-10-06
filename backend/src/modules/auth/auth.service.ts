@@ -39,7 +39,7 @@ export class AuthService {
       phone: dto.phone,
     });
 
-    await this.emailService.sendVerificationEmail(user.email, user.name, emailVerificationToken);
+    await this.emailService.sendVerificationEmail(dto.email, user.name, emailVerificationToken);
 
     return { message: 'Registration successful. Please verify your email.' };
   }

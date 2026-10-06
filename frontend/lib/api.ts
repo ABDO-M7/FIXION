@@ -170,6 +170,7 @@ export const adminApi = {
   overview: () => api.get('/admin/analytics/overview'),
   health: () => api.get('/health/detailed'),
   users: (params?: any) => api.get('/users', { params }),
+  createTeacher: (data: { name: string }) => api.post('/users/teachers', data),
   updateUserStatus: (id: string, isActive: boolean) => api.patch(`/users/${id}/status`, { isActive }),
   updateUserRole: (id: string, role: string) => api.patch(`/users/${id}/role`, { role }),
   updateUserSubjects: (id: string, subjects: string[]) => api.patch(`/users/${id}/subjects`, { subjects }),

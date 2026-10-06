@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import AppShell from '@/components/AppShell';
 import { adminApi } from '@/lib/api';
-import { Search, Shield, UserX, UserCheck, Trash2, BookOpen, X, Check } from 'lucide-react';
+import { Search, Shield, UserX, UserCheck, Trash2, BookOpen, X, Check, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -25,6 +25,9 @@ export default function AdminUsersPage() {
   // Subjects modal state
   const [subjectsModal, setSubjectsModal] = useState<{ user: any; selected: string[] } | null>(null);
   const [savingSubjects, setSavingSubjects] = useState(false);
+  const [teacherModal, setTeacherModal] = useState(false);
+  const [creatingTeacher, setCreatingTeacher] = useState(false);
+  const [teacherForm, setTeacherForm] = useState({ name: '' });
   const LIMIT = 20;
 
   const fetchUsers = async () => {
@@ -84,7 +87,23 @@ export default function AdminUsersPage() {
     finally { setSavingSubjects(false); }
   };
 
-  const filtered = users.filter(u => !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()));
+  const createTeacher = async (event: FormEvent) => {
+    event.preventDefault();
+    setCreatingTeacher(true);
+    try {
+      await adminApi.createTeacher(teacherForm);
+      toast.success('Teacher added');
+      setTeacherModal(false);
+      setTeacherForm({ name: '' });
+      fetchUsers();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to create teacher');
+    } finally {
+      setCreatingTeacher(false);
+    }
+  };
+
+  const filtered = users.filter(u => !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase()));
 
   const roleBadge = (r: string) => {
     if (r === 'admin') return <span className="badge badge-admin">Admin</span>;
@@ -99,6 +118,9 @@ export default function AdminUsersPage() {
           <h1 className="page-title">User Management</h1>
           <p className="page-subtitle">{total.toLocaleString()} registered users</p>
         </div>
+        <button onClick={() => setTeacherModal(true)} className="btn btn-primary">
+          <UserPlus size={15} /> Add teacher
+        </button>
       </div>
 
       <div className="filter-bar">
@@ -248,6 +270,35 @@ export default function AdminUsersPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {teacherModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16,
+        }}>
+          <form onSubmit={createTeacher} className="card" style={{ width: 460, padding: 28 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <h3 style={{ fontWeight: 700, fontSize: 16 }}>Add teacher</h3>
+              <button type="button" onClick={() => setTeacherModal(false)} className="icon-btn" style={{ width: 30, height: 30 }} aria-label="Close"><X size={15} /></button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+              Add the teacher name now. Login details can be added later as a separate feature.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="teacher-name">Full name</label>
+                <input id="teacher-name" required value={teacherForm.name} onChange={e => setTeacherForm(p => ({ ...p, name: e.target.value }))} className="form-input" placeholder="e.g. Ahmed Hassan" />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              <button type="button" onClick={() => setTeacherModal(false)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+              <button type="submit" disabled={creatingTeacher} className="btn btn-primary" style={{ flex: 1 }}>
+                {creatingTeacher ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Creating...</> : 'Create teacher'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </AppShell>

@@ -1,5 +1,6 @@
 import {
-  Controller, Get, Patch, Delete, Param, Body, UseGuards, Query
+  BadRequestException,
+  Controller, Get, Patch, Post, Delete, Param, Body, UseGuards, Query
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/auth.guard';
@@ -32,6 +33,23 @@ export class UsersController {
     @Query('role') role?: UserRole,
   ) {
     return this.usersService.findAll(+page, +limit, role);
+  }
+
+  @Post('teachers')
+  @Roles(UserRole.ADMIN)
+  async createTeacher(@Body() body: { name?: string }) {
+    const name = body.name?.trim();
+
+    if (!name) throw new BadRequestException('Teacher name is required');
+
+    const teacher = await this.usersService.create({
+      name,
+      role: UserRole.TEACHER,
+      isActive: true,
+    });
+
+    const { passwordHash: _passwordHash, ...safeTeacher } = teacher;
+    return safeTeacher;
   }
 
   @Patch(':id/status')
