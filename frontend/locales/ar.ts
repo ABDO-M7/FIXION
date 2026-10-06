@@ -157,6 +157,15 @@ export const ar: Dictionary = {
   dashboard: {
     student: {
       totalQuestions: 'إجمالي الأسئلة',
+      learningOverview: 'تابع دوراتك ومحاضراتك وواجباتك من مكان واحد.',
+      myCourses: 'دوراتي',
+      lecturesCompleted: 'المحاضرات المكتملة',
+      assignmentsSubmitted: 'الواجبات المُسلّمة',
+      learningProgress: 'تقدمك الدراسي',
+      progressHint: 'يُحسب التقدم من نقاط المحاضرات المكتملة والواجبات التي تم تسليمها.',
+      lectures: 'محاضرات',
+      lectureProgress: 'تقدم المحاضرات',
+      assignments: 'واجبات',
       answered: 'تمت الإجابة',
       pending: 'قيد الانتظار',
       closed: 'مغلق',

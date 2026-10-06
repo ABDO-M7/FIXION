@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
-import { questionsApi, subscriptionsApi } from '@/lib/api';
+import { assignmentsApi, enrollmentsApi, questionsApi, subscriptionsApi, videosApi } from '@/lib/api';
 import { useAuthStore } from '@/store';
 import { useTranslation } from '@/hooks/useTranslation';
-import { HelpCircle, CheckCircle, Clock, Key, Plus, ArrowRight } from 'lucide-react';
+import { BookOpen, FileText, Key, PlayCircle, Plus, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -12,6 +12,7 @@ export default function StudentDashboard() {
   const { user } = useAuthStore();
   const [questions, setQuestions] = useState<any[]>([]);
   const [subscription, setSubscription] = useState<any>(null);
+  const [courseProgress, setCourseProgress] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { t } = useTranslation();
 
@@ -19,14 +20,40 @@ export default function StudentDashboard() {
     Promise.all([
       questionsApi.myQuestions(1, 5),
       subscriptionsApi.status(),
-    ]).then(([qRes, sRes]) => {
+      enrollmentsApi.my(),
+    ]).then(async ([qRes, sRes, enrollmentsRes]) => {
       setQuestions(qRes.data.data || []);
       setSubscription(sRes.data);
+      const enrollments = enrollmentsRes.data || [];
+      const progress = await Promise.all(enrollments.map(async (enrollment: any) => {
+        const [videosResult, assignmentsResult] = await Promise.allSettled([
+          videosApi.studentList(enrollment.courseName, enrollment.groupName),
+          assignmentsApi.myAssignments(enrollment.courseName, enrollment.groupName),
+        ]);
+        const videos = videosResult.status === 'fulfilled' ? videosResult.value.data || [] : [];
+        const assignments = assignmentsResult.status === 'fulfilled' ? assignmentsResult.value.data || [] : [];
+        const completedLectures = videos.filter((video: any) =>
+          video.checkpointCount > 0 && video.completedCheckpointCount >= video.checkpointCount,
+        ).length;
+        const submittedAssignments = assignments.filter((assignment: any) => assignment.submission).length;
+        return {
+          ...enrollment,
+          videos,
+          assignments,
+          completedLectures,
+          submittedAssignments,
+          lectureProgress: videos.length ? Math.round((completedLectures / videos.length) * 100) : 0,
+          assignmentProgress: assignments.length ? Math.round((submittedAssignments / assignments.length) * 100) : 0,
+        };
+      }));
+      setCourseProgress(progress);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  const pending = questions.filter(q => q.status === 'pending').length;
-  const answered = questions.filter(q => q.status === 'answered').length;
+  const totalLectures = courseProgress.reduce((total, course) => total + course.videos.length, 0);
+  const completedLectures = courseProgress.reduce((total, course) => total + course.completedLectures, 0);
+  const totalAssignments = courseProgress.reduce((total, course) => total + course.assignments.length, 0);
+  const submittedAssignments = courseProgress.reduce((total, course) => total + course.submittedAssignments, 0);
 
   const statusBadge = (status: string) => {
     if (status === 'answered') return <span className="badge badge-answered">✓ {t('dashboard.student.answered')}</span>;
@@ -38,36 +65,37 @@ export default function StudentDashboard() {
     <AppShell>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{t('common.welcomeBack')}, {user?.name?.split(' ')[0]} 👋</h1>
-          <p className="page-subtitle">{t('common.overview')}</p>
+          <h1 className="page-title">{t('common.welcomeBack')}, {user?.name?.split(' ')[0]}</h1>
+          <p className="page-subtitle">{t('dashboard.student.learningOverview')}</p>
         </div>
-        <Link href="/student/questions/new" className="btn btn-primary">
-          <Plus size={16} /> {t('common.askQuestion')}
-        </Link>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <Link href="/student/courses" className="btn btn-primary"><BookOpen size={16} /> {t('nav.courses')}</Link>
+          <Link href="/student/questions/new" className="btn btn-ghost"><Plus size={16} /> {t('common.askQuestion')}</Link>
+        </div>
       </div>
 
       {/* Stats */}
       <div className="grid-4" style={{ marginBottom: 28 }}>
         <div className="stat-card blue">
           <div className="stat-icon" style={{ background: 'rgba(99,102,241,0.15)' }}>
-            <HelpCircle size={22} style={{ color: 'var(--primary-light)' }} />
+            <BookOpen size={22} style={{ color: 'var(--primary-light)' }} />
           </div>
-          <div className="stat-value">{questions.length}</div>
-          <div className="stat-label">{t('dashboard.student.totalQuestions')}</div>
+          <div className="stat-value">{courseProgress.length}</div>
+          <div className="stat-label">{t('dashboard.student.myCourses')}</div>
         </div>
         <div className="stat-card green">
           <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.15)' }}>
-            <CheckCircle size={22} style={{ color: 'var(--success)' }} />
+            <PlayCircle size={22} style={{ color: 'var(--success)' }} />
           </div>
-          <div className="stat-value">{answered}</div>
-          <div className="stat-label">{t('dashboard.student.answered')}</div>
+          <div className="stat-value">{completedLectures}/{totalLectures}</div>
+          <div className="stat-label">{t('dashboard.student.lecturesCompleted')}</div>
         </div>
         <div className="stat-card purple">
           <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.15)' }}>
-            <Clock size={22} style={{ color: 'var(--warning)' }} />
+            <FileText size={22} style={{ color: 'var(--warning)' }} />
           </div>
-          <div className="stat-value">{pending}</div>
-          <div className="stat-label">{t('dashboard.student.pending')}</div>
+          <div className="stat-value">{submittedAssignments}/{totalAssignments}</div>
+          <div className="stat-label">{t('dashboard.student.assignmentsSubmitted')}</div>
         </div>
         <div className="stat-card cyan">
           <div className="stat-icon" style={{ background: subscription?.isActive ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)' }}>
@@ -96,6 +124,38 @@ export default function StudentDashboard() {
           <Link href="/student/subscription" className="btn btn-sm" style={{ background: 'var(--danger)', color: 'white', flexShrink: 0 }}>
             {t('dashboard.student.redeemCode')}
           </Link>
+        </div>
+      )}
+
+      {/* Course progress */}
+      {courseProgress.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 700 }}>{t('dashboard.student.learningProgress')}</h2>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{t('dashboard.student.progressHint')}</p>
+            </div>
+            <Link href="/student/courses" className="btn btn-ghost btn-sm">{t('common.viewAll')} <ArrowRight size={14} /></Link>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {courseProgress.slice(0, 4).map(course => (
+              <div key={course.id}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{course.courseName}</span>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                    {course.completedLectures}/{course.videos.length} {t('dashboard.student.lectures')}
+                  </span>
+                </div>
+                <div style={{ height: 8, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ width: `${course.lectureProgress}%`, height: '100%', background: 'var(--gradient-primary)', borderRadius: 99, transition: 'width 0.3s ease' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 16, marginTop: 7, color: 'var(--text-muted)', fontSize: 11 }}>
+                  <span>{course.lectureProgress}% {t('dashboard.student.lectureProgress')}</span>
+                  <span>{course.submittedAssignments}/{course.assignments.length} {t('dashboard.student.assignments')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

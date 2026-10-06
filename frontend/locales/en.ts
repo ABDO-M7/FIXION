@@ -155,6 +155,15 @@ export const en = {
   dashboard: {
     student: {
       totalQuestions: 'Total Questions',
+      learningOverview: 'Track your courses, lectures, and assignments in one place.',
+      myCourses: 'My Courses',
+      lecturesCompleted: 'Lectures Completed',
+      assignmentsSubmitted: 'Assignments Submitted',
+      learningProgress: 'Learning Progress',
+      progressHint: 'Your progress is based on completed lecture checkpoints and submitted assignments.',
+      lectures: 'lectures',
+      lectureProgress: 'lecture progress',
+      assignments: 'assignments',
       answered: 'Answered',
       pending: 'Pending',
       closed: 'Closed',
