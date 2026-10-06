@@ -23,7 +23,7 @@ export class User {
   id: string;
 
   @Index()
-  @Column({ unique: true, length: 255, nullable: true })
+  @Column({ type: 'varchar', unique: true, length: 255, nullable: true })
   email: string | null;
 
   @Column({ nullable: true, select: false })
