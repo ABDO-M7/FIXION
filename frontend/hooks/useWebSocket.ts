@@ -27,7 +27,7 @@ export function useWebSocket() {
     }
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_PRIMARY?.replace('/api/v1', '') || 'http://localhost:3001';
+    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_PRIMARY || 'https://fixion.onrender.com/api/v1').replace('/api/v1', '');
 
     if (socket) {
       socket.disconnect();

@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const redirect = searchParams.get('redirect') || '/';
 
   try {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_PRIMARY || 'http://localhost:3001/api/v1';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_PRIMARY || 'https://fixion.onrender.com/api/v1';
     const cookieHeader = request.headers.get('cookie') || '';
 
     const res = await fetch(`${backendUrl}/auth/refresh`, {

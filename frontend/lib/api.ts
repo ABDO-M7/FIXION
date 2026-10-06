@@ -1,9 +1,10 @@
 import axios from 'axios';
 
-const API_URLS = [
-  process.env.NEXT_PUBLIC_BACKEND_PRIMARY || 'http://localhost:3001/api/v1',
-  process.env.NEXT_PUBLIC_BACKEND_FALLBACK || 'http://localhost:3001/api/v1',
-];
+const DEFAULT_BACKEND_URL = 'https://fixion.onrender.com/api/v1';
+const API_URLS = [...new Set([
+  process.env.NEXT_PUBLIC_BACKEND_PRIMARY || DEFAULT_BACKEND_URL,
+  process.env.NEXT_PUBLIC_BACKEND_FALLBACK || DEFAULT_BACKEND_URL,
+].filter(Boolean))];
 
 const api = axios.create({
   baseURL: API_URLS[0],

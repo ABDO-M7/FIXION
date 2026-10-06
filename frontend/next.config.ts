@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     ],
   },
   async rewrites() {
-    const primary = process.env.NEXT_PUBLIC_BACKEND_PRIMARY || 'http://localhost:3001/api/v1';
+    const primary = process.env.NEXT_PUBLIC_BACKEND_PRIMARY || 'https://fixion.onrender.com/api/v1';
     return [
       {
         source: '/api/backend/:path*',
