@@ -139,7 +139,7 @@ export default function SubscriptionPage() {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={redeeming || code.trim().length < 6}
+              disabled={redeeming || code.trim().length < 4}
               style={{ flexShrink: 0 }}
             >
               {redeeming ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <><ArrowRight size={15} /> {t('subscription.redeemBtn')}</>}
