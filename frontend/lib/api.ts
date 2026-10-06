@@ -204,7 +204,7 @@ export const uploadsApi = {
 };
 
 export const appointmentsApi = {
-  create: (dto: { courseName: string; topic: string; message?: string; preferredTime?: string }) =>
+  create: (dto: { courseName: string; groupName?: string; topic: string; message?: string; preferredTime?: string }) =>
     api.post('/appointments', dto),
   mine: () => api.get('/appointments/mine'),
   teacherList: () => api.get('/appointments/teacher'),

@@ -18,7 +18,7 @@ export class AppointmentsController {
   @Roles(UserRole.STUDENT)
   create(
     @CurrentUser() student: any,
-    @Body() dto: { courseName: string; topic: string; message?: string; preferredTime?: string },
+    @Body() dto: { courseName: string; groupName?: string; topic: string; message?: string; preferredTime?: string },
   ) {
     return this.service.create(student, dto);
   }

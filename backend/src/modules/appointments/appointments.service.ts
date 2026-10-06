@@ -20,6 +20,7 @@ export class AppointmentsService {
   // ─── Student: create a new appointment request ────────────────────────────
   async create(student: User, dto: {
     courseName: string;
+    groupName?: string;
     topic: string;
     message?: string;
     preferredTime?: string;
@@ -27,16 +28,25 @@ export class AppointmentsService {
     if (!hasPermission(student, 'student_appointments')) {
       throw new ForbiddenException('Meeting requests are disabled for this account');
     }
-    const enrollment = await this.enrollmentsRepo.findOne({ where: { studentId: student.id, courseName: dto.courseName } });
-    if (enrollment?.teacherName) {
-      const teacher = await this.usersRepo.findOne({ where: { name: enrollment.teacherName, role: UserRole.TEACHER } });
-      if (teacher && !hasPermission(teacher, 'student_appointments')) {
-        throw new ForbiddenException('Meeting requests are disabled for this course');
-      }
+    if (!dto.courseName?.trim() || !dto.groupName?.trim()) {
+      throw new ForbiddenException('A course group is required for meeting requests');
+    }
+    const enrollment = await this.enrollmentsRepo.findOne({
+      where: { studentId: student.id, courseName: dto.courseName, groupName: dto.groupName },
+    });
+    if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
+    if (!enrollment.teacherName) {
+      throw new ForbiddenException('This course group has no assigned teacher');
+    }
+    const teacher = await this.usersRepo.findOne({ where: { name: enrollment.teacherName, role: UserRole.TEACHER } });
+    if (!teacher) throw new ForbiddenException('This course group has no valid teacher');
+    if (!hasPermission(teacher, 'student_appointments')) {
+      throw new ForbiddenException('Meeting requests are disabled for this course');
     }
     const appt = new Appointment();
     appt.studentId = student.id;
     appt.courseName = dto.courseName;
+    appt.groupName = enrollment.groupName;
     appt.topic = dto.topic;
     appt.message = dto.message ?? null as any;
     appt.preferredTime = dto.preferredTime ?? null as any;
@@ -55,6 +65,9 @@ export class AppointmentsService {
 
   // ─── Staff: list requests in their scope ──────────────────────────────────
   async listForTeacher(teacher: User) {
+    if (!hasPermission(teacher, 'staff_handle_appointments')) {
+      throw new ForbiddenException('Appointment handling is disabled for this account');
+    }
     const scope = await resolveStaffScope(this.usersRepo, teacher);
     if (scope.type === 'subjects') {
       if (scope.subjects.length === 0) return [];
@@ -72,7 +85,7 @@ export class AppointmentsService {
         .innerJoin(
           CourseEnrollment,
           'e',
-          'e.studentId = a.studentId AND e.teacherName = :teacherName AND e.courseName = a.courseName',
+          'e.studentId = a.studentId AND e.teacherName = :teacherName AND e.courseName = a.courseName AND e.groupName = a.groupName',
           { teacherName: scope.teacherName },
         )
         .orderBy('a.createdAt', 'DESC')
@@ -90,6 +103,9 @@ export class AppointmentsService {
     teacher: User,
     dto: { status: AppointmentStatus; teacherReply?: string; scheduledTime?: string },
   ) {
+    if (!hasPermission(teacher, 'staff_handle_appointments')) {
+      throw new ForbiddenException('Appointment handling is disabled for this account');
+    }
     const appt = await this.repo.findOne({ where: { id: appointmentId } });
     if (!appt) throw new NotFoundException('Appointment not found');
 
@@ -101,7 +117,12 @@ export class AppointmentsService {
     } else if (scope.type === 'teacher') {
       if (!scope.teacherName) throw new ForbiddenException('No teacher assignment found');
       const enrollment = await this.enrollmentsRepo.findOne({
-        where: { studentId: appt.studentId, teacherName: scope.teacherName, courseName: appt.courseName },
+        where: {
+          studentId: appt.studentId,
+          teacherName: scope.teacherName,
+          courseName: appt.courseName,
+          groupName: appt.groupName,
+        },
       });
       if (!enrollment) throw new ForbiddenException('This appointment is not in your groups');
     }
@@ -134,6 +155,7 @@ export class AppointmentsService {
       return {
         id:            a.id,
         courseName:    a.courseName,
+        groupName:     a.groupName,
         topic:         a.topic,
         message:       a.message,
         preferredTime: a.preferredTime,

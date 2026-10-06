@@ -13,6 +13,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 type Appointment = {
   id: string;
   courseName: string;
+  groupName?: string;
   topic: string;
   message?: string;
   preferredTime?: string;
@@ -32,6 +33,7 @@ export default function StudentAppointmentsPage() {
 
   const [form, setForm] = useState({
     courseName: '',
+    groupName: '',
     topic: '',
     message: '',
     preferredTime: '',
@@ -48,7 +50,7 @@ export default function StudentAppointmentsPage() {
       setAppointments(apptsRes.data || []);
       setEnrollments(enrollRes.data || []);
       if (enrollRes.data?.[0]?.courseName) {
-        setForm((prev) => ({ ...prev, courseName: prev.courseName || enrollRes.data[0].courseName }));
+        setForm((prev) => ({ ...prev, courseName: prev.courseName || enrollRes.data[0].courseName, groupName: prev.groupName || enrollRes.data[0].groupName || '' }));
       }
     } catch {
       toast.error(t('appointments.failedLoad'));
@@ -75,7 +77,7 @@ export default function StudentAppointmentsPage() {
       await appointmentsApi.create(form);
       toast.success(t('appointments.sentSuccess'));
       setShowModal(false);
-      setForm({ courseName: enrollments[0]?.courseName || '', topic: '', message: '', preferredTime: '' });
+      setForm({ courseName: enrollments[0]?.courseName || '', groupName: enrollments[0]?.groupName || '', topic: '', message: '', preferredTime: '' });
       loadData();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || t('appointments.failedSubmit'));
@@ -121,6 +123,7 @@ export default function StudentAppointmentsPage() {
         </div>
         <button
           onClick={() => setShowModal(true)}
+          disabled={enrollments.length === 0}
           className="btn btn-primary"
           style={{ display: 'flex', alignItems: 'center', gap: 8 }}
         >
@@ -142,6 +145,7 @@ export default function StudentAppointmentsPage() {
           </p>
           <button
             onClick={() => setShowModal(true)}
+          disabled={enrollments.length === 0}
             className="btn btn-primary"
             style={{ margin: '0 auto' }}
           >
@@ -229,28 +233,22 @@ export default function StudentAppointmentsPage() {
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="form-group">
                 <label className="form-label">{t('appointments.selectCourse')}</label>
-                {enrollments.length > 0 ? (
-                  <select
-                    className="form-input"
-                    value={form.courseName}
-                    onChange={(e) => setForm({ ...form, courseName: e.target.value })}
-                    required
-                  >
-                    <option value="" disabled>{t('appointments.selectCoursePlaceholder')}</option>
-                    {enrollments.map((e: any) => (
-                      <option key={e.id} value={e.courseName}>{e.courseName}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. فيزيا, رياضه..."
-                    value={form.courseName}
-                    onChange={(e) => setForm({ ...form, courseName: e.target.value })}
-                    required
-                  />
-                )}
+                <select
+                  className="form-input"
+                  value={`${form.courseName}::${form.groupName || ''}`}
+                  onChange={(e) => { const [courseName, groupName = ''] = e.target.value.split('::'); setForm({ ...form, courseName, groupName }); }}
+                  required
+                  disabled={enrollments.length === 0}
+                >
+                  {enrollments.length === 0
+                    ? <option value="">No enrolled course groups available</option>
+                    : <>
+                        <option value="" disabled>{t('appointments.selectCoursePlaceholder')}</option>
+                        {enrollments.map((e: any) => (
+                          <option key={e.id} value={`${e.courseName}::${e.groupName || ''}`}>{e.courseName}{e.groupName ? ` — ${e.groupName}` : ''}</option>
+                        ))}
+                      </>}
+                </select>
               </div>
 
               <div className="form-group">

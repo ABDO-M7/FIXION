@@ -42,6 +42,9 @@ export class Appointment {
   @Column()
   courseName: string;
 
+  @Column({ nullable: true })
+  groupName: string;
+
   // What topic the student needs explained
   @Column({ type: 'text' })
   topic: string;
