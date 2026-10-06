@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, ListObjectsV2Command, HeadBucketCommand } from '@aws-sdk/client-s3';
@@ -39,6 +39,16 @@ export class HealthController {
       timestamp: new Date().toISOString(),
       memory: process.memoryUsage(),
     };
+  }
+
+  @Get('readiness')
+  async readiness() {
+    try {
+      await this.dataSource.query('SELECT 1');
+      return { status: 'ready' };
+    } catch {
+      throw new ServiceUnavailableException({ status: 'not_ready' });
+    }
   }
 
   /** Detailed health with all service checks (admin use) */

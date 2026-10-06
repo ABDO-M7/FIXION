@@ -7,12 +7,6 @@ export class AddStaffRoles1760000002000 implements MigrationInterface {
     await queryRunner.query(`ALTER TABLE "users" ALTER COLUMN "role" DROP DEFAULT`);
     await queryRunner.query(`ALTER TABLE "users" ALTER COLUMN "role" TYPE varchar USING "role"::text`);
 
-    await queryRunner.query(`
-      UPDATE "users"
-      SET "role" = 'team_member'
-      WHERE "role" = 'teacher' AND "email" IS NOT NULL
-    `);
-
     await queryRunner.query(`DROP TYPE IF EXISTS "users_role_enum"`);
     await queryRunner.query(`
       CREATE TYPE "users_role_enum" AS ENUM ('student', 'team_member', 'teacher', 'assistant', 'admin')

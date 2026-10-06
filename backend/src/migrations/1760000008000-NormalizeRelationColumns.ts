@@ -4,6 +4,46 @@ export class NormalizeRelationColumns1760000008000 implements MigrationInterface
   name = 'NormalizeRelationColumns1760000008000';
 
   async up(queryRunner: QueryRunner): Promise<void> {
+    const canonicalColumns: Array<[string, string]> = [
+      ['questions', 'student_id'], ['questions', 'category_id'],
+      ['answers', 'question_id'], ['answers', 'teacher_id'],
+      ['assignments', 'teacher_id'], ['assignment_submissions', 'assignment_id'],
+      ['assignment_submissions', 'student_id'], ['quiz_questions', 'assignment_id'],
+      ['appointments', 'student_id'], ['appointments', 'teacher_id'],
+      ['notifications', 'user_id'], ['video_checkpoints', 'video_id'],
+      ['video_checkpoint_responses', 'checkpoint_id'],
+      ['video_checkpoint_responses', 'video_id'], ['video_checkpoint_responses', 'student_id'],
+      ['course_videos', 'teacher_id'], ['subscriptions', 'user_id'],
+      ['subscription_codes', 'used_by'], ['subscription_codes', 'created_by'],
+      ['course_enrollments', 'student_id'], ['course_enrollments', 'code_id'],
+    ];
+
+    for (const [table, column] of canonicalColumns) {
+      await queryRunner.query(`ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS "${column}" uuid`);
+    }
+
+    const copies: Array<[string, string, string]> = [
+      ['questions', 'student_id', 'studentId'], ['questions', 'category_id', 'categoryId'],
+      ['answers', 'question_id', 'questionId'], ['answers', 'teacher_id', 'teacherId'],
+      ['assignments', 'teacher_id', 'teacherId'], ['assignment_submissions', 'assignment_id', 'assignmentId'],
+      ['assignment_submissions', 'student_id', 'studentId'], ['quiz_questions', 'assignment_id', 'assignmentId'],
+      ['appointments', 'student_id', 'studentId'], ['appointments', 'teacher_id', 'teacherId'],
+      ['notifications', 'user_id', 'userId'], ['video_checkpoints', 'video_id', 'videoId'],
+      ['video_checkpoint_responses', 'checkpoint_id', 'checkpointId'],
+      ['video_checkpoint_responses', 'video_id', 'videoId'], ['video_checkpoint_responses', 'student_id', 'studentId'],
+      ['course_videos', 'teacher_id', 'teacherId'], ['subscriptions', 'user_id', 'userId'],
+      ['subscription_codes', 'used_by', 'usedById'], ['subscription_codes', 'created_by', 'createdById'],
+      ['course_enrollments', 'student_id', 'studentId'], ['course_enrollments', 'code_id', 'codeId'],
+    ];
+
+    for (const [table, canonical, legacy] of copies) {
+      await queryRunner.query(`
+        UPDATE "${table}"
+        SET "${canonical}" = "${legacy}"
+        WHERE "${canonical}" IS NULL AND "${legacy}" IS NOT NULL
+      `);
+    }
+
     const duplicateColumns: Array<[string, string]> = [
       ['questions', 'studentId'],
       ['questions', 'categoryId'],
@@ -31,6 +71,15 @@ export class NormalizeRelationColumns1760000008000 implements MigrationInterface
     for (const [table, column] of duplicateColumns) {
       await queryRunner.query(`ALTER TABLE "${table}" DROP COLUMN IF EXISTS "${column}"`);
     }
+
+    await queryRunner.query(`
+      ALTER TABLE "video_checkpoint_responses"
+      DROP CONSTRAINT IF EXISTS "UQ_video_response_checkpoint_student"
+    `);
+    await queryRunner.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "UQ_video_response_checkpoint_student_canonical"
+      ON "video_checkpoint_responses" ("checkpoint_id", "student_id")
+    `);
   }
 
   async down(): Promise<void> {

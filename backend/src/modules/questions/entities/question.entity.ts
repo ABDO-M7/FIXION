@@ -36,7 +36,7 @@ export class Question {
   content: string;
 
   @Index()
-  @Column({ name: 'category_id', nullable: true })
+  @Column({ nullable: true })
   courseName: string;
 
   @Column({ nullable: true })
@@ -67,7 +67,7 @@ export class Question {
   category: Category;
 
   @Index()
-  @Column({ nullable: true })
+  @Column({ name: 'category_id', nullable: true })
   categoryId: string;
 
   @OneToMany(() => Answer, (a) => a.question)
