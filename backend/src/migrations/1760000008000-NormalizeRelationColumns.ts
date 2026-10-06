@@ -39,8 +39,13 @@ export class NormalizeRelationColumns1760000008000 implements MigrationInterface
     for (const [table, canonical, legacy] of copies) {
       await queryRunner.query(`
         UPDATE "${table}"
-        SET "${canonical}" = "${legacy}"
-        WHERE "${canonical}" IS NULL AND "${legacy}" IS NOT NULL
+        SET "${canonical}" = CASE
+          WHEN "${legacy}"::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+          THEN "${legacy}"::text::uuid
+          ELSE NULL
+        END
+        WHERE "${canonical}" IS NULL
+          AND "${legacy}" IS NOT NULL
       `);
     }
 
