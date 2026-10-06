@@ -176,6 +176,7 @@ export const adminApi = {
   updateUserStatus: (id: string, isActive: boolean) => api.patch(`/users/${id}/status`, { isActive }),
   updateUserRole: (id: string, role: string) => api.patch(`/users/${id}/role`, { role }),
   updateUserSubjects: (id: string, subjects: string[]) => api.patch(`/users/${id}/subjects`, { subjects }),
+  updateUserPermissions: (id: string, permissions: Record<string, boolean>) => api.patch(`/users/${id}/permissions`, { permissions }),
   updateAssignedTeacher: (id: string, assignedTeacherId: string) =>
     api.patch(`/users/${id}/assigned-teacher`, { assignedTeacherId }),
   deleteUser: (id: string) => api.delete(`/users/${id}`),

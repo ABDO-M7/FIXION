@@ -75,6 +75,9 @@ export class User {
   @Column({ type: 'jsonb', nullable: true, default: [] })
   subjects: string[];
 
+  @Column({ type: 'jsonb', nullable: true, default: {} })
+  permissions: Record<string, boolean>;
+
   // Assistant is scoped to this teacher's work across all groups
   @Column({ type: 'uuid', nullable: true })
   assignedTeacherId: string | null;

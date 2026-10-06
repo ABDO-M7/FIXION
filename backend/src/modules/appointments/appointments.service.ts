@@ -2,9 +2,9 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Appointment, AppointmentStatus } from './entities/appointment.entity';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
-import { resolveStaffScope, workOwnerId } from '../../common/staff-access';
+import { resolveStaffScope, workOwnerId, hasPermission } from '../../common/staff-access';
 
 @Injectable()
 export class AppointmentsService {
@@ -24,6 +24,16 @@ export class AppointmentsService {
     message?: string;
     preferredTime?: string;
   }) {
+    if (!hasPermission(student, 'student_appointments')) {
+      throw new ForbiddenException('Meeting requests are disabled for this account');
+    }
+    const enrollment = await this.enrollmentsRepo.findOne({ where: { studentId: student.id, courseName: dto.courseName } });
+    if (enrollment?.teacherName) {
+      const teacher = await this.usersRepo.findOne({ where: { name: enrollment.teacherName, role: UserRole.TEACHER } });
+      if (teacher && !hasPermission(teacher, 'student_appointments')) {
+        throw new ForbiddenException('Meeting requests are disabled for this course');
+      }
+    }
     const appt = new Appointment();
     appt.studentId = student.id;
     appt.courseName = dto.courseName;

@@ -6,7 +6,7 @@ import { CreateQuestionDto, SearchQuestionsDto } from './dto/question.dto';
 import { User, UserRole } from '../users/entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
-import { resolveStaffScope } from '../../common/staff-access';
+import { resolveStaffScope, hasPermission } from '../../common/staff-access';
 
 @Injectable()
 export class QuestionsService {
@@ -19,6 +19,7 @@ export class QuestionsService {
   ) {}
 
   async create(dto: CreateQuestionDto, student: User): Promise<Question> {
+    if (!hasPermission(student, 'student_questions')) throw new ForbiddenException('Questions are disabled for this account');
     const question = this.questionsRepo.create({
       ...dto,
       studentId: student.id,

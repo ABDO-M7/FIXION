@@ -1,6 +1,24 @@
 import { Repository } from 'typeorm';
 import { User, UserRole } from '../modules/users/entities/user.entity';
 
+export const PERMISSION_KEYS = [
+  'student_appointments',
+  'student_questions',
+  'student_videos',
+  'student_assignments',
+  'student_team_contact',
+  'staff_manage_videos',
+  'staff_manage_assignments',
+  'staff_manage_questions',
+  'staff_handle_appointments',
+] as const;
+export type PermissionKey = (typeof PERMISSION_KEYS)[number];
+
+export function hasPermission(user: Pick<User, 'role' | 'permissions'> | null | undefined, key: PermissionKey) {
+  if (!user || user.role === UserRole.ADMIN) return true;
+  return user.permissions?.[key] !== false;
+}
+
 export const STAFF_ROLES = [UserRole.TEAM_MEMBER, UserRole.TEACHER, UserRole.ASSISTANT] as const;
 export const STAFF_AND_ADMIN = [...STAFF_ROLES, UserRole.ADMIN];
 

@@ -10,6 +10,7 @@ export const en = {
     notifications: 'Notifications',
     categories: 'Categories',
     users: 'Users',
+    permissions: 'Permissions',
     codes: 'Codes',
     analytics: 'Analytics',
     navigation: 'Navigation',

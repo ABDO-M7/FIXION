@@ -6,7 +6,7 @@ import { AssignmentSubmission } from './entities/assignment-submission.entity';
 import { QuizQuestion, QuizQuestionType, QuizOption } from './entities/quiz-question.entity';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
 import { User } from '../users/entities/user.entity';
-import { canManageOwnedWork, resolveStaffScope, workOwnerId, StaffScope } from '../../common/staff-access';
+import { canManageOwnedWork, resolveStaffScope, workOwnerId, StaffScope, hasPermission } from '../../common/staff-access';
 
 @Injectable()
 export class AssignmentsService {
@@ -178,6 +178,7 @@ export class AssignmentsService {
     student: User,
     dto: { content?: string; attachments?: string[] },
   ) {
+    if (!hasPermission(student, 'student_assignments')) throw new ForbiddenException('Assignments are disabled for this account');
     const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
     if (!assignment) throw new NotFoundException('Assignment not found');
 
@@ -200,6 +201,7 @@ export class AssignmentsService {
     student: User,
     answers: Record<string, string>, // { questionId: answeredOption }
   ) {
+    if (!hasPermission(student, 'student_assignments')) throw new ForbiddenException('Assignments are disabled for this account');
     const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
     if (!assignment) throw new NotFoundException('Quiz not found');
 

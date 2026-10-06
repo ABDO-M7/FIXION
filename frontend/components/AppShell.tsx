@@ -6,7 +6,7 @@ import {
   LayoutDashboard, HelpCircle, Bell, LogOut,
   Search, Menu, X, Globe, BookOpen, User,
   Users, BarChart2, Key, MessageSquare, GraduationCap, Calendar,
-  Activity, ChevronLeft, ChevronRight, Sparkles,
+  Activity, ChevronLeft, ChevronRight, Sparkles, SlidersHorizontal,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -39,6 +39,7 @@ const teacherNav = [
 const adminNav = [
   { key: 'nav.dashboard',    href: '/admin',            icon: LayoutDashboard },
   { key: 'nav.users',        href: '/admin/users',      icon: Users },
+  { key: 'nav.permissions', href: '/admin/permissions', icon: SlidersHorizontal },
   { key: 'nav.allQuestions', href: '/admin/questions',  icon: MessageSquare },
   { key: 'nav.codes',        href: '/admin/codes',      icon: Key },
   { key: 'nav.analytics',    href: '/admin/analytics',  icon: BarChart2 },

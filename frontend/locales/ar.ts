@@ -12,6 +12,7 @@ export const ar: Dictionary = {
     notifications: 'الإشعارات',
     categories: 'التصنيفات',
     users: 'المستخدمين',
+    permissions: 'الصلاحيات',
     codes: 'الأكواد',
     analytics: 'التحليلات',
     navigation: 'القائمة',

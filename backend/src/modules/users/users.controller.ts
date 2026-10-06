@@ -135,6 +135,18 @@ export class UsersController {
     return this.usersService.update(id, { assignedTeacherId: teacher.id });
   }
 
+  @Patch(':id/permissions')
+  @Roles(UserRole.ADMIN)
+  async updatePermissions(@Param('id') id: string, @Body('permissions') permissions: Record<string, boolean>) {
+    const user = await this.usersService.findById(id);
+    if (!user) throw new BadRequestException('User not found');
+    if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
+      throw new BadRequestException('Permissions must be an object');
+    }
+    const safePermissions = Object.fromEntries(Object.entries(permissions).map(([key, value]) => [key, value === true]));
+    return this.usersService.update(id, { permissions: safePermissions });
+  }
+
   @Delete(':id')
   @Roles(UserRole.ADMIN)
   remove(@Param('id') id: string) {
