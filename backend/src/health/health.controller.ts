@@ -3,6 +3,10 @@ import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, ListObjectsV2Command, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { NotificationsGateway } from '../modules/notifications/notifications.gateway';
+import { JwtAuthGuard } from '../modules/auth/guards/auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '../modules/users/entities/user.entity';
 
 @Controller('health')
 export class HealthController {
@@ -39,6 +43,8 @@ export class HealthController {
 
   /** Detailed health with all service checks (admin use) */
   @Get('detailed')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   async detailed() {
     const checks: Record<string, any> = {};
     let overallStatus = 'healthy';
