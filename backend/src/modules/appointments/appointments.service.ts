@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Appointment, AppointmentStatus } from './entities/appointment.entity';
 import { User } from '../users/entities/user.entity';
+import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
+import { resolveStaffScope, workOwnerId } from '../../common/staff-access';
 
 @Injectable()
 export class AppointmentsService {
@@ -11,6 +13,8 @@ export class AppointmentsService {
     private repo: Repository<Appointment>,
     @InjectRepository(User)
     private usersRepo: Repository<User>,
+    @InjectRepository(CourseEnrollment)
+    private enrollmentsRepo: Repository<CourseEnrollment>,
   ) {}
 
   // ─── Student: create a new appointment request ────────────────────────────
@@ -39,19 +43,38 @@ export class AppointmentsService {
     return this.enrichAppointments(appts);
   }
 
-  // ─── Teacher: list all pending/handled requests for their specialization ──
+  // ─── Staff: list requests in their scope ──────────────────────────────────
   async listForTeacher(teacher: User) {
-    const subjects: string[] = teacher.subjects || [];
-    if (subjects.length === 0) return [];
+    const scope = await resolveStaffScope(this.usersRepo, teacher);
+    if (scope.type === 'subjects') {
+      if (scope.subjects.length === 0) return [];
+      const appts = await this.repo.find({
+        where: scope.subjects.map((s) => ({ courseName: s })),
+        order: { createdAt: 'DESC' },
+      });
+      return this.enrichAppointments(appts);
+    }
 
-    const appts = await this.repo.find({
-      where: subjects.map((s) => ({ courseName: s })),
-      order: { createdAt: 'DESC' },
-    });
+    if (scope.type === 'teacher') {
+      if (!scope.teacherName) return [];
+      const appts = await this.repo
+        .createQueryBuilder('a')
+        .innerJoin(
+          CourseEnrollment,
+          'e',
+          'e.studentId = a.studentId AND e.teacherName = :teacherName AND e.courseName = a.courseName',
+          { teacherName: scope.teacherName },
+        )
+        .orderBy('a.createdAt', 'DESC')
+        .getMany();
+      return this.enrichAppointments(appts);
+    }
+
+    const appts = await this.repo.find({ order: { createdAt: 'DESC' } });
     return this.enrichAppointments(appts);
   }
 
-  // ─── Teacher: reply to an appointment ─────────────────────────────────────
+  // ─── Staff: reply to an appointment ───────────────────────────────────────
   async reply(
     appointmentId: string,
     teacher: User,
@@ -60,12 +83,20 @@ export class AppointmentsService {
     const appt = await this.repo.findOne({ where: { id: appointmentId } });
     if (!appt) throw new NotFoundException('Appointment not found');
 
-    const subjects: string[] = teacher.subjects || [];
-    if (!subjects.includes(appt.courseName)) {
-      throw new ForbiddenException('This appointment is not in your specialization');
+    const scope = await resolveStaffScope(this.usersRepo, teacher);
+    if (scope.type === 'subjects') {
+      if (!scope.subjects.includes(appt.courseName)) {
+        throw new ForbiddenException('This appointment is not in your subject');
+      }
+    } else if (scope.type === 'teacher') {
+      if (!scope.teacherName) throw new ForbiddenException('No teacher assignment found');
+      const enrollment = await this.enrollmentsRepo.findOne({
+        where: { studentId: appt.studentId, teacherName: scope.teacherName, courseName: appt.courseName },
+      });
+      if (!enrollment) throw new ForbiddenException('This appointment is not in your groups');
     }
 
-    appt.teacherId     = teacher.id;
+    appt.teacherId     = workOwnerId(scope, teacher);
     appt.status        = dto.status;
     appt.teacherReply  = dto.teacherReply ?? appt.teacherReply;
     appt.scheduledTime = dto.scheduledTime ?? appt.scheduledTime;

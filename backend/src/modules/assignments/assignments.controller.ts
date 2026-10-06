@@ -8,6 +8,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../users/entities/user.entity';
+import { STAFF_AND_ADMIN } from '../../common/staff-access';
 import { AssignmentType } from './entities/assignment.entity';
 import { QuizQuestionType } from './entities/quiz-question.entity';
 
@@ -18,21 +19,21 @@ export class AssignmentsController {
 
   // ── Teacher: courses for teacher's specialization ──────────────────────────
   @Get('courses/mine')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   getTeacherCourses(@CurrentUser() teacher: any) {
     return this.assignmentsService.getTeacherCourses(teacher);
   }
 
   // ── Teacher: get groups for a course ──────────────────────────────────────
   @Get('courses/:courseName/groups')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
-  getGroups(@Param('courseName') courseName: string) {
-    return this.assignmentsService.getGroupsForCourse(courseName);
+  @Roles(...STAFF_AND_ADMIN)
+  getGroups(@Param('courseName') courseName: string, @CurrentUser() actor: any) {
+    return this.assignmentsService.getGroupsForCourse(courseName, actor);
   }
 
   // ── Teacher: students in a group ──────────────────────────────────────────
   @Get('courses/:courseName/groups/:groupName/students')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   getStudents(
     @Param('courseName') courseName: string,
     @Param('groupName') groupName: string,
@@ -42,7 +43,7 @@ export class AssignmentsController {
 
   // ── Teacher/Student: list assignments for a group ─────────────────────────
   @Get('courses/:courseName/groups/:groupName')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   getAssignments(
     @Param('courseName') courseName: string,
     @Param('groupName') groupName: string,
@@ -53,14 +54,14 @@ export class AssignmentsController {
 
   // ── Teacher: create assignment ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   createAssignment(@Body() dto: any, @CurrentUser() teacher: any) {
     return this.assignmentsService.createAssignment(dto, teacher);
   }
 
   // ── Teacher/Student: view assignment + all submissions ─────────────────────
   @Get(':id/submissions')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   getSubmissions(
     @Param('id') id: string,
     @Query('courseName') courseName: string,
@@ -100,7 +101,7 @@ export class AssignmentsController {
 
   // ── Teacher: grade a submission (manual override) ─────────────────────────
   @Patch('submissions/:submissionId/grade')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   gradeSubmission(
     @Param('submissionId') submissionId: string,
     @Body('grade') grade: number,
@@ -111,7 +112,7 @@ export class AssignmentsController {
 
   // ── Teacher: grade matrix ─────────────────────────────────────────────────
   @Get('courses/:courseName/groups/:groupName/grades')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   getGradeMatrix(
     @Param('courseName') courseName: string,
     @Param('groupName') groupName: string,
@@ -136,35 +137,35 @@ export class AssignmentsController {
 
   // Teacher: list questions for a quiz
   @Get(':id/questions')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN, UserRole.STUDENT)
+  @Roles(...STAFF_AND_ADMIN, UserRole.STUDENT)
   getQuestions(@Param('id') id: string) {
     return this.assignmentsService.getQuestions(id);
   }
 
   // Teacher: add a question
   @Post(':id/questions')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   createQuestion(@Param('id') assignmentId: string, @Body() dto: any) {
     return this.assignmentsService.createQuestion(assignmentId, dto);
   }
 
   // Teacher: update a question
   @Patch(':id/questions/:qid')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   updateQuestion(@Param('qid') qid: string, @Body() dto: any) {
     return this.assignmentsService.updateQuestion(qid, dto);
   }
 
   // Teacher: delete a question
   @Delete(':id/questions/:qid')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   deleteQuestion(@Param('qid') qid: string) {
     return this.assignmentsService.deleteQuestion(qid);
   }
 
   // Teacher: reorder questions
   @Patch(':id/questions/reorder')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   reorderQuestions(
     @Param('id') assignmentId: string,
     @Body('orderedIds') orderedIds: string[],
@@ -174,15 +175,15 @@ export class AssignmentsController {
 
   // Teacher: delete assignment
   @Delete(':id')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
-  deleteAssignment(@Param('id') id: string, @CurrentUser('id') teacherId: string) {
-    return this.assignmentsService.deleteAssignment(id, teacherId);
+  @Roles(...STAFF_AND_ADMIN)
+  deleteAssignment(@Param('id') id: string, @CurrentUser() actor: any) {
+    return this.assignmentsService.deleteAssignment(id, actor);
   }
 
   // Teacher: publish assignment
   @Patch(':id/publish')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
-  publishAssignment(@Param('id') id: string, @CurrentUser('id') teacherId: string) {
-    return this.assignmentsService.publishAssignment(id, teacherId);
+  @Roles(...STAFF_AND_ADMIN)
+  publishAssignment(@Param('id') id: string, @CurrentUser() actor: any) {
+    return this.assignmentsService.publishAssignment(id, actor);
   }
 }

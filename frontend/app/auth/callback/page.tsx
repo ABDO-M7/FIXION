@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store';
+import { dashboardPath } from '@/lib/roles';
 import { authApi } from '@/lib/api';
 import { CheckCircle, XCircle, Loader } from 'lucide-react';
 import Link from 'next/link';
@@ -41,7 +42,7 @@ function AuthCallbackInner() {
           if (missingData) {
             router.push('/onboarding');
           } else {
-            router.push(role === 'admin' ? '/admin' : role === 'teacher' ? '/teacher' : '/student');
+            router.push(dashboardPath(role));
           }
         }, 1500);
       } catch {

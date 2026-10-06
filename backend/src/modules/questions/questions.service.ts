@@ -1,16 +1,20 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike, FindOptionsWhere } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Question, QuestionStatus } from './entities/question.entity';
 import { CreateQuestionDto, SearchQuestionsDto } from './dto/question.dto';
 import { User, UserRole } from '../users/entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
+import { resolveStaffScope } from '../../common/staff-access';
 
 @Injectable()
 export class QuestionsService {
   constructor(
     @InjectRepository(Question)
     private questionsRepo: Repository<Question>,
+    @InjectRepository(User)
+    private usersRepo: Repository<User>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -51,9 +55,27 @@ export class QuestionsService {
       .skip((page - 1) * limit)
       .take(limit);
 
-    // If teacher has specialization subjects set, only show matching questions
-    if (user?.role === 'teacher' && Array.isArray(user.subjects) && user.subjects.length > 0) {
-      qb.andWhere('q.courseName IN (:...teacherSubjects)', { teacherSubjects: user.subjects });
+    const scope = user ? await resolveStaffScope(this.usersRepo, user) : { type: 'admin' as const };
+    if (scope.type === 'subjects') {
+      if (!scope.subjects.length) qb.andWhere('1=0');
+      else qb.andWhere('q.courseName IN (:...staffSubjects)', { staffSubjects: scope.subjects });
+    } else if (scope.type === 'teacher') {
+      if (!scope.teacherName) {
+        qb.andWhere('1=0');
+      } else {
+        qb.andWhere(subQb => {
+          const sub = subQb
+            .subQuery()
+            .select('1')
+            .from(CourseEnrollment, 'e')
+            .where('e.studentId = q.studentId')
+            .andWhere('e.teacherName = :scopeTeacherName')
+            .andWhere('(q.courseName IS NULL OR e.courseName = q.courseName)')
+            .getQuery();
+          return `EXISTS ${sub}`;
+        });
+        qb.setParameter('scopeTeacherName', scope.teacherName);
+      }
     }
 
     if (dto.status) qb.andWhere('q.status = :status', { status: dto.status });

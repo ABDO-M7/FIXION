@@ -9,6 +9,7 @@ import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../users/entities/user.entity';
+import { STAFF_AND_ADMIN } from '../../common/staff-access';
 
 @Controller('questions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -33,7 +34,7 @@ export class QuestionsController {
   }
 
   @Get()
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   findAll(@Query() query: SearchQuestionsDto, @CurrentUser() user: any) {
     return this.questionsService.findAll(query, user);
   }
@@ -44,13 +45,13 @@ export class QuestionsController {
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   updateStatus(@Param('id') id: string, @Body() dto: UpdateQuestionStatusDto) {
     return this.questionsService.updateStatus(id, dto.status);
   }
 
   @Patch(':id/category')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   assignCategory(@Param('id') id: string, @Body() dto: AssignCategoryDto) {
     return this.questionsService.assignCategory(id, dto.categoryId);
   }

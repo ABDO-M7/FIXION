@@ -7,6 +7,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store';
+import { dashboardPath } from '@/lib/roles';
 import { Phone, GraduationCap, ArrowRight, Loader } from 'lucide-react';
 import Image from 'next/image';
 
@@ -32,8 +33,7 @@ export default function OnboardingPage() {
   useEffect(() => {
     // If they already have all data, send them to dashboard
     if (user && user.phone && (user.role !== 'student' || user.level)) {
-      const role = user.role;
-      router.push(role === 'admin' ? '/admin' : role === 'teacher' ? '/teacher' : '/student');
+      router.push(dashboardPath(user.role));
     }
   }, [user]);
 
@@ -59,7 +59,7 @@ export default function OnboardingPage() {
       });
       setUser(res.data);
       toast.success('Profile completed!');
-      router.push(user.role === 'admin' ? '/admin' : user.role === 'teacher' ? '/teacher' : '/student');
+      router.push(dashboardPath(user.role));
     } catch (err: any) {
       toast.error('Failed to update profile');
     } finally {

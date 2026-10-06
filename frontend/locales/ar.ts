@@ -18,7 +18,9 @@ export const ar: Dictionary = {
   },
   roles: {
     student: 'طالب',
-    teacher: 'عضو الفريق',
+    teacher: 'معلم',
+    team_member: 'عضو الفريق',
+    assistant: 'مساعد',
     admin: 'مشرف',
   },
   common: {

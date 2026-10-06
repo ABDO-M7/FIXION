@@ -4,6 +4,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '../users/entities/user.entity';
+import { STAFF_AND_ADMIN } from '../../common/staff-access';
 import { VideosService } from './videos.service';
 
 @Controller('videos')
@@ -12,13 +13,13 @@ export class VideosController {
   constructor(private readonly videosService: VideosService) {}
 
   @Post()
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   create(@Body() dto: any, @CurrentUser() actor: any) { return this.videosService.create(dto, actor); }
 
   @Get('teacher/:courseName/:groupName')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
-  listForTeacher(@Param('courseName') courseName: string, @Param('groupName') groupName: string, @CurrentUser('id') teacherId: string) {
-    return this.videosService.listForTeacher(courseName, groupName, teacherId);
+  @Roles(...STAFF_AND_ADMIN)
+  listForTeacher(@Param('courseName') courseName: string, @Param('groupName') groupName: string, @CurrentUser() actor: any) {
+    return this.videosService.listForTeacher(courseName, groupName, actor);
   }
 
   @Get('student/:courseName/:groupName')
@@ -45,19 +46,19 @@ export class VideosController {
   }
 
   @Get(':id/checkpoints')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   teacherCheckpoints(@Param('id') videoId: string, @CurrentUser() actor: any) {
     return this.videosService.getTeacherCheckpoints(videoId, actor);
   }
 
   @Post(':id/checkpoints')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   createCheckpoint(@Param('id') videoId: string, @Body() dto: any, @CurrentUser() actor: any) {
     return this.videosService.createCheckpoint(videoId, dto, actor);
   }
 
   @Patch(':id/checkpoints/:checkpointId')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   updateCheckpoint(
     @Param('id') videoId: string,
     @Param('checkpointId') checkpointId: string,
@@ -68,7 +69,7 @@ export class VideosController {
   }
 
   @Delete(':id/checkpoints/:checkpointId')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   removeCheckpoint(
     @Param('id') videoId: string,
     @Param('checkpointId') checkpointId: string,
@@ -78,6 +79,6 @@ export class VideosController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   remove(@Param('id') id: string, @CurrentUser() actor: any) { return this.videosService.remove(id, actor); }
 }

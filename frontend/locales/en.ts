@@ -16,7 +16,9 @@ export const en = {
   },
   roles: {
     student: 'Student',
-    teacher: 'Team member',
+    teacher: 'Teacher',
+    team_member: 'Team member',
+    assistant: 'Assistant',
     admin: 'Admin',
   },
   common: {

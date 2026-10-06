@@ -91,7 +91,9 @@ export class UsersService {
   }
 
   async findAll(page = 1, limit = 20, role?: UserRole) {
-    const qb = this.usersRepo.createQueryBuilder('user');
+    const qb = this.usersRepo
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.assignedTeacher', 'assignedTeacher');
     if (role) qb.where('user.role = :role', { role });
     qb.skip((page - 1) * limit).take(limit).orderBy('user.createdAt', 'DESC');
     const [data, total] = await qb.getManyAndCount();
@@ -113,6 +115,8 @@ export class UsersService {
     const total = await this.usersRepo.count();
     const students = await this.usersRepo.count({ where: { role: UserRole.STUDENT } });
     const teachers = await this.usersRepo.count({ where: { role: UserRole.TEACHER } });
-    return { total, students, teachers };
+    const teamMembers = await this.usersRepo.count({ where: { role: UserRole.TEAM_MEMBER } });
+    const assistants = await this.usersRepo.count({ where: { role: UserRole.ASSISTANT } });
+    return { total, students, teachers, teamMembers, assistants };
   }
 }

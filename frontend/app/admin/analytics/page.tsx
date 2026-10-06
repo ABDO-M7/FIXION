@@ -35,9 +35,11 @@ export default function AdminAnalyticsPage() {
   if (loading) return <AppShell><div className="page-loader"><span className="spinner" /></div></AppShell>;
   if (!data) return <AppShell><div className="empty-state"><div className="empty-state-icon">❌</div><div className="empty-state-title">Failed to load analytics</div></div></AppShell>;
 
-  const userDistribution = [
+    const userDistribution = [
     { name: 'Students', value: data.users?.students || 0 },
-    { name: 'Team members', value: data.users?.teachers || 0 },
+    { name: 'Teachers', value: data.users?.teachers || 0 },
+    { name: 'Team members', value: data.users?.teamMembers || 0 },
+    { name: 'Assistants', value: data.users?.assistants || 0 },
   ];
 
   const questionStatus = [
@@ -55,7 +57,7 @@ export default function AdminAnalyticsPage() {
     : 0;
 
   const kpis = [
-    { label: 'Total Users', value: data.users?.total?.toLocaleString(), icon: Users, color: '#6366f1', sub: `${data.users?.students} students, ${data.users?.teachers} team members` },
+    { label: 'Total Users', value: data.users?.total?.toLocaleString(), icon: Users, color: '#6366f1', sub: `${data.users?.students} students, ${data.users?.teachers} teachers, ${data.users?.teamMembers || 0} team members` },
     { label: 'Questions', value: data.questions?.total?.toLocaleString(), icon: HelpCircle, color: '#8b5cf6', sub: `${data.questions?.pending} pending` },
     { label: 'Answers', value: data.answers?.total?.toLocaleString(), icon: CheckCircle, color: '#10b981', sub: `${responseRate}% response rate` },
     { label: 'Active Subs', value: data.subscriptions?.activeSubscriptions?.toLocaleString(), icon: Key, color: '#06b6d4', sub: `${data.subscriptions?.availableCodes} codes left` },
@@ -149,7 +151,7 @@ export default function AdminAnalyticsPage() {
             </thead>
             <tbody>
               {[
-                { metric: 'Total Users', value: data.users?.total, detail: `${data.users?.students} students + ${data.users?.teachers} team members` },
+                { metric: 'Total Users', value: data.users?.total, detail: `${data.users?.students} students, ${data.users?.teachers} teachers, ${data.users?.teamMembers || 0} team members, ${data.users?.assistants || 0} assistants` },
                 { metric: 'Total Questions', value: data.questions?.total, detail: `${data.questions?.pending} pending, ${data.questions?.answered} answered` },
                 { metric: 'Total Answers', value: data.answers?.total, detail: `${responseRate}% of questions answered` },
                 { metric: 'Active Subscriptions', value: data.subscriptions?.activeSubscriptions, detail: 'Currently active student subscriptions' },

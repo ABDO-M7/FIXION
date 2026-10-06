@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
+import { STAFF_AND_ADMIN } from '../../common/staff-access';
 
 @Controller('categories')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -11,19 +12,19 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   findAll(@Query('subject') subject?: string) {
     return this.categoriesService.findAll(subject);
   }
 
   @Post()
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   create(@Body() dto: CreateCategoryDto) {
     return this.categoriesService.create(dto);
   }
 
   @Patch(':id')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   update(@Param('id') id: string, @Body() dto: Partial<CreateCategoryDto>) {
     return this.categoriesService.update(id, dto);
   }

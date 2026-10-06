@@ -7,6 +7,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store';
+import { dashboardPath } from '@/lib/roles';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Globe } from 'lucide-react';
 import Link from 'next/link';
 
@@ -75,9 +76,7 @@ export default function LoginPage() {
       const role = user.role;
       const missingData = !user.phone || (role === 'student' && !user.level);
       if (missingData) router.push('/onboarding');
-      else if (role === 'admin') router.push('/admin');
-      else if (role === 'teacher') router.push('/teacher');
-      else router.push('/student');
+      else router.push(dashboardPath(role));
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {

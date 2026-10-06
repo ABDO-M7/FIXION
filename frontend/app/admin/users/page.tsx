@@ -2,17 +2,20 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import AppShell from '@/components/AppShell';
 import { adminApi } from '@/lib/api';
-import { Search, Shield, UserX, UserCheck, Trash2, BookOpen, X, Check, UserPlus } from 'lucide-react';
+import { Search, UserX, UserCheck, Trash2, BookOpen, X, Check, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
-const ROLE_FILTERS = ['all', 'student', 'teacher', 'admin'] as const;
+const ROLE_FILTERS = ['all', 'student', 'teacher', 'team_member', 'assistant', 'admin'] as const;
 const ROLE_LABELS: Record<(typeof ROLE_FILTERS)[number], string> = {
   all: 'All',
   student: 'Student',
-  teacher: 'Team member',
+  teacher: 'Teacher',
+  team_member: 'Team member',
+  assistant: 'Assistant',
   admin: 'Admin',
 };
+const STAFF_ROLES = ['teacher', 'team_member', 'assistant'] as const;
 const COURSES = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
 
 export default function AdminUsersPage() {
@@ -22,12 +25,17 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  // Subjects modal state
   const [subjectsModal, setSubjectsModal] = useState<{ user: any; selected: string[] } | null>(null);
   const [savingSubjects, setSavingSubjects] = useState(false);
-  const [teacherModal, setTeacherModal] = useState(false);
-  const [creatingTeacher, setCreatingTeacher] = useState(false);
-  const [teacherForm, setTeacherForm] = useState({ name: '' });
+  const [staffModal, setStaffModal] = useState(false);
+  const [creatingStaff, setCreatingStaff] = useState(false);
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const [staffForm, setStaffForm] = useState({
+    name: '',
+    role: 'teacher' as (typeof STAFF_ROLES)[number],
+    subjects: [] as string[],
+    assignedTeacherId: '',
+  });
   const LIMIT = 20;
 
   const fetchUsers = async () => {
@@ -39,6 +47,15 @@ export default function AdminUsersPage() {
       setUsers(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch {} finally { setLoading(false); }
+  };
+
+  const fetchTeachers = async () => {
+    try {
+      const res = await adminApi.users({ page: 1, limit: 100, role: 'teacher' });
+      setTeachers(res.data.data || []);
+    } catch {
+      setTeachers([]);
+    }
   };
 
   useEffect(() => { fetchUsers(); }, [role, page]);
@@ -75,31 +92,62 @@ export default function AdminUsersPage() {
     });
   };
 
+  const toggleStaffCourse = (course: string) => {
+    setStaffForm(prev => ({
+      ...prev,
+      subjects: prev.subjects.includes(course)
+        ? prev.subjects.filter(s => s !== course)
+        : [...prev.subjects, course],
+    }));
+  };
+
   const saveSubjects = async () => {
     if (!subjectsModal) return;
+    if (subjectsModal.selected.length === 0) {
+      toast.error('Choose at least one subject for this team member');
+      return;
+    }
     setSavingSubjects(true);
     try {
       await adminApi.updateUserSubjects(subjectsModal.user.id, subjectsModal.selected);
       setUsers(prev => prev.map(u => u.id === subjectsModal.user.id ? { ...u, subjects: subjectsModal.selected } : u));
-      toast.success(`Specializations saved for ${subjectsModal.user.name}`);
+      toast.success(`Subjects saved for ${subjectsModal.user.name}`);
       setSubjectsModal(null);
-    } catch { toast.error('Failed to save specializations'); }
+    } catch { toast.error('Failed to save subjects'); }
     finally { setSavingSubjects(false); }
   };
 
-  const createTeacher = async (event: FormEvent) => {
+  const openStaffModal = () => {
+    setStaffForm({ name: '', role: 'teacher', subjects: [], assignedTeacherId: '' });
+    setStaffModal(true);
+    fetchTeachers();
+  };
+
+  const createStaff = async (event: FormEvent) => {
     event.preventDefault();
-    setCreatingTeacher(true);
+    if (staffForm.role === 'team_member' && staffForm.subjects.length === 0) {
+      toast.error('Choose the subject this team member works on');
+      return;
+    }
+    if (staffForm.role === 'assistant' && !staffForm.assignedTeacherId) {
+      toast.error('Choose the teacher this assistant works with');
+      return;
+    }
+    setCreatingStaff(true);
     try {
-      await adminApi.createTeacher(teacherForm);
-      toast.success('Teacher added');
-      setTeacherModal(false);
-      setTeacherForm({ name: '' });
+      await adminApi.createStaff({
+        name: staffForm.name,
+        role: staffForm.role,
+        subjects: staffForm.role === 'team_member' ? staffForm.subjects : undefined,
+        assignedTeacherId: staffForm.role === 'assistant' ? staffForm.assignedTeacherId : undefined,
+      });
+      toast.success(`${ROLE_LABELS[staffForm.role]} added`);
+      setStaffModal(false);
       fetchUsers();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Failed to create teacher');
+      toast.error(error?.response?.data?.message || 'Failed to create staff account');
     } finally {
-      setCreatingTeacher(false);
+      setCreatingStaff(false);
     }
   };
 
@@ -107,9 +155,13 @@ export default function AdminUsersPage() {
 
   const roleBadge = (r: string) => {
     if (r === 'admin') return <span className="badge badge-admin">Admin</span>;
-    if (r === 'teacher') return <span className="badge badge-teacher">Team member</span>;
+    if (r === 'teacher') return <span className="badge badge-teacher">Teacher</span>;
+    if (r === 'team_member') return <span className="badge badge-team">Team member</span>;
+    if (r === 'assistant') return <span className="badge badge-assistant">Assistant</span>;
     return <span className="badge badge-student">Student</span>;
   };
+
+  const assignedTeacherName = (u: any) => u.assignedTeacher?.name || teachers.find(t => t.id === u.assignedTeacherId)?.name;
 
   return (
     <AppShell>
@@ -118,8 +170,8 @@ export default function AdminUsersPage() {
           <h1 className="page-title">User Management</h1>
           <p className="page-subtitle">{total.toLocaleString()} registered users</p>
         </div>
-        <button onClick={() => setTeacherModal(true)} className="btn btn-primary">
-          <UserPlus size={15} /> Add teacher
+        <button onClick={openStaffModal} className="btn btn-primary">
+          <UserPlus size={15} /> Add staff
         </button>
       </div>
 
@@ -128,7 +180,7 @@ export default function AdminUsersPage() {
           <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or email..." />
         </div>
-        <div className="tabs" style={{ flex: 'none' }}>
+        <div className="tabs" style={{ flex: 'none', flexWrap: 'wrap' }}>
           {ROLE_FILTERS.map(r => (
             <button key={r} className={`tab-btn ${role === r ? 'active' : ''}`}
               onClick={() => { setRole(r); setPage(1); }} style={{ textTransform: 'capitalize', flex: 'none', padding: '7px 14px' }}>
@@ -144,7 +196,7 @@ export default function AdminUsersPage() {
             <tr>
               <th>User</th>
               <th>Role</th>
-              <th>Specializations</th>
+              <th>Access</th>
               <th>Status</th>
               <th>Joined</th>
               <th>Actions</th>
@@ -175,7 +227,7 @@ export default function AdminUsersPage() {
                 </td>
                 <td>{roleBadge(u.role)}</td>
                 <td>
-                  {u.role === 'teacher' ? (
+                  {u.role === 'team_member' ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       {Array.isArray(u.subjects) && u.subjects.length > 0
                         ? u.subjects.map((s: string) => (
@@ -183,17 +235,23 @@ export default function AdminUsersPage() {
                               {s}
                             </span>
                           ))
-                        : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>All subjects</span>
+                        : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No subjects</span>
                       }
                       <button
                         onClick={() => openSubjectsModal(u)}
                         className="btn btn-secondary btn-sm"
                         style={{ padding: '2px 8px', fontSize: 11, height: 'auto' }}
-                        title="Edit specializations"
+                        title="Edit subjects"
                       >
                         <BookOpen size={11} /> Edit
                       </button>
                     </div>
+                  ) : u.role === 'assistant' ? (
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      Teacher: {assignedTeacherName(u) || '—'}
+                    </span>
+                  ) : u.role === 'teacher' ? (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Own groups</span>
                   ) : (
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
                   )}
@@ -233,7 +291,6 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Specializations Modal */}
       {subjectsModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
@@ -241,12 +298,12 @@ export default function AdminUsersPage() {
         }}>
           <div className="card" style={{ width: 420, padding: 28 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <h3 style={{ fontWeight: 700, fontSize: 16 }}>Set Specializations</h3>
+              <h3 style={{ fontWeight: 700, fontSize: 16 }}>Set subjects</h3>
               <button onClick={() => setSubjectsModal(null)} className="icon-btn" style={{ width: 30, height: 30 }}><X size={15} /></button>
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
               Team member: <strong>{subjectsModal.user.name}</strong><br />
-              Select which courses this team member can see and answer. Leave all unselected to allow all subjects.
+              They can only see work for the selected subject.
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
               {COURSES.map(c => {
@@ -273,29 +330,89 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {teacherModal && (
+      {staffModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16,
         }}>
-          <form onSubmit={createTeacher} className="card" style={{ width: 460, padding: 28 }}>
+          <form onSubmit={createStaff} className="card" style={{ width: 480, padding: 28 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <h3 style={{ fontWeight: 700, fontSize: 16 }}>Add teacher</h3>
-              <button type="button" onClick={() => setTeacherModal(false)} className="icon-btn" style={{ width: 30, height: 30 }} aria-label="Close"><X size={15} /></button>
+              <h3 style={{ fontWeight: 700, fontSize: 16 }}>Add staff</h3>
+              <button type="button" onClick={() => setStaffModal(false)} className="icon-btn" style={{ width: 30, height: 30 }} aria-label="Close"><X size={15} /></button>
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-              Add the teacher name now. Login details can be added later as a separate feature.
+              Choose the role first. Login details can be added later.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="form-group">
-                <label className="form-label" htmlFor="teacher-name">Full name</label>
-                <input id="teacher-name" required value={teacherForm.name} onChange={e => setTeacherForm(p => ({ ...p, name: e.target.value }))} className="form-input" placeholder="e.g. Ahmed Hassan" />
+                <label className="form-label" htmlFor="staff-name">Full name</label>
+                <input id="staff-name" required value={staffForm.name} onChange={e => setStaffForm(p => ({ ...p, name: e.target.value }))} className="form-input" placeholder="e.g. Ahmed Hassan" />
               </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="staff-role">Role</label>
+                <select
+                  id="staff-role"
+                  className="form-input"
+                  value={staffForm.role}
+                  onChange={e => setStaffForm(p => ({ ...p, role: e.target.value as (typeof STAFF_ROLES)[number] }))}
+                >
+                  <option value="teacher">Teacher</option>
+                  <option value="assistant">Assistant</option>
+                  <option value="team_member">Team member</option>
+                </select>
+              </div>
+              {staffForm.role === 'teacher' && (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+                  Sees their own work across all groups.
+                </p>
+              )}
+              {staffForm.role === 'assistant' && (
+                <div className="form-group">
+                  <label className="form-label" htmlFor="staff-teacher">Works with teacher</label>
+                  <select
+                    id="staff-teacher"
+                    required
+                    className="form-input"
+                    value={staffForm.assignedTeacherId}
+                    onChange={e => setStaffForm(p => ({ ...p, assignedTeacherId: e.target.value }))}
+                  >
+                    <option value="">Select teacher</option>
+                    {teachers.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                  {teachers.length === 0 && (
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Add a teacher first, then create their assistant.</p>
+                  )}
+                </div>
+              )}
+              {staffForm.role === 'team_member' && (
+                <div className="form-group">
+                  <label className="form-label">Subject</label>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>They can only see work for this subject.</p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {COURSES.map(c => {
+                      const active = staffForm.subjects.includes(c);
+                      return (
+                        <button
+                          type="button"
+                          key={c}
+                          onClick={() => toggleStaffCourse(c)}
+                          className={`btn btn-sm ${active ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ fontFamily: 'inherit', fontSize: 15, padding: '8px 16px' }}
+                        >
+                          {active && <Check size={12} />} {c}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-              <button type="button" onClick={() => setTeacherModal(false)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
-              <button type="submit" disabled={creatingTeacher} className="btn btn-primary" style={{ flex: 1 }}>
-                {creatingTeacher ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Creating...</> : 'Create teacher'}
+              <button type="button" onClick={() => setStaffModal(false)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
+              <button type="submit" disabled={creatingStaff} className="btn btn-primary" style={{ flex: 1 }}>
+                {creatingStaff ? <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Creating...</> : `Create ${ROLE_LABELS[staffForm.role].toLowerCase()}`}
               </button>
             </div>
           </form>

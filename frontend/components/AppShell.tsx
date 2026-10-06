@@ -14,6 +14,7 @@ import { authApi, notificationsApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useTranslation } from '@/hooks/useTranslation';
+import { dashboardPath, isStaffRole } from '@/lib/roles';
 
 const studentNav = [
   { key: 'nav.dashboard',      href: '/student',                icon: LayoutDashboard },
@@ -54,7 +55,8 @@ export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const { t } = useTranslation();
 
-  const nav = user?.role === 'admin' ? adminNav : user?.role === 'teacher' ? teacherNav : studentNav;
+  const workspaceRoot = dashboardPath(user?.role);
+  const nav = user?.role === 'admin' ? adminNav : isStaffRole(user?.role) ? teacherNav : studentNav;
 
   useWebSocket();
 
@@ -189,7 +191,7 @@ export default function AppShell({ children }: AppShellProps) {
               <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
               <input placeholder={t('common.search')} aria-label={t('common.search')} />
             </div>
-            <span className="workspace-context">{user?.role === 'admin' ? 'Control center' : user?.role === 'teacher' ? 'Team workspace' : 'Learning workspace'}</span>
+            <span className="workspace-context">{user?.role === 'admin' ? 'Control center' : isStaffRole(user?.role) ? 'Team workspace' : 'Learning workspace'}</span>
           </div>
 
           <div className="topbar-actions">
@@ -204,13 +206,13 @@ export default function AppShell({ children }: AppShellProps) {
             </button>
 
             {/* Notifications */}
-            <Link href={`/${user?.role}/notifications`} className="icon-btn" style={{ position: 'relative' }}>
+            <Link href={`${workspaceRoot}/notifications`} className="icon-btn" style={{ position: 'relative' }}>
               <Bell size={17} />
               {unreadCount > 0 && <span className="notification-dot" />}
             </Link>
 
             {/* Avatar */}
-            <Link href={`/${user?.role}/profile`} title="Profile">
+            <Link href={`${workspaceRoot}/profile`} title="Profile">
               {user?.avatarUrl ? (
                 <img src={user.avatarUrl} alt="Avatar" className="user-avatar" style={{ width: 32, height: 32, objectFit: 'cover' }} />
               ) : (

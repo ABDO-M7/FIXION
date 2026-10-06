@@ -4,16 +4,17 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
-  BeforeInsert,
-  BeforeUpdate,
+  ManyToOne,
+  JoinColumn,
   Index,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 
 export enum UserRole {
   STUDENT = 'student',
+  TEAM_MEMBER = 'team_member',
   TEACHER = 'teacher',
+  ASSISTANT = 'assistant',
   ADMIN = 'admin',
 }
 
@@ -70,9 +71,17 @@ export class User {
   @Exclude()
   refreshTokenHash: string | null;
 
-  // Teacher specialization: list of course names they can answer
+  // Team member specialization: list of course names they can answer
   @Column({ type: 'jsonb', nullable: true, default: [] })
   subjects: string[];
+
+  // Assistant is scoped to this teacher's work across all groups
+  @Column({ type: 'uuid', nullable: true })
+  assignedTeacherId: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'assignedTeacherId' })
+  assignedTeacher?: User | null;
 
   @CreateDateColumn()
   createdAt: Date;

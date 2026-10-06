@@ -5,6 +5,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../users/entities/user.entity';
+import { STAFF_AND_ADMIN } from '../../common/staff-access';
 import { AppointmentStatus } from './entities/appointment.entity';
 
 @Controller('appointments')
@@ -31,14 +32,14 @@ export class AppointmentsController {
 
   // ── Teacher: list all appointments matching their subjects ───────────────
   @Get('teacher')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   listForTeacher(@CurrentUser() teacher: any) {
     return this.service.listForTeacher(teacher);
   }
 
   // ── Teacher: reply to an appointment ────────────────────────────────────
   @Patch(':id/reply')
-  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @Roles(...STAFF_AND_ADMIN)
   reply(
     @Param('id') id: string,
     @CurrentUser() teacher: any,

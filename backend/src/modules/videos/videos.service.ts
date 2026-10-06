@@ -2,10 +2,11 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 import { CourseVideo } from './entities/course-video.entity';
 import { VideoCheckpoint, VideoCheckpointOption, VideoCheckpointType } from './entities/video-checkpoint.entity';
 import { VideoResponse } from './entities/video-response.entity';
+import { canManageOwnedWork, resolveStaffScope, workOwnerId } from '../../common/staff-access';
 
 type CreateVideoDto = {
   courseName: string;
@@ -45,6 +46,7 @@ export class VideosService {
     @InjectRepository(CourseEnrollment) private readonly enrollmentsRepo: Repository<CourseEnrollment>,
     @InjectRepository(VideoCheckpoint) private readonly checkpointsRepo: Repository<VideoCheckpoint>,
     @InjectRepository(VideoResponse) private readonly responsesRepo: Repository<VideoResponse>,
+    @InjectRepository(User) private readonly usersRepo: Repository<User>,
   ) {}
 
   async create(dto: CreateVideoDto, teacher: User) {
@@ -52,22 +54,34 @@ export class VideosService {
     if (!dto.courseName?.trim() || !dto.groupName?.trim() || !title) {
       throw new BadRequestException('Course, group, and title are required');
     }
+    const courseName = dto.courseName.trim();
+    const scope = await resolveStaffScope(this.usersRepo, teacher);
+    if (scope.type === 'subjects' && !scope.subjects.includes(courseName)) {
+      throw new ForbiddenException('This course is not in your subject');
+    }
     const source = this.parseVideoSource(dto.sourceUrl || dto.videoUrl || dto.youtubeUrl, dto.provider);
     return this.videosRepo.save(this.videosRepo.create({
-      courseName: dto.courseName.trim(),
+      courseName,
       groupName: dto.groupName.trim(),
       title,
       description: dto.description?.trim() || null,
       provider: source.provider,
       providerVideoId: source.providerVideoId,
       youtubeVideoId: source.provider === 'youtube' ? source.providerVideoId : null,
-      teacherId: teacher.id,
+      teacherId: workOwnerId(scope, teacher),
     }));
   }
 
-  async listForTeacher(courseName: string, groupName: string, teacherId: string) {
+  async listForTeacher(courseName: string, groupName: string, actor: User) {
+    const scope = await resolveStaffScope(this.usersRepo, actor);
+    if (scope.type === 'subjects' && !scope.subjects.includes(courseName)) return [];
+    const where: { courseName: string; groupName: string; teacherId?: string } = { courseName, groupName };
+    if (scope.type === 'teacher') {
+      if (!scope.teacherId) return [];
+      where.teacherId = scope.teacherId;
+    }
     const videos = await this.videosRepo.find({
-      where: { courseName, groupName, teacherId },
+      where,
       order: { createdAt: 'DESC' },
     });
     return Promise.all(videos.map(video => this.withCheckpointSummary(video)));
@@ -213,7 +227,8 @@ export class VideosService {
   async remove(id: string, actor: User) {
     const video = await this.videosRepo.findOne({ where: { id } });
     if (!video) throw new NotFoundException('Video not found');
-    if (actor.role !== UserRole.ADMIN && video.teacherId !== actor.id) {
+    const scope = await resolveStaffScope(this.usersRepo, actor);
+    if (!canManageOwnedWork(scope, actor, video.teacherId)) {
       throw new ForbiddenException('You can only delete your own videos');
     }
     await this.videosRepo.delete(id);
@@ -223,7 +238,8 @@ export class VideosService {
   private async getOwnedVideo(videoId: string, actor: User) {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
-    if (actor.role !== UserRole.ADMIN && video.teacherId !== actor.id) {
+    const scope = await resolveStaffScope(this.usersRepo, actor);
+    if (!canManageOwnedWork(scope, actor, video.teacherId)) {
       throw new ForbiddenException('You can only manage your own videos');
     }
     return video;

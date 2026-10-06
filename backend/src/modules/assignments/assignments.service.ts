@@ -6,6 +6,7 @@ import { AssignmentSubmission } from './entities/assignment-submission.entity';
 import { QuizQuestion, QuizQuestionType, QuizOption } from './entities/quiz-question.entity';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
 import { User } from '../users/entities/user.entity';
+import { canManageOwnedWork, resolveStaffScope, workOwnerId, StaffScope } from '../../common/staff-access';
 
 @Injectable()
 export class AssignmentsService {
@@ -22,19 +23,51 @@ export class AssignmentsService {
     private usersRepo: Repository<User>,
   ) {}
 
-  // ─── TEACHER: get courses for their specialization ────────────────────────
-  async getTeacherCourses(teacher: User): Promise<string[]> {
-    return teacher.subjects || [];
+  private async staffScope(user: User) {
+    return resolveStaffScope(this.usersRepo, user);
   }
 
-  // ─── TEACHER: get distinct groups for a course ────────────────────────────
-  async getGroupsForCourse(courseName: string): Promise<string[]> {
-    const rows = await this.enrollmentsRepo
+  private applyEnrollmentScope(qb: ReturnType<Repository<CourseEnrollment>['createQueryBuilder']>, scope: StaffScope) {
+    if (scope.type === 'teacher') {
+      if (!scope.teacherName) {
+        qb.andWhere('1=0');
+        return qb;
+      }
+      qb.andWhere('e.teacherName = :teacherName', { teacherName: scope.teacherName });
+    } else if (scope.type === 'subjects' && scope.subjects.length > 0) {
+      qb.andWhere('e.courseName IN (:...subjects)', { subjects: scope.subjects });
+    } else if (scope.type === 'subjects') {
+      qb.andWhere('1=0');
+    }
+    return qb;
+  }
+
+  // ─── STAFF: get courses they are allowed to see ───────────────────────────
+  async getTeacherCourses(teacher: User): Promise<string[]> {
+    const scope = await this.staffScope(teacher);
+    if (scope.type === 'subjects') return scope.subjects || [];
+
+    const qb = this.enrollmentsRepo
+      .createQueryBuilder('e')
+      .select('DISTINCT e.courseName', 'courseName');
+    this.applyEnrollmentScope(qb, scope);
+    const rows = await qb.getRawMany();
+    return rows.map((r) => r.courseName).filter(Boolean);
+  }
+
+  // ─── STAFF: get distinct groups for a course ──────────────────────────────
+  async getGroupsForCourse(courseName: string, actor: User): Promise<string[]> {
+    const scope = await this.staffScope(actor);
+    if (scope.type === 'subjects' && scope.subjects.length > 0 && !scope.subjects.includes(courseName)) {
+      return [];
+    }
+    const qb = this.enrollmentsRepo
       .createQueryBuilder('e')
       .select('DISTINCT e.groupName', 'groupName')
       .where('e.courseName = :courseName', { courseName })
-      .andWhere('e.groupName IS NOT NULL')
-      .getRawMany();
+      .andWhere('e.groupName IS NOT NULL');
+    this.applyEnrollmentScope(qb, scope);
+    const rows = await qb.getRawMany();
     return rows.map((r) => r.groupName).filter(Boolean);
   }
 
@@ -76,11 +109,12 @@ export class AssignmentsService {
     dueDate?: string;
     maxGrade?: number;
   }, teacher: User): Promise<Assignment> {
+    const scope = await this.staffScope(teacher);
     const assignment = this.assignmentsRepo.create({
       ...dto,
       maxGrade: dto.maxGrade ?? 100,
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-      teacherId: teacher.id,
+      teacherId: workOwnerId(scope, teacher),
     });
     return this.assignmentsRepo.save(assignment);
   }
@@ -284,10 +318,11 @@ export class AssignmentsService {
   }
 
   // ─── TEACHER: publish assignment ───────────────────────────────────────────
-  async publishAssignment(id: string, teacherId: string) {
+  async publishAssignment(id: string, actor: User) {
     const a = await this.assignmentsRepo.findOne({ where: { id } });
     if (!a) throw new NotFoundException('Assignment not found');
-    if (a.teacherId !== teacherId) throw new ForbiddenException();
+    const scope = await this.staffScope(actor);
+    if (!canManageOwnedWork(scope, actor, a.teacherId)) throw new ForbiddenException();
 
     if (a.type === 'QUIZ') {
       const questions = await this.questionsRepo.find({ where: { assignmentId: id } });
@@ -302,10 +337,11 @@ export class AssignmentsService {
   }
 
   // ─── TEACHER: delete assignment ────────────────────────────────────────────
-  async deleteAssignment(id: string, teacherId: string) {
+  async deleteAssignment(id: string, actor: User) {
     const a = await this.assignmentsRepo.findOne({ where: { id } });
     if (!a) throw new NotFoundException('Assignment not found');
-    if (a.teacherId !== teacherId) throw new ForbiddenException();
+    const scope = await this.staffScope(actor);
+    if (!canManageOwnedWork(scope, actor, a.teacherId)) throw new ForbiddenException();
     await this.assignmentsRepo.delete(id);
     return { message: 'Deleted' };
   }

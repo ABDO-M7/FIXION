@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Routes and their allowed roles
+const STAFF_ROLES = ['teacher', 'team_member', 'assistant'];
+
 const PROTECTED_ROUTES: Record<string, string[]> = {
   '/student': ['student'],
-  '/teacher': ['teacher', 'admin'],
+  '/teacher': [...STAFF_ROLES, 'admin'],
   '/admin': ['admin'],
 };
 
@@ -65,7 +67,11 @@ export function middleware(request: NextRequest) {
     if (pathname.startsWith(route)) {
       if (!allowedRoles.includes(userRole)) {
         // Redirect to their correct dashboard
-        const redirect = userRole === 'admin' ? '/admin' : userRole === 'teacher' ? '/teacher' : '/student';
+        const redirect = userRole === 'admin'
+          ? '/admin'
+          : STAFF_ROLES.includes(userRole)
+            ? '/teacher'
+            : '/student';
         return NextResponse.redirect(new URL(redirect, request.url));
       }
       break;
