@@ -45,8 +45,12 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, res: any) {
-    const user = await this.usersService.findByEmailWithPassword(dto.email);
+    const email = dto.email.trim().toLowerCase();
+    const user = await this.usersService.findByEmailWithPassword(email);
     if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('This account does not have login credentials. Ask an admin to create a staff account.');
+    }
 
     const passwordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordValid) throw new UnauthorizedException('Invalid credentials');
