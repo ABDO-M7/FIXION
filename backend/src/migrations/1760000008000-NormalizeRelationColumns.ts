@@ -22,21 +22,31 @@ export class NormalizeRelationColumns1760000008000 implements MigrationInterface
       await queryRunner.query(`ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS "${column}" uuid`);
     }
 
-    const copies: Array<[string, string, string]> = [
-      ['questions', 'student_id', 'studentId'], ['questions', 'category_id', 'categoryId'],
-      ['answers', 'question_id', 'questionId'], ['answers', 'teacher_id', 'teacherId'],
-      ['assignments', 'teacher_id', 'teacherId'], ['assignment_submissions', 'assignment_id', 'assignmentId'],
-      ['assignment_submissions', 'student_id', 'studentId'], ['quiz_questions', 'assignment_id', 'assignmentId'],
-      ['appointments', 'student_id', 'studentId'], ['appointments', 'teacher_id', 'teacherId'],
-      ['notifications', 'user_id', 'userId'], ['video_checkpoints', 'video_id', 'videoId'],
-      ['video_checkpoint_responses', 'checkpoint_id', 'checkpointId'],
-      ['video_checkpoint_responses', 'video_id', 'videoId'], ['video_checkpoint_responses', 'student_id', 'studentId'],
-      ['course_videos', 'teacher_id', 'teacherId'], ['subscriptions', 'user_id', 'userId'],
-      ['subscription_codes', 'used_by', 'usedById'], ['subscription_codes', 'created_by', 'createdById'],
-      ['course_enrollments', 'student_id', 'studentId'], ['course_enrollments', 'code_id', 'codeId'],
+    const copies: Array<[string, string, string, string]> = [
+      ['questions', 'student_id', 'studentId', 'users'],
+      ['questions', 'category_id', 'categoryId', 'categories'],
+      ['answers', 'question_id', 'questionId', 'questions'],
+      ['answers', 'teacher_id', 'teacherId', 'users'],
+      ['assignments', 'teacher_id', 'teacherId', 'users'],
+      ['assignment_submissions', 'assignment_id', 'assignmentId', 'assignments'],
+      ['assignment_submissions', 'student_id', 'studentId', 'users'],
+      ['quiz_questions', 'assignment_id', 'assignmentId', 'assignments'],
+      ['appointments', 'student_id', 'studentId', 'users'],
+      ['appointments', 'teacher_id', 'teacherId', 'users'],
+      ['notifications', 'user_id', 'userId', 'users'],
+      ['video_checkpoints', 'video_id', 'videoId', 'course_videos'],
+      ['video_checkpoint_responses', 'checkpoint_id', 'checkpointId', 'video_checkpoints'],
+      ['video_checkpoint_responses', 'video_id', 'videoId', 'course_videos'],
+      ['video_checkpoint_responses', 'student_id', 'studentId', 'users'],
+      ['course_videos', 'teacher_id', 'teacherId', 'users'],
+      ['subscriptions', 'user_id', 'userId', 'users'],
+      ['subscription_codes', 'used_by', 'usedById', 'users'],
+      ['subscription_codes', 'created_by', 'createdById', 'users'],
+      ['course_enrollments', 'student_id', 'studentId', 'users'],
+      ['course_enrollments', 'code_id', 'codeId', 'subscription_codes'],
     ];
 
-    for (const [table, canonical, legacy] of copies) {
+    for (const [table, canonical, legacy, referencedTable] of copies) {
       await queryRunner.query(`
         UPDATE "${table}"
         SET "${canonical}" = CASE
@@ -46,6 +56,12 @@ export class NormalizeRelationColumns1760000008000 implements MigrationInterface
         END
         WHERE "${canonical}" IS NULL
           AND "${legacy}" IS NOT NULL
+          AND "${legacy}"::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+          AND EXISTS (
+            SELECT 1
+            FROM "${referencedTable}" referenced
+            WHERE referenced."id" = "${table}"."${legacy}"::text::uuid
+          )
       `);
     }
 
