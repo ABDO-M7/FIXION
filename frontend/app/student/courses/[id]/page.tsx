@@ -5,7 +5,7 @@ import AppShell from '@/components/AppShell';
 import { enrollmentsApi, assignmentsApi, uploadsApi } from '@/lib/api';
 import StudentVideosTab from '@/components/StudentVideosTab';
 import {
-  GraduationCap, User, Users, ArrowLeft, BookOpen,
+  GraduationCap, User, Users, ArrowLeft, BookOpen, HelpCircle, Calendar,
   ClipboardList, Upload, X, FileText, Image, CheckCircle,
   Clock, Loader2, ExternalLink, Star, BarChart2, TrendingUp, Video,
 } from 'lucide-react';
@@ -580,7 +580,7 @@ export default function CourseDetailPage() {
   const [enrollment, setEnrollment] = useState<any>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'homework' | 'quiz' | 'videos' | 'grades'>('homework');
+  const [tab, setTab] = useState<'homework' | 'quiz' | 'videos' | 'grades' | 'questions' | 'appointments'>('homework');
 
   const loadAssignments = useCallback(async (courseName: string, groupName: string) => {
     const res = await assignmentsApi.myAssignments(courseName, groupName);
@@ -635,6 +635,7 @@ export default function CourseDetailPage() {
 
   const color = COURSE_COLORS[enrollment.courseName] || '#6366f1';
   const filtered = assignments.filter(a => a.type.toLowerCase() === tab);
+  const teacherPermissions = enrollment.teacherPermissions || { questions: true, appointments: true };
 
   return (
     <AppShell>
@@ -727,6 +728,24 @@ export default function CourseDetailPage() {
         >
           <BarChart2 size={15} /> My Grades
         </button>
+        {teacherPermissions.questions && (
+          <Link
+            href={`/student/questions/new?courseName=${encodeURIComponent(enrollment.courseName)}`}
+            className="tab-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <HelpCircle size={15} /> Questions
+          </Link>
+        )}
+        {teacherPermissions.appointments && (
+          <Link
+            href={`/student/appointments?courseName=${encodeURIComponent(enrollment.courseName)}&groupName=${encodeURIComponent(enrollment.groupName || '')}`}
+            className="tab-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Calendar size={15} /> Appointments
+          </Link>
+        )}
       </div>
 
       {/* Content */}

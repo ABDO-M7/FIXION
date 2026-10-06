@@ -100,16 +100,29 @@ export class SubscriptionsService {
   }
 
   async getMyEnrollments(studentId: string): Promise<CourseEnrollment[]> {
-    return this.enrollmentsRepo.find({
+    const enrollments = await this.enrollmentsRepo.find({
       where: { studentId },
+      relations: ['teacher'],
       order: { createdAt: 'DESC' },
     });
+    return enrollments.map(enrollment => this.withTeacherCapabilities(enrollment));
   }
 
   async getEnrollmentById(id: string, studentId: string): Promise<CourseEnrollment> {
-    const enrollment = await this.enrollmentsRepo.findOne({ where: { id, studentId } });
+    const enrollment = await this.enrollmentsRepo.findOne({ where: { id, studentId }, relations: ['teacher'] });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
-    return enrollment;
+    return this.withTeacherCapabilities(enrollment);
+  }
+
+  private withTeacherCapabilities(enrollment: CourseEnrollment) {
+    const permissions = enrollment.teacher?.permissions || {};
+    return {
+      ...enrollment,
+      teacherPermissions: {
+        questions: !!enrollment.teacher && permissions.student_questions !== false,
+        appointments: !!enrollment.teacher && permissions.student_appointments !== false,
+      },
+    };
   }
 
   async getStatus(userId: string) {

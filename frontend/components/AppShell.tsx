@@ -19,9 +19,7 @@ import { dashboardPath, isStaffRole } from '@/lib/roles';
 const studentNav = [
   { key: 'nav.dashboard',      href: '/student',                icon: LayoutDashboard },
   { key: 'nav.courses',        href: '/student/courses',        icon: GraduationCap },
-  { key: 'nav.questions',      href: '/student/questions',      icon: HelpCircle },
-  { key: 'nav.appointments',   href: '/student/appointments',   icon: Calendar },
-  { key: 'nav.subscription',   href: '/student/subscription',   icon: Key },
+  { key: 'nav.subscription',   href: '/student/subscription',  icon: Key },
   { key: 'nav.profile',        href: '/student/profile',        icon: User },
   { key: 'nav.notifications',  href: '/student/notifications',  icon: Bell },
 ];

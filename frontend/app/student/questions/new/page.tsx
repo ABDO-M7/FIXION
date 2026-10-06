@@ -1,8 +1,9 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import AppShell from '@/components/AppShell';
 import { questionsApi, uploadsApi } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { enrollmentsApi } from '@/lib/api';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,8 +11,6 @@ import toast from 'react-hot-toast';
 import { useDropzone } from 'react-dropzone';
 import { Upload, X, FileText, Image, ArrowLeft, Send } from 'lucide-react';
 import Link from 'next/link';
-
-const COURSES = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
 
 const schema = z.object({
   courseName: z.string().min(1, 'Please select a course'),
@@ -28,12 +27,24 @@ export default function NewQuestionPage() {
   const [files, setFiles] = useState<{ file: File; url?: string; uploading?: boolean }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+  const [enrollments, setEnrollments] = useState<any[]>([]);
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
   const content = watch('content') || '';
+
+  useEffect(() => {
+    enrollmentsApi.my().then(response => {
+      const allowed = (response.data || []).filter((enrollment: any) => enrollment.teacherPermissions?.questions !== false);
+      setEnrollments(allowed);
+      const requestedCourse = new URLSearchParams(window.location.search).get('courseName');
+      if (requestedCourse && allowed.some((enrollment: any) => enrollment.courseName === requestedCourse)) {
+        setValue('courseName', requestedCourse);
+      }
+    }).catch(() => {});
+  }, [setValue]);
 
   const onDrop = useCallback(async (accepted: File[]) => {
     for (const file of accepted.slice(0, 3)) {
@@ -110,8 +121,8 @@ export default function NewQuestionPage() {
                 style={{ cursor: 'pointer' }}
               >
                 <option value="">— Select a course —</option>
-                {COURSES.map(c => (
-                  <option key={c} value={c}>{c}</option>
+                {enrollments.filter(enrollment => enrollment.teacherPermissions?.questions !== false).map(enrollment => (
+                  <option key={enrollment.id} value={enrollment.courseName}>{enrollment.courseName}</option>
                 ))}
               </select>
               {errors.courseName && <span className="form-error">{errors.courseName.message}</span>}

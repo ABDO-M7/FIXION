@@ -48,9 +48,20 @@ export default function StudentAppointmentsPage() {
         enrollmentsApi.my().catch(() => ({ data: [] })),
       ]);
       setAppointments(apptsRes.data || []);
-      setEnrollments(enrollRes.data || []);
-      if (enrollRes.data?.[0]?.courseName) {
-        setForm((prev) => ({ ...prev, courseName: prev.courseName || enrollRes.data[0].courseName, groupName: prev.groupName || enrollRes.data[0].groupName || '' }));
+      const allowedEnrollments = (enrollRes.data || []).filter((enrollment: any) => enrollment.teacherPermissions?.appointments !== false);
+      setEnrollments(allowedEnrollments);
+      const params = new URLSearchParams(window.location.search);
+      const requestedCourse = params.get('courseName');
+      const requestedGroup = params.get('groupName') || '';
+      const selectedEnrollment = allowedEnrollments.find((enrollment: any) =>
+        enrollment.courseName === requestedCourse && (!requestedGroup || enrollment.groupName === requestedGroup),
+      ) || allowedEnrollments[0];
+      if (selectedEnrollment?.courseName) {
+        setForm((prev) => ({
+          ...prev,
+          courseName: prev.courseName || selectedEnrollment.courseName,
+          groupName: prev.groupName || selectedEnrollment.groupName || '',
+        }));
       }
     } catch {
       toast.error(t('appointments.failedLoad'));

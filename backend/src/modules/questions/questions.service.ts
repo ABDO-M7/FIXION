@@ -15,11 +15,23 @@ export class QuestionsService {
     private questionsRepo: Repository<Question>,
     @InjectRepository(User)
     private usersRepo: Repository<User>,
+    @InjectRepository(CourseEnrollment)
+    private enrollmentsRepo: Repository<CourseEnrollment>,
     private notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateQuestionDto, student: User): Promise<Question> {
     if (!hasPermission(student, 'student_questions')) throw new ForbiddenException('Questions are disabled for this account');
+    if (!dto.courseName?.trim()) throw new ForbiddenException('A course is required for questions');
+    const enrollment = await this.enrollmentsRepo.findOne({
+      where: { studentId: student.id, courseName: dto.courseName },
+      relations: ['teacher'],
+      order: { createdAt: 'DESC' },
+    });
+    if (!enrollment) throw new ForbiddenException('You are not enrolled in this course');
+    if (!enrollment.teacher || !hasPermission(enrollment.teacher, 'student_questions')) {
+      throw new ForbiddenException('Questions are disabled for this course');
+    }
     const question = this.questionsRepo.create({
       ...dto,
       studentId: student.id,
