@@ -24,7 +24,7 @@ export class VideoResponse {
   checkpoint: VideoCheckpoint;
 
   @Index()
-  @Column()
+  @Column({ name: 'checkpoint_id' })
   checkpointId: string;
 
   @ManyToOne(() => CourseVideo, { onDelete: 'CASCADE' })
@@ -32,7 +32,7 @@ export class VideoResponse {
   video: CourseVideo;
 
   @Index()
-  @Column()
+  @Column({ name: 'video_id' })
   videoId: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
@@ -40,7 +40,7 @@ export class VideoResponse {
   student: User;
 
   @Index()
-  @Column()
+  @Column({ name: 'student_id' })
   studentId: string;
 
   @Column({ type: 'text', nullable: true })

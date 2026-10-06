@@ -21,14 +21,14 @@ export class CourseEnrollment {
   student: User;
 
   @Index()
-  @Column()
+  @Column({ name: 'student_id' })
   studentId: string;
 
   @Index()
   @Column()
   courseName: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'code_id', nullable: true })
   teacherName: string;
 
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })

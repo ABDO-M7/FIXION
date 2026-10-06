@@ -26,7 +26,7 @@ export class Appointment {
   student: User;
 
   @Index()
-  @Column()
+  @Column({ name: 'student_id' })
   studentId: string;
 
   // Teacher who replied (nullable until a teacher acts on it)
@@ -35,7 +35,7 @@ export class Appointment {
   teacher: User;
 
   @Index()
-  @Column({ nullable: true })
+  @Column({ name: 'teacher_id', nullable: true })
   teacherId: string;
 
   // Subject/course name — used to match teacher specialization

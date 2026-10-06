@@ -16,7 +16,7 @@ export class CourseVideo {
   id: string;
 
   @Index()
-  @Column()
+  @Column({ name: 'teacher_id' })
   courseName: string;
 
   @Index()

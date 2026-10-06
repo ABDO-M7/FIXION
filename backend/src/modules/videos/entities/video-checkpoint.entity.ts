@@ -30,7 +30,7 @@ export class VideoCheckpoint {
   video: CourseVideo;
 
   @Index()
-  @Column()
+  @Column({ name: 'video_id' })
   videoId: string;
 
   @Column({ type: 'int' })

@@ -21,7 +21,7 @@ export class Answer {
   question: Question;
 
   @Index()
-  @Column()
+  @Column({ name: 'question_id' })
   questionId: string;
 
   @ManyToOne(() => User)
@@ -29,7 +29,7 @@ export class Answer {
   teacher: User;
 
   @Index()
-  @Column()
+  @Column({ name: 'teacher_id' })
   teacherId: string;
 
   @Column({ type: 'text' })

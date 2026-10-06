@@ -21,7 +21,7 @@ export class Notification {
   user: User;
 
   @Index()
-  @Column()
+  @Column({ name: 'user_id' })
   userId: string;
 
   @Column({ length: 50 })

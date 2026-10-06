@@ -25,7 +25,7 @@ export class Subscription {
   user: User;
 
   @Index()
-  @Column()
+  @Column({ name: 'user_id' })
   userId: string;
 
   @Column({ type: 'enum', enum: SubscriptionPlan })

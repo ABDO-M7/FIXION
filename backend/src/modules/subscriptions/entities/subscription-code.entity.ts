@@ -31,14 +31,14 @@ export class SubscriptionCode {
   @JoinColumn({ name: 'used_by' })
   usedBy: User;
 
-  @Column({ nullable: true })
+  @Column({ name: 'used_by', nullable: true })
   usedById: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'created_by' })
   createdBy: User;
 
-  @Column()
+  @Column({ name: 'created_by' })
   createdById: string;
 
   @Column({ nullable: true, type: 'timestamptz' })

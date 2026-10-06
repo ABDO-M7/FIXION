@@ -29,14 +29,14 @@ export class Question {
   student: User;
 
   @Index()
-  @Column()
+  @Column({ name: 'student_id' })
   studentId: string;
 
   @Column({ type: 'text' })
   content: string;
 
   @Index()
-  @Column({ nullable: true })
+  @Column({ name: 'category_id', nullable: true })
   courseName: string;
 
   @Column({ nullable: true })

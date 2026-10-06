@@ -31,7 +31,7 @@ export class QuizQuestion {
   assignment: Assignment;
 
   @Index()
-  @Column()
+  @Column({ name: 'assignment_id' })
   assignmentId: string;
 
   @Column({ type: 'int', default: 0 })

@@ -23,7 +23,7 @@ export class AssignmentSubmission {
   assignment: Assignment;
 
   @Index()
-  @Column()
+  @Column({ name: 'assignment_id' })
   assignmentId: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
@@ -31,7 +31,7 @@ export class AssignmentSubmission {
   student: User;
 
   @Index()
-  @Column()
+  @Column({ name: 'student_id' })
   studentId: string;
 
   @Column({ type: 'text', nullable: true })

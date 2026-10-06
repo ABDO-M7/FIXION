@@ -23,7 +23,7 @@ export class Assignment {
   id: string;
 
   @Index()
-  @Column()
+  @Column({ name: 'teacher_id' })
   courseName: string;
 
   @Index()
