@@ -63,6 +63,11 @@ export default function AdminCodesPage() {
     const maxLength = Number(form.maxLength);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) { toast.error('Quantity must be between 1 and 500'); return; }
     if (!Number.isInteger(minLength) || !Number.isInteger(maxLength) || minLength < 4 || maxLength > 64 || minLength > maxLength) { toast.error('Length must be between 4 and 64, with minimum no greater than maximum'); return; }
+    if (form.courseName.trim() && !form.teacherId) { toast.error('Select a teacher for this course'); return; }
+    if (form.teacherId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(form.teacherId)) {
+      toast.error('Please select a valid teacher');
+      return;
+    }
     setGenerating(true);
     try {
       const res = await codesApi.generate(
@@ -187,7 +192,7 @@ export default function AdminCodesPage() {
                       <option value="">— No teacher —</option>
                       {teachers
                         .filter(teacher => !form.courseName || !teacher.subjects?.length || teacher.subjects.includes(form.courseName) || teacher.id === form.teacherId)
-                        .map(teacher => <option key={teacher.id} value={teacher.name}>{teacher.name}</option>)}
+                        .map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>

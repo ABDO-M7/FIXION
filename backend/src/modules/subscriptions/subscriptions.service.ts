@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomInt } from 'crypto';
 import { addDays } from 'date-fns';
+import { isUUID } from 'class-validator';
 import { Subscription, SubscriptionPlan } from './entities/subscription.entity';
 import { SubscriptionCode } from './entities/subscription-code.entity';
 import { CourseEnrollment } from './entities/course-enrollment.entity';
@@ -148,6 +149,9 @@ export class SubscriptionsService {
     }
     let teacher: User | null = null;
     if (teacherId) {
+      if (!isUUID(teacherId)) {
+        throw new BadRequestException('Selected teacher id is invalid');
+      }
       teacher = await this.usersRepo.findOne({ where: { id: teacherId, role: UserRole.TEACHER } });
       if (!teacher) throw new BadRequestException('Selected teacher was not found');
     }
