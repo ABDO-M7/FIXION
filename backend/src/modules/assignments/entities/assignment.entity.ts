@@ -23,7 +23,7 @@ export class Assignment {
   id: string;
 
   @Index()
-  @Column({ name: 'teacher_id' })
+  @Column({ name: 'courseName' })
   courseName: string;
 
   @Index()
@@ -35,7 +35,7 @@ export class Assignment {
   teacher: User;
 
   @Index()
-  @Column()
+  @Column({ name: 'teacher_id' })
   teacherId: string;
 
   @Column({ type: 'enum', enum: AssignmentType })
