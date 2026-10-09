@@ -358,9 +358,10 @@ export class AssignmentsService {
     if (!submission) {
       return { isLocked: true, lockReason: rule === UnlockRuleType.PASS_QUIZ ? 'Complete the previous quiz first' : 'Submit the previous assignment first' };
     }
+    const prerequisite = await this.assignmentsRepo.findOne({ where: { id: prerequisiteId } });
     const percentage = submission.grade === null || submission.grade === undefined
       ? 0
-      : (submission.grade / 100);
+      : (submission.grade / Math.max(prerequisite?.maxGrade ?? 100, 1)) * 100;
     if (rule === UnlockRuleType.PASS_QUIZ && (submission.grade === null || submission.grade === undefined || percentage < (requiredScore ?? 50) / 100)) {
       return { isLocked: true, lockReason: `You need at least ${requiredScore ?? 50}% in the previous quiz` };
     }
