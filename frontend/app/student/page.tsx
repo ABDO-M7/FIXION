@@ -20,9 +20,11 @@ export default function StudentDashboard() {
   const [subscription, setSubscription] = useState<any>(null);
   const [courseProgress, setCourseProgress] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chartsReady, setChartsReady] = useState(false);
   const { t } = useTranslation();
 
   useEffect(() => {
+    setChartsReady(true);
     Promise.all([
       questionsApi.myQuestions(1, 5),
       subscriptionsApi.status(),
@@ -139,14 +141,16 @@ export default function StudentDashboard() {
             <CheckCircle size={18} style={{ color: 'var(--success)' }} />
           </div>
           <div style={{ height: 170, position: 'relative' }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={170}>
-              <PieChart>
-                <Pie data={completionData} dataKey="value" innerRadius={52} outerRadius={70} paddingAngle={4} stroke="none">
-                  {completionData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-                </Pie>
-                <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)' }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {chartsReady && (
+              <ResponsiveContainer width="100%" height={170} minWidth={1} minHeight={170}>
+                <PieChart>
+                  <Pie data={completionData} dataKey="value" innerRadius={52} outerRadius={70} paddingAngle={4} stroke="none">
+                    {completionData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
               <strong style={{ fontSize: 24 }}>{completedLectures + submittedAssignments}</strong>
               <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{t('dashboard.student.done')}</span>
@@ -219,17 +223,19 @@ export default function StudentDashboard() {
             <Link href="/student/courses" className="btn btn-ghost btn-sm">{t('common.viewAll')} <ArrowRight size={14} /></Link>
           </div>
           <div style={{ height: 230, marginBottom: 16 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={230}>
-              <BarChart data={courseChartData} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(value) => [`${value}%`, t('dashboard.student.progress')]} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }} />
-                <Bar dataKey="progress" radius={[6, 6, 0, 0]} barSize={34}>
-                  {courseChartData.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {chartsReady && (
+              <ResponsiveContainer width="100%" height={230} minWidth={1} minHeight={230}>
+                <BarChart data={courseChartData} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip formatter={(value) => [`${value}%`, t('dashboard.student.progress')]} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }} />
+                  <Bar dataKey="progress" radius={[6, 6, 0, 0]} barSize={34}>
+                    {courseChartData.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {courseProgress.slice(0, 4).map(course => (
