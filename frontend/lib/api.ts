@@ -109,6 +109,7 @@ export const assignmentsApi = {
   // Teacher
   myCourses: () => api.get('/assignments/courses/mine'),
   groups: (courseName: string) => api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups`),
+  groupsDetailed: (courseName: string) => api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups-detailed`),
   students: (courseName: string, groupName: string) =>
     api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/students`),
   list: (courseName: string, groupName: string, type?: string) =>

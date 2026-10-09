@@ -255,9 +255,15 @@ export default function StudentAppointmentsPage() {
                     ? <option value="">No enrolled course groups available</option>
                     : <>
                         <option value="" disabled>{t('appointments.selectCoursePlaceholder')}</option>
-                        {enrollments.map((e: any) => (
-                          <option key={e.id} value={`${e.courseName}::${e.groupName || ''}`}>{e.courseName}{e.groupName ? ` — ${e.groupName}` : ''}</option>
-                        ))}
+                        {enrollments.map((e: any) => {
+                          const teacher = e.teacher?.name || e.teacherName ? ` — أ. ${e.teacher?.name || e.teacherName}` : '';
+                          const group = e.groupName ? ` (${e.groupName})` : '';
+                          return (
+                            <option key={e.id} value={`${e.courseName}::${e.groupName || ''}`}>
+                              {e.courseName}{teacher}{group}
+                            </option>
+                          );
+                        })}
                       </>}
                 </select>
               </div>

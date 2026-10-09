@@ -669,18 +669,16 @@ export default function CourseDetailPage() {
               <GraduationCap size={26} style={{ color }} />
             </div>
             <div>
-              <h1 className="page-title" style={{ marginBottom: 2 }}>{enrollment.courseName}</h1>
-              <div style={{ display: 'flex', gap: 16, fontSize: 13, color: 'var(--text-muted)' }}>
-                {enrollment.teacherName && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <User size={12} /> <span><strong>Teacher:</strong> {enrollment.teacherName}</span>
-                  </span>
-                )}
-                {enrollment.groupName && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Users size={12} /> {enrollment.groupName}
-                  </span>
-                )}
+              <h1 className="page-title" style={{ marginBottom: 4 }}>{enrollment.courseName}</h1>
+              <div style={{ display: 'flex', gap: 10, fontSize: 13, color: 'var(--text-muted)', flexWrap: 'wrap', marginTop: 4 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(99,102,241,0.14)', padding: '4px 12px', borderRadius: 6, color: '#c7d2fe', fontWeight: 600 }}>
+                  <User size={13} style={{ color: 'var(--primary-light)' }} />
+                  <span>المدرس: {enrollment.teacher?.name || enrollment.teacherName || 'مدرس المادة'}</span>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(245,158,11,0.12)', padding: '4px 12px', borderRadius: 6, color: '#fde68a', fontWeight: 600 }}>
+                  <Calendar size={13} style={{ color: '#f59e0b' }} />
+                  <span>الميعاد / المجموعة: {enrollment.groupName || 'المجموعة الأساسية'}</span>
+                </span>
               </div>
             </div>
           </div>

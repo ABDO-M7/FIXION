@@ -36,6 +36,7 @@ export class SubscriptionsService {
   async redeemCode(code: string, student: User): Promise<{ subscription: Subscription; enrollment: CourseEnrollment | null }> {
     const subCode = await this.codesRepo.findOne({
       where: { code: code.toUpperCase().trim(), isUsed: false },
+      relations: ['teacher'],
     });
 
     if (!subCode) throw new NotFoundException('Invalid or already used code');
@@ -83,14 +84,28 @@ export class SubscriptionsService {
     // Auto-enroll in course if code has course info
     let enrollment: CourseEnrollment | null = null;
     if (subCode.courseName) {
+      let teacher = subCode.teacher || null;
+      let teacherName = subCode.teacherName || subCode.teacher?.name || null;
+      let teacherId = subCode.teacherId || subCode.teacher?.id || null;
+
+      if (!teacherName) {
+        const teachers = await this.usersRepo.find({ where: { role: UserRole.TEACHER, isActive: true } });
+        const matched = teachers.find(t => Array.isArray(t.subjects) && t.subjects.includes(subCode.courseName!));
+        if (matched) {
+          teacher = matched;
+          teacherId = matched.id;
+          teacherName = matched.name;
+        }
+      }
+
       enrollment = await this.enrollmentsRepo.save(
         this.enrollmentsRepo.create({
           studentId: student.id,
           courseName: subCode.courseName,
-          teacherName: subCode.teacherName,
-          teacherId: subCode.teacherId,
-          teacher: subCode.teacher,
-          groupName: subCode.groupName,
+          teacherName: teacherName || undefined,
+          teacherId: teacherId || undefined,
+          teacher: teacher || undefined,
+          groupName: subCode.groupName || 'المجموعة الأساسية',
           codeId: subCode.id,
         }),
       );
@@ -105,7 +120,7 @@ export class SubscriptionsService {
       relations: ['teacher'],
       order: { createdAt: 'DESC' },
     });
-    return enrollments.map(enrollment => this.withTeacherCapabilities(enrollment));
+    return Promise.all(enrollments.map(enrollment => this.withTeacherCapabilities(enrollment)));
   }
 
   async getEnrollmentById(id: string, studentId: string): Promise<CourseEnrollment> {
@@ -114,13 +129,27 @@ export class SubscriptionsService {
     return this.withTeacherCapabilities(enrollment);
   }
 
-  private withTeacherCapabilities(enrollment: CourseEnrollment) {
-    const permissions = enrollment.teacher?.permissions || {};
+  private async withTeacherCapabilities(enrollment: CourseEnrollment): Promise<any> {
+    let teacher = enrollment.teacher || null;
+    let teacherName = teacher?.name || enrollment.teacherName || null;
+
+    if (!teacherName && enrollment.courseName) {
+      const teachers = await this.usersRepo.find({ where: { role: UserRole.TEACHER, isActive: true } });
+      const matched = teachers.find(t => Array.isArray(t.subjects) && t.subjects.includes(enrollment.courseName));
+      if (matched) {
+        teacher = matched;
+        teacherName = matched.name;
+      }
+    }
+
+    const permissions = teacher?.permissions || {};
     return {
       ...enrollment,
+      teacher,
+      teacherName: teacherName || 'مدرس المادة',
       teacherPermissions: {
-        questions: !!enrollment.teacher && permissions.student_questions !== false,
-        appointments: !!enrollment.teacher && permissions.student_appointments !== false,
+        questions: !!teacher && permissions.student_questions !== false,
+        appointments: !!teacher && permissions.student_appointments !== false,
       },
     };
   }
@@ -212,7 +241,7 @@ export class SubscriptionsService {
     return {
       data: data.map(code => ({
         ...code,
-        teacherName: code.teacherId ? code.teacher?.name ?? null : null,
+        teacherName: code.teacher?.name ?? code.teacherName ?? null,
       })),
       total,
       page,

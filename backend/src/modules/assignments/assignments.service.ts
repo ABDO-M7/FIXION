@@ -5,7 +5,7 @@ import { Assignment, AssignmentType } from './entities/assignment.entity';
 import { AssignmentSubmission } from './entities/assignment-submission.entity';
 import { QuizQuestion, QuizQuestionType, QuizOption } from './entities/quiz-question.entity';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { canManageOwnedWork, resolveStaffScope, workOwnerId, StaffScope, hasPermission } from '../../common/staff-access';
 import { UnlockRuleType } from '../learning/unlock-rule';
 import { VideoProgress } from '../videos/entities/video-progress.entity';
@@ -121,6 +121,55 @@ export class AssignmentsService {
     ]);
     if (set.size === 0) set.add('Group 1');
     return Array.from(set);
+  }
+
+  // ─── STAFF: get rich groups info including assigned teacher and student count ─
+  async getGroupsDetailedForCourse(courseName: string, actor: User) {
+    const groupNames = await this.getGroupsForCourse(courseName, actor);
+
+    // Find all active teachers who teach this course
+    const allTeachers = await this.usersRepo.find({ where: { role: UserRole.TEACHER, isActive: true } });
+    const courseTeachers = allTeachers.filter(t => Array.isArray(t.subjects) && t.subjects.includes(courseName));
+    const defaultTeacher = courseTeachers[0] || null;
+
+    const details = await Promise.all(
+      groupNames.map(async (groupName) => {
+        const studentCount = await this.enrollmentsRepo.count({
+          where: { courseName, groupName },
+        });
+
+        const enrollmentWithTeacher = await this.enrollmentsRepo.findOne({
+          where: { courseName, groupName },
+          relations: ['teacher'],
+          order: { createdAt: 'DESC' },
+        });
+
+        const assignmentWithTeacher = await this.assignmentsRepo.findOne({
+          where: { courseName, groupName },
+          relations: ['teacher'],
+          order: { createdAt: 'DESC' },
+        });
+
+        const teacher = enrollmentWithTeacher?.teacher
+          || assignmentWithTeacher?.teacher
+          || defaultTeacher;
+
+        const teacherName = teacher?.name
+          || enrollmentWithTeacher?.teacherName
+          || defaultTeacher?.name
+          || 'مدرس المادة';
+
+        return {
+          groupName,
+          courseName,
+          teacherName,
+          teacherId: teacher?.id || null,
+          studentCount,
+        };
+      }),
+    );
+
+    return details;
   }
 
   // ─── TEACHER: get students enrolled in a specific group ───────────────────

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi } from '@/lib/api';
-import { Users, ChevronRight, ArrowLeft, GraduationCap } from 'lucide-react';
+import { Users, ChevronRight, ArrowLeft, GraduationCap, User, Calendar } from 'lucide-react';
 import Link from 'next/link';
 
 const COURSE_COLORS: Record<string, string> = {
@@ -14,20 +14,40 @@ const COURSE_COLORS: Record<string, string> = {
   'برمجه':  '#8b5cf6',
 };
 
-const GROUP_ICONS = ['🅰', '🅱', '🅲', '🅳', '🅴', '🅵'];
+type GroupItem = {
+  groupName: string;
+  courseName?: string;
+  teacherName?: string | null;
+  teacherId?: string | null;
+  studentCount?: number;
+};
 
 export default function CourseGroupsPage() {
   const { courseName } = useParams<{ courseName: string }>();
   const decoded = decodeURIComponent(courseName);
   const color = COURSE_COLORS[decoded] || '#6366f1';
 
-  const [groups, setGroups] = useState<string[]>([]);
+  const [groups, setGroups] = useState<GroupItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    assignmentsApi.groups(decoded)
-      .then(r => setGroups(Array.isArray(r.data) ? r.data : []))
-      .catch(() => {})
+    assignmentsApi.groupsDetailed(decoded)
+      .then(r => {
+        const list = Array.isArray(r.data) ? r.data : [];
+        if (list.length === 0) {
+          setGroups([{ groupName: 'Group 1', teacherName: 'مدرس المادة', studentCount: 0 }]);
+        } else {
+          setGroups(list);
+        }
+      })
+      .catch(() => {
+        assignmentsApi.groups(decoded)
+          .then(r => {
+            const list = Array.isArray(r.data) ? r.data : [];
+            setGroups(list.map((g: string) => ({ groupName: g, teacherName: 'مدرس المادة', studentCount: 0 })));
+          })
+          .catch(() => setGroups([]));
+      })
       .finally(() => setLoading(false));
   }, [decoded]);
 
@@ -70,14 +90,14 @@ export default function CourseGroupsPage() {
         </div>
       ) : (
         <div className="grid-3">
-          {groups.map((group, i) => (
+          {groups.map((group) => (
             <Link
-              key={group}
-              href={`/teacher/courses/${courseName}/${encodeURIComponent(group)}`}
+              key={group.groupName}
+              href={`/teacher/courses/${courseName}/${encodeURIComponent(group.groupName)}`}
               className="card"
               style={{
-                display: 'flex', alignItems: 'center', gap: 16,
-                textDecoration: 'none', cursor: 'pointer',
+                display: 'block', textDecoration: 'none', padding: 0,
+                overflow: 'hidden', cursor: 'pointer',
                 transition: 'transform 0.15s, box-shadow 0.15s',
               }}
               onMouseEnter={e => {
@@ -89,23 +109,50 @@ export default function CourseGroupsPage() {
                 (e.currentTarget as HTMLElement).style.boxShadow = '';
               }}
             >
-              <div style={{
-                width: 48, height: 48, borderRadius: 12,
-                background: `${color}22`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, flexShrink: 0,
-              }}>
-                <Users size={22} style={{ color }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
-                  {group}
+              <div style={{ height: 4, background: color }} />
+              <div style={{ padding: '20px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 10,
+                    background: `${color}22`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <Calendar size={22} style={{ color }} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)' }}>
+                      {group.groupName}
+                    </div>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {decoded} Course
+                    </span>
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {decoded}
+
+                {/* Teacher and enrolled count */}
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 6,
+                  padding: '10px 12px', background: 'rgba(255,255,255,0.03)',
+                  borderRadius: 8, border: '1px solid var(--border)', marginBottom: 14,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <User size={13} style={{ color: 'var(--primary-light)', flexShrink: 0 }} />
+                    <span>المدرس: <strong style={{ color: '#fff' }}>{group.teacherName || 'مدرس المادة'}</strong></span>
+                  </div>
+                  {typeof group.studentCount === 'number' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                      <Users size={13} style={{ color: '#10b981', flexShrink: 0 }} />
+                      <span>{group.studentCount} طالب مسجل</span>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    فتح المنهج والحصص <ChevronRight size={14} />
+                  </span>
                 </div>
               </div>
-              <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
             </Link>
           ))}
         </div>

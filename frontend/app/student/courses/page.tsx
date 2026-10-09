@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { enrollmentsApi } from '@/lib/api';
-import { GraduationCap, User, Users, ChevronRight } from 'lucide-react';
+import { GraduationCap, User, Users, ChevronRight, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -103,20 +103,30 @@ export default function StudentCoursesPage() {
                     </div>
                   </div>
 
-                  {/* Teacher / Group */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {enrollment.teacherName && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-                        <User size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                        <><span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Teacher:</span> {enrollment.teacherName}</>
-                      </div>
-                    )}
-                    {enrollment.groupName && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-                        <Users size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                        {enrollment.groupName}
-                      </div>
-                    )}
+                  {/* Teacher & Schedule / Group */}
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: 8,
+                    padding: '10px 12px', background: 'rgba(255,255,255,0.03)',
+                    borderRadius: 8, border: '1px solid var(--border)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                      <User size={14} style={{ color, flexShrink: 0 }} />
+                      <span>
+                        <strong style={{ color: 'var(--text-muted)' }}>المدرس: </strong>
+                        <span style={{ color: '#fff', fontWeight: 600 }}>
+                          {enrollment.teacher?.name || enrollment.teacherName || 'مدرس المادة'}
+                        </span>
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                      <Calendar size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                      <span>
+                        <strong style={{ color: 'var(--text-muted)' }}>الميعاد / المجموعة: </strong>
+                        <span style={{ color: 'var(--text-secondary)' }}>
+                          {enrollment.groupName || 'المجموعة الأساسية'}
+                        </span>
+                      </span>
+                    </div>
                   </div>
 
                   {/* Footer */}

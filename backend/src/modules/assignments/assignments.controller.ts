@@ -31,6 +31,13 @@ export class AssignmentsController {
     return this.assignmentsService.getGroupsForCourse(courseName, actor);
   }
 
+  // ── Teacher/Admin: get groups with teacher and student count ──────────────
+  @Get('courses/:courseName/groups-detailed')
+  @Roles(...STAFF_AND_ADMIN)
+  getGroupsDetailed(@Param('courseName') courseName: string, @CurrentUser() actor: any) {
+    return this.assignmentsService.getGroupsDetailedForCourse(courseName, actor);
+  }
+
   // ── Teacher: students in a group ──────────────────────────────────────────
   @Get('courses/:courseName/groups/:groupName/students')
   @Roles(...STAFF_AND_ADMIN)
