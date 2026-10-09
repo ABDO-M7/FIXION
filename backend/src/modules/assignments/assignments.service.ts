@@ -10,6 +10,10 @@ import { canManageOwnedWork, resolveStaffScope, workOwnerId, StaffScope, hasPerm
 import { UnlockRuleType } from '../learning/unlock-rule';
 import { VideoProgress } from '../videos/entities/video-progress.entity';
 
+import { Course } from './entities/course.entity';
+import { CourseGroup } from './entities/course-group.entity';
+import { CourseVideo } from '../videos/entities/course-video.entity';
+
 @Injectable()
 export class AssignmentsService {
   constructor(
@@ -25,6 +29,12 @@ export class AssignmentsService {
     private usersRepo: Repository<User>,
     @InjectRepository(VideoProgress)
     private videoProgressRepo: Repository<VideoProgress>,
+    @InjectRepository(Course)
+    private coursesRepo: Repository<Course>,
+    @InjectRepository(CourseGroup)
+    private courseGroupsRepo: Repository<CourseGroup>,
+    @InjectRepository(CourseVideo)
+    private videosRepo: Repository<CourseVideo>,
   ) {}
 
   private async staffScope(user: User) {
@@ -49,12 +59,94 @@ export class AssignmentsService {
     return qb;
   }
 
+  // ─── ADMIN: create course ────────────────────────────────────────────────
+  async createCourse(dto: { name: string; color?: string; description?: string }) {
+    const name = dto.name?.trim();
+    if (!name) throw new BadRequestException('Course name is required');
+    let course = await this.coursesRepo.findOne({ where: { name } });
+    if (!course) {
+      course = this.coursesRepo.create({
+        name,
+        color: dto.color || null,
+        description: dto.description || null,
+      });
+      await this.coursesRepo.save(course);
+    }
+    const defaultGroup = await this.courseGroupsRepo.findOne({
+      where: { courseName: name, groupName: 'Group 1' },
+    });
+    if (!defaultGroup) {
+      await this.courseGroupsRepo.save(
+        this.courseGroupsRepo.create({
+          courseName: name,
+          groupName: 'Group 1',
+        }),
+      );
+    }
+    return course;
+  }
+
+  // ─── ADMIN: delete course ────────────────────────────────────────────────
+  async deleteCourse(courseName: string) {
+    await this.coursesRepo.delete({ name: courseName });
+    await this.courseGroupsRepo.delete({ courseName });
+    return { success: true };
+  }
+
+  // ─── ADMIN/STAFF: create/update course group ─────────────────────────────
+  async createCourseGroup(courseName: string, dto: { groupName: string; teacherId?: string; schedule?: string }) {
+    const groupName = dto.groupName?.trim();
+    if (!groupName) throw new BadRequestException('Group name is required');
+
+    let course = await this.coursesRepo.findOne({ where: { name: courseName } });
+    if (!course) {
+      course = this.coursesRepo.create({ name: courseName });
+      await this.coursesRepo.save(course);
+    }
+
+    let teacher: User | null = null;
+    if (dto.teacherId) {
+      teacher = await this.usersRepo.findOne({ where: { id: dto.teacherId } });
+    }
+
+    let group = await this.courseGroupsRepo.findOne({
+      where: { courseName, groupName },
+    });
+    if (!group) {
+      group = this.courseGroupsRepo.create({
+        courseName,
+        groupName,
+        teacherId: teacher?.id || null,
+        teacherName: teacher?.name || null,
+        schedule: dto.schedule || null,
+      });
+    } else {
+      if (dto.teacherId !== undefined) {
+        group.teacherId = teacher?.id || null;
+        group.teacherName = teacher?.name || null;
+      }
+      if (dto.schedule !== undefined) {
+        group.schedule = dto.schedule || null;
+      }
+    }
+    return this.courseGroupsRepo.save(group);
+  }
+
+  // ─── ADMIN: delete course group ──────────────────────────────────────────
+  async deleteCourseGroup(courseName: string, groupName: string) {
+    await this.courseGroupsRepo.delete({ courseName, groupName });
+    return { success: true };
+  }
+
   // ─── STAFF: get courses they are allowed to see ───────────────────────────
   async getTeacherCourses(teacher: User): Promise<string[]> {
     const scope = await this.staffScope(teacher);
     if (scope.type === 'subjects') return scope.subjects || [];
 
     const defaultCourses = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
+    const coursesRows = await this.coursesRepo.find();
+    const registeredCourses = coursesRows.map((c) => c.name).filter(Boolean);
+
     const qb = this.enrollmentsRepo
       .createQueryBuilder('e')
       .select('DISTINCT e.courseName', 'courseName');
@@ -67,10 +159,22 @@ export class AssignmentsService {
         .createQueryBuilder('a')
         .select('DISTINCT a.courseName', 'courseName')
         .getRawMany();
+      const videoCourses = await this.videosRepo
+        .createQueryBuilder('v')
+        .select('DISTINCT v.courseName', 'courseName')
+        .getRawMany();
+      const groupCourses = await this.courseGroupsRepo
+        .createQueryBuilder('cg')
+        .select('DISTINCT cg.courseName', 'courseName')
+        .getRawMany();
+
       const set = new Set<string>([
         ...defaultCourses,
+        ...registeredCourses,
         ...enrolledCourses,
         ...assignmentCourses.map((r) => r.courseName).filter(Boolean),
+        ...videoCourses.map((r) => r.courseName).filter(Boolean),
+        ...groupCourses.map((r) => r.courseName).filter(Boolean),
       ]);
       return Array.from(set);
     }
@@ -83,11 +187,23 @@ export class AssignmentsService {
         .select('DISTINCT a.courseName', 'courseName')
         .where('a.teacherId = :tid', { tid: teacher.id })
         .getRawMany();
+      const videoCourses = await this.videosRepo
+        .createQueryBuilder('v')
+        .select('DISTINCT v.courseName', 'courseName')
+        .where('v.teacherId = :tid', { tid: teacher.id })
+        .getRawMany();
+      const groupCourses = await this.courseGroupsRepo
+        .createQueryBuilder('cg')
+        .select('DISTINCT cg.courseName', 'courseName')
+        .where('cg.teacherId = :tid', { tid: teacher.id })
+        .getRawMany();
 
       const set = new Set<string>([
         ...enrolledCourses,
         ...teacherSubjects,
         ...assignmentCourses.map((r) => r.courseName).filter(Boolean),
+        ...videoCourses.map((r) => r.courseName).filter(Boolean),
+        ...groupCourses.map((r) => r.courseName).filter(Boolean),
       ]);
       return Array.from(set);
     }
@@ -101,6 +217,13 @@ export class AssignmentsService {
     if (scope.type === 'subjects' && scope.subjects.length > 0 && !scope.subjects.includes(courseName)) {
       return [];
     }
+
+    const savedGroups = await this.courseGroupsRepo
+      .createQueryBuilder('cg')
+      .select('DISTINCT cg.groupName', 'groupName')
+      .where('cg.courseName = :courseName', { courseName })
+      .getRawMany();
+
     const qb = this.enrollmentsRepo
       .createQueryBuilder('e')
       .select('DISTINCT e.groupName', 'groupName')
@@ -115,9 +238,18 @@ export class AssignmentsService {
       .select('DISTINCT a.groupName', 'groupName')
       .where('a.courseName = :courseName', { courseName })
       .getRawMany();
+
+    const videoGroups = await this.videosRepo
+      .createQueryBuilder('v')
+      .select('DISTINCT v.groupName', 'groupName')
+      .where('v.courseName = :courseName', { courseName })
+      .getRawMany();
+
     const set = new Set<string>([
+      ...savedGroups.map((r) => r.groupName).filter(Boolean),
       ...enrolledGroups,
       ...assignmentGroups.map((r) => r.groupName).filter(Boolean),
+      ...videoGroups.map((r) => r.groupName).filter(Boolean),
     ]);
     if (set.size === 0) set.add('Group 1');
     return Array.from(set);
@@ -132,11 +264,20 @@ export class AssignmentsService {
     const courseTeachers = allTeachers.filter(t => Array.isArray(t.subjects) && t.subjects.includes(courseName));
     const defaultTeacher = courseTeachers[0] || null;
 
+    // Load explicit group records from course_groups
+    const savedGroups = await this.courseGroupsRepo.find({
+      where: { courseName },
+      relations: ['teacher'],
+    });
+    const savedGroupMap = new Map(savedGroups.map((g) => [g.groupName, g]));
+
     const details = await Promise.all(
       groupNames.map(async (groupName) => {
         const studentCount = await this.enrollmentsRepo.count({
           where: { courseName, groupName },
         });
+
+        const explicitGroup = savedGroupMap.get(groupName);
 
         const enrollmentWithTeacher = await this.enrollmentsRepo.findOne({
           where: { courseName, groupName },
@@ -150,27 +291,34 @@ export class AssignmentsService {
           order: { createdAt: 'DESC' },
         });
 
-        const teacher = enrollmentWithTeacher?.teacher
-          || assignmentWithTeacher?.teacher
-          || defaultTeacher;
+        const teacher =
+          explicitGroup?.teacher ||
+          enrollmentWithTeacher?.teacher ||
+          assignmentWithTeacher?.teacher ||
+          defaultTeacher;
 
-        const teacherName = teacher?.name
-          || enrollmentWithTeacher?.teacherName
-          || defaultTeacher?.name
-          || 'مدرس المادة';
+        const teacherName =
+          explicitGroup?.teacher?.name ||
+          explicitGroup?.teacherName ||
+          teacher?.name ||
+          enrollmentWithTeacher?.teacherName ||
+          defaultTeacher?.name ||
+          'مدرس المادة';
 
         return {
           groupName,
           courseName,
           teacherName,
-          teacherId: teacher?.id || null,
+          teacherId: teacher?.id || explicitGroup?.teacherId || null,
           studentCount,
+          schedule: explicitGroup?.schedule || null,
         };
       }),
     );
 
     return details;
   }
+
 
   // ─── TEACHER: get students enrolled in a specific group ───────────────────
   async getStudentsInGroup(courseName: string, groupName: string) {

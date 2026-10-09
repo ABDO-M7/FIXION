@@ -24,6 +24,41 @@ export class AssignmentsController {
     return this.assignmentsService.getTeacherCourses(teacher);
   }
 
+  // ── Admin: create new course ───────────────────────────────────────────────
+  @Post('courses')
+  @Roles(UserRole.ADMIN)
+  createCourse(@Body() dto: { name: string; color?: string; description?: string }) {
+    return this.assignmentsService.createCourse(dto);
+  }
+
+  // ── Admin: delete course ───────────────────────────────────────────────────
+  @Delete('courses/:courseName')
+  @Roles(UserRole.ADMIN)
+  deleteCourse(@Param('courseName') courseName: string) {
+    return this.assignmentsService.deleteCourse(courseName);
+  }
+
+  // ── Admin/Staff: create or update group ────────────────────────────────────
+  @Post('courses/:courseName/groups')
+  @Roles(...STAFF_AND_ADMIN)
+  createGroup(
+    @Param('courseName') courseName: string,
+    @Body() dto: { groupName: string; teacherId?: string; schedule?: string },
+  ) {
+    return this.assignmentsService.createCourseGroup(courseName, dto);
+  }
+
+  // ── Admin: delete group ───────────────────────────────────────────────────
+  @Delete('courses/:courseName/groups/:groupName')
+  @Roles(UserRole.ADMIN)
+  deleteGroup(
+    @Param('courseName') courseName: string,
+    @Param('groupName') groupName: string,
+  ) {
+    return this.assignmentsService.deleteCourseGroup(courseName, groupName);
+  }
+
+
   // ── Teacher: get groups for a course ──────────────────────────────────────
   @Get('courses/:courseName/groups')
   @Roles(...STAFF_AND_ADMIN)

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
-import { adminApi, codesApi } from '@/lib/api';
+import { adminApi, codesApi, assignmentsApi } from '@/lib/api';
 import { Key, Copy, Trash2, CheckCircle, Clock, GraduationCap, FileDown, Printer, BarChart3 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -18,6 +18,7 @@ export default function AdminCodesPage() {
   const [teacherUsage, setTeacherUsage] = useState<{ teacherName: string; usedCodes: number }[]>([]);
   const [usageTotal, setUsageTotal] = useState(0);
   const [teachers, setTeachers] = useState<{ id: string; name: string; email: string; subjects?: string[] }[]>([]);
+  const [availableCourses, setAvailableCourses] = useState<string[]>(['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه']);
   const [form, setForm] = useState({
     plan: 'monthly',
     quantity: '10',
@@ -55,7 +56,17 @@ export default function AdminCodesPage() {
     adminApi.users({ page: 1, limit: 100, role: 'teacher' })
       .then(res => setTeachers(res.data.data || []))
       .catch(() => setTeachers([]));
+
+    assignmentsApi.myCourses()
+      .then(r => {
+        const list = Array.isArray(r.data) ? r.data : [];
+        const fallback = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
+        const set = new Set([...fallback, ...list]);
+        setAvailableCourses(Array.from(set));
+      })
+      .catch(() => {});
   }, []);
+
 
   const generate = async () => {
     const quantity = Number(form.quantity);
@@ -174,7 +185,7 @@ export default function AdminCodesPage() {
                     style={{ appearance: 'auto', fontSize: 13 }}
                   >
                     <option value="">— No course (subscription only) —</option>
-                    {['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'].map(c => (
+                    {availableCourses.map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>

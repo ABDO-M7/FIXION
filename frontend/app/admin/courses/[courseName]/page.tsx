@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi, adminApi } from '@/lib/api';
-import { Users, ArrowLeft, GraduationCap, Plus, ChevronRight, Layers, X, User, Calendar } from 'lucide-react';
+import { Users, ArrowLeft, GraduationCap, Plus, ChevronRight, Layers, X, User, Calendar, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -36,8 +36,9 @@ export default function AdminCourseGroupsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
+  const loadGroups = () => {
     assignmentsApi.groupsDetailed(decoded)
       .then(r => {
         const list = Array.isArray(r.data) ? r.data : [];
@@ -58,30 +59,49 @@ export default function AdminCourseGroupsPage() {
           });
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadGroups();
 
     adminApi.users({ page: 1, limit: 100, role: 'teacher' })
       .then(r => setTeachers(r.data?.data || []))
       .catch(() => {});
   }, [decoded]);
 
-  const handleCreateGroup = () => {
-    if (!newGroupName.trim()) {
+  const handleCreateGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name) {
       toast.error('Group name is required');
       return;
     }
-    const name = newGroupName.trim();
-    const assignedTeacher = teachers.find(t => t.id === selectedTeacherId);
-    if (!groups.some(g => g.groupName === name)) {
-      setGroups(prev => [...prev, {
+    try {
+      setSubmitting(true);
+      await assignmentsApi.createGroup(decoded, {
         groupName: name,
-        teacherName: assignedTeacher?.name || 'مدرس المادة',
-        teacherId: assignedTeacher?.id || null,
-        studentCount: 0,
-      }]);
+        teacherId: selectedTeacherId || undefined,
+      });
+      toast.success(`Group "${name}" ready!`);
+      setShowAddGroup(false);
+      router.push(`/admin/courses/${encodeURIComponent(decoded)}/${encodeURIComponent(name)}`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to create group');
+    } finally {
+      setSubmitting(false);
     }
-    setShowAddGroup(false);
-    toast.success(`Group "${name}" ready!`);
-    router.push(`/admin/courses/${encodeURIComponent(decoded)}/${encodeURIComponent(name)}`);
+  };
+
+  const handleDeleteGroup = async (e: React.MouseEvent, groupName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete group "${groupName}"?`)) return;
+    try {
+      await assignmentsApi.deleteGroup(decoded, groupName);
+      setGroups(prev => prev.filter(g => g.groupName !== groupName));
+      toast.success(`Group "${groupName}" deleted`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to delete group');
+    }
   };
 
   return (
@@ -106,7 +126,7 @@ export default function AdminCourseGroupsPage() {
           </div>
         </div>
         <button
-          onClick={() => { setNewGroupName(''); setShowAddGroup(true); }}
+          onClick={() => { setNewGroupName(''); setSelectedTeacherId(''); setShowAddGroup(true); }}
           className="btn btn-primary"
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
@@ -128,6 +148,7 @@ export default function AdminCourseGroupsPage() {
               style={{
                 display: 'block', textDecoration: 'none', padding: 0,
                 overflow: 'hidden', cursor: 'pointer',
+                position: 'relative',
                 transition: 'transform 0.15s, box-shadow 0.15s',
               }}
               onMouseEnter={e => {
@@ -141,23 +162,36 @@ export default function AdminCourseGroupsPage() {
             >
               <div style={{ height: 4, background: color }} />
               <div style={{ padding: '20px 18px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 10,
-                    background: 'rgba(99,102,241,0.12)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    <Calendar size={22} style={{ color }} />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)' }}>
-                      {group.groupName}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 10,
+                      background: 'rgba(99,102,241,0.12)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <Calendar size={22} style={{ color }} />
                     </div>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {decoded} Course
-                    </span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)' }}>
+                        {group.groupName}
+                      </div>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {decoded} Course
+                      </span>
+                    </div>
                   </div>
+                  <button
+                    onClick={e => handleDeleteGroup(e, group.groupName)}
+                    className="icon-btn"
+                    title="Delete Group"
+                    style={{ color: 'var(--text-muted)', opacity: 0.6 }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.6'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
+
 
                 {/* Teacher and enrolled count */}
                 <div style={{
@@ -232,8 +266,10 @@ export default function AdminCourseGroupsPage() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-                <button className="btn btn-secondary" onClick={() => setShowAddGroup(false)}>Cancel</button>
-                <button className="btn btn-primary" onClick={handleCreateGroup}>Create & Open Workflow →</button>
+                <button className="btn btn-secondary" onClick={() => setShowAddGroup(false)} disabled={submitting}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleCreateGroup} disabled={submitting}>
+                  {submitting ? 'Creating…' : 'Create & Open Workflow →'}
+                </button>
               </div>
             </div>
           </div>

@@ -36,6 +36,8 @@ import { CourseEnrollment } from './modules/subscriptions/entities/course-enroll
 import { Assignment } from './modules/assignments/entities/assignment.entity';
 import { AssignmentSubmission } from './modules/assignments/entities/assignment-submission.entity';
 import { QuizQuestion } from './modules/assignments/entities/quiz-question.entity';
+import { Course } from './modules/assignments/entities/course.entity';
+import { CourseGroup } from './modules/assignments/entities/course-group.entity';
 import { Notification } from './modules/notifications/entities/notification.entity';
 import { Appointment } from './modules/appointments/entities/appointment.entity';
 import { CourseVideo } from './modules/videos/entities/course-video.entity';
@@ -60,7 +62,26 @@ import { VideoProgress } from './modules/videos/entities/video-progress.entity';
         type: 'postgres',
         url: config.get<string>('database.url'),
         ssl: config.get('database.ssl'),
-        entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Assignment, AssignmentSubmission, QuizQuestion, Notification, Appointment, CourseVideo, VideoCheckpoint, VideoResponse, VideoProgress],
+        entities: [
+          User,
+          Question,
+          Answer,
+          Category,
+          Subscription,
+          SubscriptionCode,
+          CourseEnrollment,
+          Assignment,
+          AssignmentSubmission,
+          QuizQuestion,
+          Course,
+          CourseGroup,
+          Notification,
+          Appointment,
+          CourseVideo,
+          VideoCheckpoint,
+          VideoResponse,
+          VideoProgress,
+        ],
         synchronize: !config.get<boolean>('app.isProduction'), // Never synchronize on hosted production services
         migrations: [__dirname + '/migrations/*{.js,.ts}'],
         migrationsRun: config.get<boolean>('app.isProduction'),

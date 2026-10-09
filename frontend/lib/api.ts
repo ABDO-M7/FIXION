@@ -106,10 +106,19 @@ export const enrollmentsApi = {
 };
 
 export const assignmentsApi = {
-  // Teacher
+  // Courses & Groups
   myCourses: () => api.get('/assignments/courses/mine'),
+  createCourse: (data: { name: string; color?: string; description?: string }) =>
+    api.post('/assignments/courses', data),
+  deleteCourse: (courseName: string) =>
+    api.delete(`/assignments/courses/${encodeURIComponent(courseName)}`),
   groups: (courseName: string) => api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups`),
   groupsDetailed: (courseName: string) => api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups-detailed`),
+  createGroup: (courseName: string, data: { groupName: string; teacherId?: string; schedule?: string }) =>
+    api.post(`/assignments/courses/${encodeURIComponent(courseName)}/groups`, data),
+  deleteGroup: (courseName: string, groupName: string) =>
+    api.delete(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}`),
+  // Teacher
   students: (courseName: string, groupName: string) =>
     api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/students`),
   list: (courseName: string, groupName: string, type?: string) =>

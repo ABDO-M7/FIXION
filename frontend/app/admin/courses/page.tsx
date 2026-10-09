@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi } from '@/lib/api';
-import { GraduationCap, ChevronRight, Layers, BookOpen, Users, Plus, X } from 'lucide-react';
+import { GraduationCap, ChevronRight, Layers, BookOpen, Users, Plus, X, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -21,35 +21,58 @@ export default function AdminCoursesPage() {
   const [loading, setLoading] = useState(true);
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [newCourseName, setNewCourseName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const router = useRouter();
 
-  useEffect(() => {
+  const loadCourses = () => {
     assignmentsApi.myCourses()
       .then(r => {
         const list = Array.isArray(r.data) ? r.data : [];
         const fallback = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
-        const set = new Set([...list, ...fallback]);
+        const set = new Set([...fallback, ...list]);
         setCourses(Array.from(set));
       })
       .catch(() => {
         setCourses(['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه']);
       })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadCourses();
   }, []);
 
-  const handleCreateCourse = () => {
+  const handleCreateCourse = async () => {
     const name = newCourseName.trim();
     if (!name) {
       toast.error('Course name is required');
       return;
     }
-    if (!courses.includes(name)) {
-      setCourses(prev => [...prev, name]);
+    try {
+      setSubmitting(true);
+      await assignmentsApi.createCourse({ name });
+      toast.success(`Course "${name}" created!`);
+      setShowAddCourse(false);
+      router.push(`/admin/courses/${encodeURIComponent(name)}`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to create course');
+    } finally {
+      setSubmitting(false);
     }
-    setShowAddCourse(false);
-    toast.success(`Course "${name}" created!`);
-    router.push(`/admin/courses/${encodeURIComponent(name)}`);
+  };
+
+  const handleDeleteCourse = async (e: React.MouseEvent, courseName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete course "${courseName}"?`)) return;
+    try {
+      await assignmentsApi.deleteCourse(courseName);
+      setCourses(prev => prev.filter(c => c !== courseName));
+      toast.success(`Course "${courseName}" deleted`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to delete course');
+    }
   };
 
   return (
@@ -84,6 +107,7 @@ export default function AdminCoursesPage() {
                 style={{
                   display: 'block', textDecoration: 'none', padding: 0,
                   overflow: 'hidden', cursor: 'pointer',
+                  position: 'relative',
                   transition: 'transform 0.15s, box-shadow 0.15s',
                 }}
                 onMouseEnter={e => {
@@ -97,22 +121,34 @@ export default function AdminCoursesPage() {
               >
                 <div style={{ height: 6, background: color }} />
                 <div style={{ padding: '22px 20px 18px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-                    <div style={{
-                      width: 50, height: 50, borderRadius: 12,
-                      background: `${color}22`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    }}>
-                      <GraduationCap size={24} style={{ color }} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--text-primary)' }}>
-                        {course}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{
+                        width: 50, height: 50, borderRadius: 12,
+                        background: `${color}22`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        <GraduationCap size={24} style={{ color }} />
                       </div>
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        Subject Curriculum
-                      </span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 20, color: 'var(--text-primary)' }}>
+                          {course}
+                        </div>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          Subject Curriculum
+                        </span>
+                      </div>
                     </div>
+                    <button
+                      onClick={e => handleDeleteCourse(e, course)}
+                      className="icon-btn"
+                      title="Delete Course"
+                      style={{ color: 'var(--text-muted)', opacity: 0.6 }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.6'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
                     <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -149,16 +185,17 @@ export default function AdminCoursesPage() {
                   placeholder="e.g. كيمياء, أحياء, English, برمجه"
                   value={newCourseName}
                   onChange={e => setNewCourseName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleCreateCourse()}
+                  onKeyDown={e => e.key === 'Enter' && !submitting && handleCreateCourse()}
+                  disabled={submitting}
                   autoFocus
                 />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
-                <button className="btn btn-secondary" onClick={() => setShowAddCourse(false)}>
+                <button className="btn btn-secondary" onClick={() => setShowAddCourse(false)} disabled={submitting}>
                   Cancel
                 </button>
-                <button className="btn btn-primary" onClick={handleCreateCourse}>
-                  Create Course
+                <button className="btn btn-primary" onClick={handleCreateCourse} disabled={submitting}>
+                  {submitting ? 'Creating…' : 'Create Course'}
                 </button>
               </div>
             </div>
@@ -168,3 +205,7 @@ export default function AdminCoursesPage() {
     </AppShell>
   );
 }
+
+
+
+
