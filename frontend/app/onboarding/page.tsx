@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store';
 import { dashboardPath } from '@/lib/roles';
 import { Phone, GraduationCap, ArrowRight, Loader } from 'lucide-react';
 import Image from 'next/image';
+import { EDUCATION_LEVELS } from '@/lib/education-levels';
 
 const schema = z.object({
   phone: z.string().regex(/^\+?[0-9\s\-().]{7,20}$/, 'Invalid phone number'),
@@ -108,9 +109,9 @@ export default function OnboardingPage() {
                   defaultValue=""
                 >
                   <option value="" disabled>Select your level...</option>
-                  <option value="Level 1">Level 1</option>
-                  <option value="Level 2">Level 2</option>
-                  <option value="Level 3">Level 3</option>
+                  {EDUCATION_LEVELS.map(level => (
+                    <option key={level.value} value={level.value}>{level.en}</option>
+                  ))}
                 </select>
               </div>
             </div>

@@ -9,6 +9,7 @@ import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store';
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, Globe } from 'lucide-react';
 import Link from 'next/link';
+import { EDUCATION_LEVELS } from '@/lib/education-levels';
 
 const schema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -29,7 +30,6 @@ const strings = {
     password: 'Password', passPh: 'Min. 8 characters',
     phone: 'Phone Number', phonePh: '+20 1XX XXX XXXX',
     level: 'School Level', levelPh: 'Select your level...',
-    l1: 'Level 1', l2: 'Level 2', l3: 'Level 3',
     submit: 'Create Account',
     orWith: 'or continue with',
     google: 'Continue with Google',
@@ -44,7 +44,6 @@ const strings = {
     password: 'كلمة المرور', passPh: '8 أحرف على الأقل',
     phone: 'رقم الهاتف', phonePh: '+20 1XX XXX XXXX',
     level: 'المستوى الدراسي', levelPh: 'اختر مستواك...',
-    l1: 'المستوى الأول', l2: 'المستوى الثاني', l3: 'المستوى الثالث',
     submit: 'إنشاء حساب',
     orWith: 'أو تابع بـ',
     google: 'المتابعة بـ Google',
@@ -160,9 +159,9 @@ export default function RegisterPage() {
             <label className="form-label">{t.level}</label>
             <select {...register('level')} className={`form-input ${errors.level ? 'error' : ''}`} defaultValue="">
               <option value="" disabled>{t.levelPh}</option>
-              <option value="Level 1">{t.l1}</option>
-              <option value="Level 2">{t.l2}</option>
-              <option value="Level 3">{t.l3}</option>
+              {EDUCATION_LEVELS.map(level => (
+                <option key={level.value} value={level.value}>{lang === 'ar' ? level.ar : level.en}</option>
+              ))}
             </select>
             {errors.level && <span className="form-error">{errors.level.message}</span>}
           </div>

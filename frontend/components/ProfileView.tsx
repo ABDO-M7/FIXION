@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { Camera, User, Phone, Save, GraduationCap, Hash } from 'lucide-react';
 import AppShell from '@/components/AppShell';
 import { useTranslation } from '@/hooks/useTranslation';
+import { EDUCATION_LEVELS } from '@/lib/education-levels';
 
 export default function ProfileView() {
   const { user, setUser } = useAuthStore();
@@ -161,9 +162,9 @@ export default function ProfileView() {
                     required
                   >
                     <option value="" disabled>Select level...</option>
-                    <option value="Level 1">Level 1</option>
-                    <option value="Level 2">Level 2</option>
-                    <option value="Level 3">Level 3</option>
+                    {EDUCATION_LEVELS.map(level => (
+                      <option key={level.value} value={level.value}>{level.en}</option>
+                    ))}
                   </select>
                 </div>
               </div>

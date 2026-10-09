@@ -1,0 +1,17 @@
+export const EDUCATION_LEVELS = [
+  { value: 'primary_1', en: '1st Primary', ar: 'أولى ابتدائي' },
+  { value: 'primary_2', en: '2nd Primary', ar: 'ثانية ابتدائي' },
+  { value: 'primary_3', en: '3rd Primary', ar: 'ثالثة ابتدائي' },
+  { value: 'primary_4', en: '4th Primary', ar: 'رابعة ابتدائي' },
+  { value: 'primary_5', en: '5th Primary', ar: 'خامسة ابتدائي' },
+  { value: 'primary_6', en: '6th Primary', ar: 'سادسة ابتدائي' },
+  { value: 'preparatory_1', en: '1st Preparatory', ar: 'أولى إعدادي' },
+  { value: 'preparatory_2', en: '2nd Preparatory', ar: 'ثانية إعدادي' },
+  { value: 'preparatory_3', en: '3rd Preparatory', ar: 'ثالثة إعدادي' },
+  { value: 'secondary_1', en: '1st Secondary', ar: 'أولى ثانوي' },
+  { value: 'secondary_2', en: '2nd Secondary', ar: 'ثانية ثانوي' },
+  { value: 'secondary_3', en: '3rd Secondary', ar: 'ثالثة ثانوي' },
+  { value: 'baccalaureate_1', en: '1st Baccalaureate', ar: 'أولى بكالوريا' },
+  { value: 'baccalaureate_2', en: '2nd Baccalaureate', ar: 'ثانية بكالوريا' },
+  { value: 'baccalaureate_3', en: '3rd Baccalaureate', ar: 'ثالثة بكالوريا' },
+] as const;
