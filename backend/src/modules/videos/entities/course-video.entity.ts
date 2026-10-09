@@ -37,6 +37,17 @@ export class CourseVideo {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  chapterName: string | null;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  lessonName: string | null;
+
+  @Column({ type: 'int', default: 0 })
+  contentOrder: number;
+
   // Store provider + normalized id, never an arbitrary source URL.
   // youtubeVideoId is kept for backwards compatibility with existing rows.
   @Column({ type: 'varchar', length: 30, default: 'youtube' })

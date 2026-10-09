@@ -2,8 +2,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import { enrollmentsApi, assignmentsApi, uploadsApi } from '@/lib/api';
-import StudentVideosTab from '@/components/StudentVideosTab';
+import { enrollmentsApi, assignmentsApi, uploadsApi, videosApi } from '@/lib/api';
+import StudentCourseHierarchy from '@/components/StudentCourseHierarchy';
 import {
   GraduationCap, User, Users, ArrowLeft, BookOpen, HelpCircle, Calendar,
   ClipboardList, Upload, X, FileText, Image, CheckCircle,
@@ -579,12 +579,16 @@ export default function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [enrollment, setEnrollment] = useState<any>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [videos, setVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'homework' | 'quiz' | 'videos' | 'grades' | 'questions' | 'appointments'>('homework');
 
   const loadAssignments = useCallback(async (courseName: string, groupName: string) => {
-    const res = await assignmentsApi.myAssignments(courseName, groupName);
-    setAssignments(res.data);
+    const [assignmentsRes, videosRes] = await Promise.all([
+      assignmentsApi.myAssignments(courseName, groupName),
+      videosApi.studentList(courseName, groupName),
+    ]);
+    setAssignments(assignmentsRes.data);
+    setVideos(videosRes.data);
   }, []);
 
   useEffect(() => {
@@ -634,7 +638,6 @@ export default function CourseDetailPage() {
   }
 
   const color = COURSE_COLORS[enrollment.courseName] || '#6366f1';
-  const filtered = assignments.filter(a => a.type.toLowerCase() === tab);
   const teacherPermissions = enrollment.teacherPermissions || { questions: true, appointments: true };
 
   return (
@@ -688,50 +691,12 @@ export default function CourseDetailPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="tabs" style={{ marginBottom: 24 }}>
-        <button
-          className={`tab-btn ${tab === 'homework' ? 'active' : ''}`}
-          onClick={() => setTab('homework')}
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          <BookOpen size={15} /> Homework
-          {assignments.filter(a => a.type === 'HOMEWORK').length > 0 && (
-            <span style={{ background: 'rgba(245,158,11,0.2)', color: '#f59e0b', borderRadius: 20, fontSize: 10, padding: '1px 6px', fontWeight: 700 }}>
-              {assignments.filter(a => a.type === 'HOMEWORK').length}
-            </span>
-          )}
-        </button>
-        <button
-          className={`tab-btn ${tab === 'videos' ? 'active' : ''}`}
-          onClick={() => setTab('videos')}
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          <Video size={15} /> Videos
-        </button>
-        <button
-          className={`tab-btn ${tab === 'quiz' ? 'active' : ''}`}
-          onClick={() => setTab('quiz')}
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          <ClipboardList size={15} /> Quiz
-          {assignments.filter(a => a.type === 'QUIZ').length > 0 && (
-            <span style={{ background: 'rgba(99,102,241,0.2)', color: '#a5b4fc', borderRadius: 20, fontSize: 10, padding: '1px 6px', fontWeight: 700 }}>
-              {assignments.filter(a => a.type === 'QUIZ').length}
-            </span>
-          )}
-        </button>
-        <button
-          className={`tab-btn ${tab === 'grades' ? 'active' : ''}`}
-          onClick={() => setTab('grades')}
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          <BarChart2 size={15} /> My Grades
-        </button>
+      {/* Course actions */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24 }}>
         {teacherPermissions.questions && (
           <Link
             href={`/student/questions/new?courseName=${encodeURIComponent(enrollment.courseName)}`}
-            className="tab-btn"
+            className="btn btn-secondary btn-sm"
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <HelpCircle size={15} /> Questions
@@ -740,7 +705,7 @@ export default function CourseDetailPage() {
         {teacherPermissions.appointments && (
           <Link
             href={`/student/appointments?courseName=${encodeURIComponent(enrollment.courseName)}&groupName=${encodeURIComponent(enrollment.groupName || '')}`}
-            className="tab-btn"
+            className="btn btn-secondary btn-sm"
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <Calendar size={15} /> Appointments
@@ -748,28 +713,14 @@ export default function CourseDetailPage() {
         )}
       </div>
 
-      {/* Content */}
-      {tab === 'grades' ? (
-        <GradesTab assignments={assignments} />
-      ) : tab === 'videos' ? (
-        <StudentVideosTab courseName={enrollment.courseName} groupName={enrollment.groupName} enrollmentId={id} />
-      ) : filtered.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '60px 24px' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>{tab === 'homework' ? '📚' : '📝'}</div>
-          <h3 style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
-            No {tab === 'homework' ? 'homework' : 'quizzes'} yet
-          </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-            Your team member hasn't posted any {tab === 'homework' ? 'homework' : 'quizzes'} for this course yet.
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {filtered.map(a => (
-            <AssignmentCard key={a.id} assignment={a} courseId={id} onRefresh={refresh} />
-          ))}
-        </div>
-      )}
+      <StudentCourseHierarchy
+        enrollmentId={id}
+        assignments={assignments}
+        videos={videos}
+        renderAssignment={assignment => (
+          <AssignmentCard key={assignment.id} assignment={assignment} courseId={id} onRefresh={refresh} />
+        )}
+      />
     </AppShell>
   );
 }

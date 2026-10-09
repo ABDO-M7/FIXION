@@ -44,6 +44,17 @@ export class Assignment {
   @Column({ length: 255 })
   title: string;
 
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  chapterName: string | null;
+
+  @Index()
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  lessonName: string | null;
+
+  @Column({ type: 'int', default: 0 })
+  contentOrder: number;
+
   @Column({ type: 'text', nullable: true })
   description: string;
 

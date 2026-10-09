@@ -17,6 +17,9 @@ type CreateVideoDto = {
   sourceUrl?: string;
   videoUrl?: string;
   youtubeUrl?: string;
+  chapterName?: string;
+  lessonName?: string;
+  contentOrder?: number;
 };
 
 type CheckpointDto = {
@@ -65,6 +68,9 @@ export class VideosService {
       groupName: dto.groupName.trim(),
       title,
       description: dto.description?.trim() || null,
+      chapterName: dto.chapterName?.trim() || null,
+      lessonName: dto.lessonName?.trim() || null,
+      contentOrder: Number.isFinite(Number(dto.contentOrder)) ? Number(dto.contentOrder) : 0,
       provider: source.provider,
       providerVideoId: source.providerVideoId,
       youtubeVideoId: source.provider === 'youtube' ? source.providerVideoId : null,
@@ -257,6 +263,9 @@ export class VideosService {
       groupName: video.groupName,
       title: video.title,
       description: video.description,
+      chapterName: video.chapterName,
+      lessonName: video.lessonName,
+      contentOrder: video.contentOrder,
       provider: video.provider || 'youtube',
       providerVideoId: video.providerVideoId || video.youtubeVideoId,
       createdAt: video.createdAt,

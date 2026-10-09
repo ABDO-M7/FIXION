@@ -111,12 +111,18 @@ export class AssignmentsService {
     attachments?: string[];
     dueDate?: string;
     maxGrade?: number;
+    chapterName?: string;
+    lessonName?: string;
+    contentOrder?: number;
   }, teacher: User): Promise<Assignment> {
     const scope = await this.staffScope(teacher);
     const assignment = this.assignmentsRepo.create({
       ...dto,
       maxGrade: dto.maxGrade ?? 100,
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+      chapterName: dto.chapterName?.trim() || null,
+      lessonName: dto.lessonName?.trim() || null,
+      contentOrder: Number.isFinite(Number(dto.contentOrder)) ? Number(dto.contentOrder) : 0,
       teacherId: workOwnerId(scope, teacher),
     });
     return this.assignmentsRepo.save(assignment);

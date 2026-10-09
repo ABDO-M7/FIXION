@@ -34,7 +34,7 @@ function CreateModal({
   onCreated: (newId?: string) => void;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState({ title: '', description: '', dueDate: '', maxGrade: '100' });
+  const [form, setForm] = useState({ title: '', description: '', dueDate: '', maxGrade: '100', chapterName: '', lessonName: '', contentOrder: '0' });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -42,7 +42,7 @@ function CreateModal({
     if (!form.maxGrade || +form.maxGrade < 1) { toast.error('Max grade must be at least 1'); return; }
     setSaving(true);
     try {
-      const res = await assignmentsApi.create({ ...form, maxGrade: +form.maxGrade, type, courseName, groupName });
+      const res = await assignmentsApi.create({ ...form, maxGrade: +form.maxGrade, contentOrder: +form.contentOrder, type, courseName, groupName });
       toast.success(`${type === 'QUIZ' ? 'Quiz' : 'Homework'} created!`);
       onCreated((res.data as any).id);
       onClose();
@@ -97,6 +97,20 @@ function CreateModal({
                 value={form.dueDate}
                 onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))}
               />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 110px', gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">Chapter</label>
+                <input className="form-input" value={form.chapterName} onChange={e => setForm(p => ({ ...p, chapterName: e.target.value }))} placeholder="e.g. Chapter 1" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Lesson</label>
+                <input className="form-input" value={form.lessonName} onChange={e => setForm(p => ({ ...p, lessonName: e.target.value }))} placeholder="e.g. Lesson 1" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Order</label>
+                <input type="number" min={0} className="form-input" value={form.contentOrder} onChange={e => setForm(p => ({ ...p, contentOrder: e.target.value }))} />
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">Max Grade *</label>

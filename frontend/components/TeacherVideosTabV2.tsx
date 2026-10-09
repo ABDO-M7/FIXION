@@ -13,7 +13,7 @@ export default function TeacherVideosTabV2({ courseName, groupName }: { courseNa
   const [showForm, setShowForm] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', provider: 'youtube', sourceUrl: '' });
+  const [form, setForm] = useState({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0' });
 
   const load = useCallback(() => {
     videosApi.teacherList(courseName, groupName)
@@ -31,9 +31,9 @@ export default function TeacherVideosTabV2({ courseName, groupName }: { courseNa
     }
     setSaving(true);
     try {
-      await videosApi.create({ ...form, courseName, groupName });
+      await videosApi.create({ ...form, contentOrder: Number(form.contentOrder), courseName, groupName });
       toast.success('Video added');
-      setForm({ title: '', description: '', provider: 'youtube', sourceUrl: '' });
+      setForm({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0' });
       setShowForm(false);
       setLoading(true);
       load();
@@ -97,6 +97,11 @@ export default function TeacherVideosTabV2({ courseName, groupName }: { courseNa
                 <div className="form-group"><label className="form-label">Video link or embed code *</label><textarea className="form-input" rows={form.provider === 'wistia' ? 4 : 2} value={form.sourceUrl} onChange={event => setForm(previous => ({ ...previous, sourceUrl: event.target.value }))} placeholder={form.provider === 'wistia' ? 'Paste the Wistia iframe, script, or wistia_async embed code' : 'Paste the provider link'} /></div>
               </div>
               <div className="form-group"><label className="form-label">Description</label><textarea className="form-input" rows={3} value={form.description} onChange={event => setForm(previous => ({ ...previous, description: event.target.value }))} /></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px', gap: 10 }}>
+                <div className="form-group"><label className="form-label">Chapter</label><input className="form-input" value={form.chapterName} onChange={event => setForm(previous => ({ ...previous, chapterName: event.target.value }))} placeholder="e.g. Chapter 1" /></div>
+                <div className="form-group"><label className="form-label">Lesson</label><input className="form-input" value={form.lessonName} onChange={event => setForm(previous => ({ ...previous, lessonName: event.target.value }))} placeholder="e.g. Lesson 1" /></div>
+                <div className="form-group"><label className="form-label">Order</label><input type="number" min={0} className="form-input" value={form.contentOrder} onChange={event => setForm(previous => ({ ...previous, contentOrder: event.target.value }))} /></div>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button><button className="btn btn-primary" disabled={saving} onClick={save}>{saving ? 'Adding...' : 'Add Video'}</button></div>
             </div>
           </div>
