@@ -41,6 +41,7 @@ import { Appointment } from './modules/appointments/entities/appointment.entity'
 import { CourseVideo } from './modules/videos/entities/course-video.entity';
 import { VideoCheckpoint } from './modules/videos/entities/video-checkpoint.entity';
 import { VideoResponse } from './modules/videos/entities/video-response.entity';
+import { VideoProgress } from './modules/videos/entities/video-progress.entity';
 
 @Module({
   imports: [
@@ -59,7 +60,7 @@ import { VideoResponse } from './modules/videos/entities/video-response.entity';
         type: 'postgres',
         url: config.get<string>('database.url'),
         ssl: config.get('database.ssl'),
-        entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Assignment, AssignmentSubmission, QuizQuestion, Notification, Appointment, CourseVideo, VideoCheckpoint, VideoResponse],
+        entities: [User, Question, Answer, Category, Subscription, SubscriptionCode, CourseEnrollment, Assignment, AssignmentSubmission, QuizQuestion, Notification, Appointment, CourseVideo, VideoCheckpoint, VideoResponse, VideoProgress],
         synchronize: !config.get<boolean>('app.isProduction'), // Never synchronize on hosted production services
         migrations: [__dirname + '/migrations/*{.js,.ts}'],
         migrationsRun: config.get<boolean>('app.isProduction'),

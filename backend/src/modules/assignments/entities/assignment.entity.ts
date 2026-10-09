@@ -65,6 +65,12 @@ export class Assignment {
   @Column({ type: 'int', nullable: true })
   unlockScore: number | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  unlockVideoId: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  unlockPercent: number | null;
+
   @Column({ type: 'text', nullable: true })
   description: string;
 

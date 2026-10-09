@@ -8,6 +8,7 @@ import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.en
 import { User } from '../users/entities/user.entity';
 import { canManageOwnedWork, resolveStaffScope, workOwnerId, StaffScope, hasPermission } from '../../common/staff-access';
 import { UnlockRuleType } from '../learning/unlock-rule';
+import { VideoProgress } from '../videos/entities/video-progress.entity';
 
 @Injectable()
 export class AssignmentsService {
@@ -22,6 +23,8 @@ export class AssignmentsService {
     private enrollmentsRepo: Repository<CourseEnrollment>,
     @InjectRepository(User)
     private usersRepo: Repository<User>,
+    @InjectRepository(VideoProgress)
+    private videoProgressRepo: Repository<VideoProgress>,
   ) {}
 
   private async staffScope(user: User) {
@@ -118,6 +121,8 @@ export class AssignmentsService {
     unlockRule?: UnlockRuleType;
     unlockAssignmentId?: string;
     unlockScore?: number;
+    unlockVideoId?: string;
+    unlockPercent?: number;
   }, teacher: User): Promise<Assignment> {
     const scope = await this.staffScope(teacher);
     const assignment = this.assignmentsRepo.create({
@@ -130,6 +135,8 @@ export class AssignmentsService {
       unlockRule: dto.unlockRule || UnlockRuleType.NONE,
       unlockAssignmentId: dto.unlockAssignmentId || null,
       unlockScore: dto.unlockScore ?? null,
+      unlockVideoId: dto.unlockVideoId || null,
+      unlockPercent: dto.unlockPercent ?? null,
       teacherId: workOwnerId(scope, teacher),
     });
     return this.assignmentsRepo.save(assignment);
@@ -326,7 +333,7 @@ export class AssignmentsService {
     const subMap = new Map(submissions.map((s) => [s.assignmentId, s]));
     return Promise.all(assignments.map(async (a) => {
       const submission = subMap.get(a.id) || null;
-      const unlock = await this.getUnlockState(a.unlockRule, a.unlockAssignmentId, a.unlockScore, subMap);
+      const unlock = await this.getUnlockState(a.unlockRule, a.unlockAssignmentId, a.unlockScore, a.unlockVideoId, a.unlockPercent, studentId, subMap);
       return { ...a, submission, ...unlock };
     }));
   }
@@ -341,6 +348,9 @@ export class AssignmentsService {
       assignment.unlockRule,
       assignment.unlockAssignmentId,
       assignment.unlockScore,
+      assignment.unlockVideoId,
+      assignment.unlockPercent,
+      studentId,
       new Map(assignment.unlockAssignmentId ? [[assignment.unlockAssignmentId, submission as AssignmentSubmission]] : []),
     );
     if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
@@ -351,8 +361,19 @@ export class AssignmentsService {
     rule: UnlockRuleType,
     prerequisiteId: string | null,
     requiredScore: number | null,
+    prerequisiteVideoId: string | null,
+    requiredPercent: number | null,
+    studentId: string,
     submissions: Map<string, AssignmentSubmission>,
   ) {
+    if (rule === UnlockRuleType.WATCH_VIDEO) {
+      if (!prerequisiteVideoId) return { isLocked: false, lockReason: null };
+      const progress = await this.videoProgressRepo.findOne({ where: { videoId: prerequisiteVideoId, studentId } });
+      if (!progress || progress.watchedPercent < (requiredPercent ?? 80)) {
+        return { isLocked: true, lockReason: `Watch at least ${requiredPercent ?? 80}% of the previous video` };
+      }
+      return { isLocked: false, lockReason: null };
+    }
     if (!rule || rule === UnlockRuleType.NONE || !prerequisiteId) return { isLocked: false, lockReason: null };
     const submission = submissions.get(prerequisiteId);
     if (!submission) {

@@ -5,11 +5,12 @@ import { AssignmentSubmission } from './entities/assignment-submission.entity';
 import { QuizQuestion } from './entities/quiz-question.entity';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
 import { User } from '../users/entities/user.entity';
+import { VideoProgress } from '../videos/entities/video-progress.entity';
 import { AssignmentsService } from './assignments.service';
 import { AssignmentsController } from './assignments.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Assignment, AssignmentSubmission, QuizQuestion, CourseEnrollment, User])],
+  imports: [TypeOrmModule.forFeature([Assignment, AssignmentSubmission, QuizQuestion, CourseEnrollment, User, VideoProgress])],
   controllers: [AssignmentsController],
   providers: [AssignmentsService],
   exports: [AssignmentsService, TypeOrmModule],

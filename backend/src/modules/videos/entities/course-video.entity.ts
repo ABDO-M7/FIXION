@@ -58,6 +58,12 @@ export class CourseVideo {
   @Column({ type: 'int', nullable: true })
   unlockScore: number | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  unlockVideoId: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  unlockPercent: number | null;
+
   // Store provider + normalized id, never an arbitrary source URL.
   // youtubeVideoId is kept for backwards compatibility with existing rows.
   @Column({ type: 'varchar', length: 30, default: 'youtube' })

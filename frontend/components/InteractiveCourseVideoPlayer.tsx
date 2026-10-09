@@ -26,6 +26,7 @@ export type InteractiveCourseVideo = {
   provider?: 'youtube' | 'vimeo' | 'wistia' | 'bunny' | string;
   providerVideoId?: string | null;
   youtubeVideoId?: string | null;
+  watchedPercent?: number;
 };
 
 type Experience = { video: InteractiveCourseVideo; checkpoints: VideoCheckpoint[] };
@@ -64,6 +65,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const [feedback, setFeedback] = useState('');
   const [solution, setSolution] = useState<{ text?: string | null; url?: string | null } | null>(null);
   const [playerError, setPlayerError] = useState<string | null>(null);
+  const lastProgressReportRef = useRef(0);
 
   const provider = video.provider || 'youtube';
   const checkpoints = experience?.checkpoints || [];
@@ -147,6 +149,17 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     if (checkpoint) pauseForCheckpoint(checkpoint);
   }, [checkpoints, experience, pauseForCheckpoint, pending, solvedIds]);
 
+  const reportProgress = useCallback((time: number) => {
+    if (preview || !Number.isFinite(time) || Date.now() - lastProgressReportRef.current < 4000) return;
+    const player = providerPlayerRef.current;
+    const duration = provider === 'youtube'
+      ? Number(player?.getDuration?.())
+      : Number(player?.duration ?? player?.getDuration?.());
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    lastProgressReportRef.current = Date.now();
+    videosApi.updateProgress(video.id, time, duration).catch(() => {});
+  }, [preview, provider, video.id]);
+
   const checkpointHandlerRef = useRef(checkForCheckpoint);
   useEffect(() => {
     checkpointHandlerRef.current = checkForCheckpoint;
@@ -189,6 +202,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
             if (Number.isFinite(time)) {
               setCurrentTime(time);
               checkpointHandlerRef.current(time);
+              reportProgress(time);
             }
           },
         },
@@ -218,7 +232,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       if (timer) window.clearInterval(timer);
       providerPlayerRef.current = null;
     };
-  }, [provider, started, video.providerVideoId]);
+  }, [provider, reportProgress, started, video.providerVideoId]);
 
   useEffect(() => {
     if (!started) return;
@@ -233,6 +247,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       if (Number.isFinite(resolvedTime)) {
         setCurrentTime(resolvedTime);
         checkForCheckpoint(resolvedTime);
+        reportProgress(resolvedTime);
       }
     };
     window.addEventListener('message', handleMessage);
@@ -244,6 +259,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         if (Number.isFinite(time)) {
           setCurrentTime(time);
           checkForCheckpoint(time);
+          reportProgress(time);
         } else {
           sendPlayerCommand('getCurrentTime');
         }
@@ -252,6 +268,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         if (Number.isFinite(time)) {
           setCurrentTime(time);
           checkForCheckpoint(time);
+          reportProgress(time);
         }
       }
     }, 450);
@@ -259,7 +276,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       window.removeEventListener('message', handleMessage);
       window.clearInterval(timer);
     };
-  }, [checkForCheckpoint, playing, provider, sendPlayerCommand, started]);
+  }, [checkForCheckpoint, playing, provider, reportProgress, sendPlayerCommand, started]);
 
   useEffect(() => {
     if (!started || !video.providerVideoId) return;
@@ -276,7 +293,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
           let data = payload;
           if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
           const time = Number(data?.seconds ?? data?.currentTime);
-          if (Number.isFinite(time)) { setCurrentTime(time); checkForCheckpoint(time); }
+          if (Number.isFinite(time)) { setCurrentTime(time); checkForCheckpoint(time); reportProgress(time); }
         });
         player.on('play', () => setPlaying(true));
         player.on('pause', () => setPlaying(false));
@@ -291,7 +308,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     script.src = 'https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js';
     script.onload = attach;
     document.body.appendChild(script);
-  }, [checkForCheckpoint, provider, started, video.providerVideoId]);
+  }, [checkForCheckpoint, provider, reportProgress, started, video.providerVideoId]);
 
   useEffect(() => {
     if (!started || provider !== 'wistia' || !video.providerVideoId) return;
@@ -303,6 +320,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       if (Number.isFinite(time)) {
         setCurrentTime(time);
         checkpointHandlerRef.current(time);
+        reportProgress(time);
       }
     };
     const onSecondChange = (event: any) => {
@@ -310,6 +328,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       if (Number.isFinite(time)) {
         setCurrentTime(time);
         checkpointHandlerRef.current(time);
+        reportProgress(time);
       }
     };
     const onPlay = () => {

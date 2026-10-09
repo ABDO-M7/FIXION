@@ -10,6 +10,7 @@ import { canManageOwnedWork, resolveStaffScope, workOwnerId } from '../../common
 import { Assignment } from '../assignments/entities/assignment.entity';
 import { AssignmentSubmission } from '../assignments/entities/assignment-submission.entity';
 import { UnlockRuleType } from '../learning/unlock-rule';
+import { VideoProgress } from './entities/video-progress.entity';
 
 type CreateVideoDto = {
   courseName: string;
@@ -26,6 +27,8 @@ type CreateVideoDto = {
   unlockRule?: UnlockRuleType;
   unlockAssignmentId?: string;
   unlockScore?: number;
+  unlockVideoId?: string;
+  unlockPercent?: number;
 };
 
 type CheckpointDto = {
@@ -58,6 +61,7 @@ export class VideosService {
     @InjectRepository(User) private readonly usersRepo: Repository<User>,
     @InjectRepository(Assignment) private readonly assignmentsRepo: Repository<Assignment>,
     @InjectRepository(AssignmentSubmission) private readonly submissionsRepo: Repository<AssignmentSubmission>,
+    @InjectRepository(VideoProgress) private readonly progressRepo: Repository<VideoProgress>,
   ) {}
 
   async create(dto: CreateVideoDto, teacher: User) {
@@ -82,6 +86,8 @@ export class VideosService {
       unlockRule: dto.unlockRule || UnlockRuleType.NONE,
       unlockAssignmentId: dto.unlockAssignmentId || null,
       unlockScore: dto.unlockScore ?? null,
+      unlockVideoId: dto.unlockVideoId || null,
+      unlockPercent: dto.unlockPercent ?? null,
       provider: source.provider,
       providerVideoId: source.providerVideoId,
       youtubeVideoId: source.provider === 'youtube' ? source.providerVideoId : null,
@@ -111,9 +117,11 @@ export class VideosService {
     return Promise.all(videos.map(async video => {
       const checkpoints = await this.checkpointsRepo.find({ where: { videoId: video.id }, order: { orderIndex: 'ASC', timestampSeconds: 'ASC' } });
       const responses = checkpoints.length ? await this.responsesRepo.find({ where: { videoId: video.id, studentId } }) : [];
-      const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, studentId);
+      const progress = await this.progressRepo.findOne({ where: { videoId: video.id, studentId } });
+      const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, video.unlockVideoId, video.unlockPercent, studentId);
       return {
         ...this.publicVideo(video),
+        watchedPercent: progress?.watchedPercent || 0,
         ...unlock,
         checkpointCount: checkpoints.length,
         completedCheckpointCount: responses.filter(response => response.isCorrect).length,
@@ -157,7 +165,7 @@ export class VideosService {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
     await this.assertEnrollment(video.courseName, video.groupName, student.id);
-    const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, student.id);
+    const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, video.unlockVideoId, video.unlockPercent, student.id);
     if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
     const checkpoints = await this.checkpointsRepo.find({
       where: { videoId },
@@ -185,6 +193,21 @@ export class VideosService {
         };
       }),
     };
+  }
+
+  async updateProgress(videoId: string, studentId: string, dto: { watchedSeconds: number; durationSeconds: number }) {
+    const video = await this.videosRepo.findOne({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    await this.assertEnrollment(video.courseName, video.groupName, studentId);
+    const watchedSeconds = Math.max(0, Math.floor(Number(dto.watchedSeconds) || 0));
+    const durationSeconds = Math.max(0, Math.floor(Number(dto.durationSeconds) || 0));
+    const watchedPercent = durationSeconds > 0 ? Math.min(100, Math.floor((watchedSeconds / durationSeconds) * 100)) : 0;
+    const existing = await this.progressRepo.findOne({ where: { videoId, studentId } });
+    const progress = existing || this.progressRepo.create({ videoId, studentId, watchedSeconds: 0, durationSeconds: 0, watchedPercent: 0 });
+    progress.watchedSeconds = Math.max(progress.watchedSeconds, watchedSeconds);
+    progress.durationSeconds = Math.max(progress.durationSeconds, durationSeconds);
+    progress.watchedPercent = Math.max(progress.watchedPercent, watchedPercent);
+    return this.progressRepo.save(progress);
   }
 
   async answerCheckpoint(videoId: string, checkpointId: string, student: User, dto: AnswerDto) {
@@ -284,6 +307,8 @@ export class VideosService {
       unlockRule: video.unlockRule,
       unlockAssignmentId: video.unlockAssignmentId,
       unlockScore: video.unlockScore,
+      unlockVideoId: video.unlockVideoId,
+      unlockPercent: video.unlockPercent,
       provider: video.provider || 'youtube',
       providerVideoId: video.providerVideoId || video.youtubeVideoId,
       createdAt: video.createdAt,
@@ -291,8 +316,17 @@ export class VideosService {
     };
   }
 
-  private async getUnlockState(rule: UnlockRuleType, prerequisiteId: string | null, requiredScore: number | null, studentId: string) {
-    if (!rule || rule === UnlockRuleType.NONE || !prerequisiteId) return { isLocked: false, lockReason: null };
+  private async getUnlockState(rule: UnlockRuleType, prerequisiteId: string | null, requiredScore: number | null, prerequisiteVideoId: string | null, requiredPercent: number | null, studentId: string) {
+    if (!rule || rule === UnlockRuleType.NONE) return { isLocked: false, lockReason: null };
+    if (rule === UnlockRuleType.WATCH_VIDEO) {
+      if (!prerequisiteVideoId) return { isLocked: false, lockReason: null };
+      const progress = await this.progressRepo.findOne({ where: { videoId: prerequisiteVideoId, studentId } });
+      if (!progress || progress.watchedPercent < (requiredPercent ?? 80)) {
+        return { isLocked: true, lockReason: `Watch at least ${requiredPercent ?? 80}% of the previous video` };
+      }
+      return { isLocked: false, lockReason: null };
+    }
+    if (!prerequisiteId) return { isLocked: false, lockReason: null };
     const submission = await this.submissionsRepo.findOne({ where: { assignmentId: prerequisiteId, studentId } });
     if (!submission) {
       return { isLocked: true, lockReason: rule === UnlockRuleType.PASS_QUIZ ? 'Complete the previous quiz first' : 'Submit the previous assignment first' };

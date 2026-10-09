@@ -34,6 +34,12 @@ export class VideosController {
     return this.videosService.getStudentExperience(videoId, student);
   }
 
+  @Patch('student/video/:id/progress')
+  @Roles(UserRole.STUDENT)
+  updateProgress(@Param('id') videoId: string, @Body() dto: { watchedSeconds: number; durationSeconds: number }, @CurrentUser('id') studentId: string) {
+    return this.videosService.updateProgress(videoId, studentId, dto);
+  }
+
   @Post(':id/checkpoints/:checkpointId/answer')
   @Roles(UserRole.STUDENT)
   answerCheckpoint(
