@@ -54,12 +54,45 @@ export class AssignmentsService {
     const scope = await this.staffScope(teacher);
     if (scope.type === 'subjects') return scope.subjects || [];
 
+    const defaultCourses = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
     const qb = this.enrollmentsRepo
       .createQueryBuilder('e')
       .select('DISTINCT e.courseName', 'courseName');
     this.applyEnrollmentScope(qb, scope);
     const rows = await qb.getRawMany();
-    return rows.map((r) => r.courseName).filter(Boolean);
+    const enrolledCourses = rows.map((r) => r.courseName).filter(Boolean);
+
+    if (scope.type === 'admin') {
+      const assignmentCourses = await this.assignmentsRepo
+        .createQueryBuilder('a')
+        .select('DISTINCT a.courseName', 'courseName')
+        .getRawMany();
+      const set = new Set<string>([
+        ...defaultCourses,
+        ...enrolledCourses,
+        ...assignmentCourses.map((r) => r.courseName).filter(Boolean),
+      ]);
+      return Array.from(set);
+    }
+
+    if (scope.type === 'teacher') {
+      const teacherUser = await this.usersRepo.findOne({ where: { id: teacher.id } });
+      const teacherSubjects = Array.isArray(teacherUser?.subjects) ? teacherUser.subjects : [];
+      const assignmentCourses = await this.assignmentsRepo
+        .createQueryBuilder('a')
+        .select('DISTINCT a.courseName', 'courseName')
+        .where('a.teacherId = :tid', { tid: teacher.id })
+        .getRawMany();
+
+      const set = new Set<string>([
+        ...enrolledCourses,
+        ...teacherSubjects,
+        ...assignmentCourses.map((r) => r.courseName).filter(Boolean),
+      ]);
+      return Array.from(set);
+    }
+
+    return enrolledCourses;
   }
 
   // ─── STAFF: get distinct groups for a course ──────────────────────────────
@@ -75,7 +108,19 @@ export class AssignmentsService {
       .andWhere('e.groupName IS NOT NULL');
     this.applyEnrollmentScope(qb, scope);
     const rows = await qb.getRawMany();
-    return rows.map((r) => r.groupName).filter(Boolean);
+    const enrolledGroups = rows.map((r) => r.groupName).filter(Boolean);
+
+    const assignmentGroups = await this.assignmentsRepo
+      .createQueryBuilder('a')
+      .select('DISTINCT a.groupName', 'groupName')
+      .where('a.courseName = :courseName', { courseName })
+      .getRawMany();
+    const set = new Set<string>([
+      ...enrolledGroups,
+      ...assignmentGroups.map((r) => r.groupName).filter(Boolean),
+    ]);
+    if (set.size === 0) set.add('Group 1');
+    return Array.from(set);
   }
 
   // ─── TEACHER: get students enrolled in a specific group ───────────────────
@@ -123,10 +168,12 @@ export class AssignmentsService {
     unlockScore?: number;
     unlockVideoId?: string;
     unlockPercent?: number;
+    isPublished?: boolean;
   }, teacher: User): Promise<Assignment> {
     const scope = await this.staffScope(teacher);
     const assignment = this.assignmentsRepo.create({
       ...dto,
+      isPublished: dto.isPublished !== undefined ? Boolean(dto.isPublished) : (dto.type === AssignmentType.HOMEWORK),
       maxGrade: dto.maxGrade ?? 100,
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
       chapterName: dto.chapterName?.trim() || null,
@@ -383,7 +430,7 @@ export class AssignmentsService {
     const percentage = submission.grade === null || submission.grade === undefined
       ? 0
       : (submission.grade / Math.max(prerequisite?.maxGrade ?? 100, 1)) * 100;
-    if (rule === UnlockRuleType.PASS_QUIZ && (submission.grade === null || submission.grade === undefined || percentage < (requiredScore ?? 50) / 100)) {
+    if (rule === UnlockRuleType.PASS_QUIZ && (submission.grade === null || submission.grade === undefined || percentage < (requiredScore ?? 50))) {
       return { isLocked: true, lockReason: `You need at least ${requiredScore ?? 50}% in the previous quiz` };
     }
     return { isLocked: false, lockReason: null };
@@ -423,6 +470,31 @@ export class AssignmentsService {
     if (!canManageOwnedWork(scope, actor, a.teacherId)) throw new ForbiddenException();
     await this.assignmentsRepo.delete(id);
     return { message: 'Deleted' };
+  }
+
+  // ─── TEACHER/ADMIN: update assignment ──────────────────────────────────────
+  async updateAssignment(id: string, dto: any, actor: User) {
+    const a = await this.assignmentsRepo.findOne({ where: { id } });
+    if (!a) throw new NotFoundException('Assignment not found');
+    const scope = await this.staffScope(actor);
+    if (!canManageOwnedWork(scope, actor, a.teacherId)) throw new ForbiddenException();
+
+    if (dto.title !== undefined) a.title = dto.title.trim();
+    if (dto.description !== undefined) a.description = dto.description?.trim() || null;
+    if (dto.dueDate !== undefined) a.dueDate = dto.dueDate ? new Date(dto.dueDate) : (null as any);
+    if (dto.maxGrade !== undefined) a.maxGrade = Number(dto.maxGrade) || 100;
+    if (dto.chapterName !== undefined) a.chapterName = dto.chapterName?.trim() || null;
+    if (dto.lessonName !== undefined) a.lessonName = dto.lessonName?.trim() || null;
+    if (dto.contentOrder !== undefined) a.contentOrder = Number.isFinite(Number(dto.contentOrder)) ? Number(dto.contentOrder) : 0;
+    if (dto.unlockRule !== undefined) a.unlockRule = dto.unlockRule || UnlockRuleType.NONE;
+    if (dto.unlockAssignmentId !== undefined) a.unlockAssignmentId = dto.unlockAssignmentId || null;
+    if (dto.unlockScore !== undefined) a.unlockScore = dto.unlockScore ?? null;
+    if (dto.unlockVideoId !== undefined) a.unlockVideoId = dto.unlockVideoId || null;
+    if (dto.unlockPercent !== undefined) a.unlockPercent = dto.unlockPercent ?? null;
+    if (dto.attachments !== undefined) a.attachments = dto.attachments;
+    if (dto.isPublished !== undefined) a.isPublished = Boolean(dto.isPublished);
+
+    return this.assignmentsRepo.save(a);
   }
 
   // ══════════════════════════════════════════════════════════════════════════

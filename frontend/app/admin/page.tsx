@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { adminApi, codesApi } from '@/lib/api';
-import { Users, HelpCircle, CheckCircle, Key, BarChart2, TrendingUp } from 'lucide-react';
+import { Users, HelpCircle, CheckCircle, Key, BarChart2, TrendingUp, GraduationCap, ArrowRight, Layers } from 'lucide-react';
+import Link from 'next/link';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell,
@@ -90,6 +91,35 @@ export default function AdminDashboard() {
             {overview?.subscriptions?.availableCodes} codes available
           </div>
         </div>
+      </div>
+
+      {/* Course Workflow Quick Access Banner */}
+      <div className="card" style={{
+        marginBottom: 24,
+        background: 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.08) 100%)',
+        border: '1px solid rgba(99,102,241,0.25)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12,
+            background: 'rgba(99,102,241,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <GraduationCap size={24} style={{ color: 'var(--primary-light)' }} />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+              Course Workflows & Curriculums (إدارة مسارات الحصص والمناهج)
+            </h3>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+              Manage lesson pipelines, Bunny Stream videos, quizzes, homework, and sequential unlocking rules.
+            </p>
+          </div>
+        </div>
+        <Link href="/admin/courses" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Layers size={15} /> Open Workflows <ArrowRight size={15} />
+        </Link>
       </div>
 
       {/* Charts Row */}

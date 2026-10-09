@@ -84,6 +84,12 @@ export class VideosController {
     return this.videosService.removeCheckpoint(videoId, checkpointId, actor);
   }
 
+  @Patch(':id')
+  @Roles(...STAFF_AND_ADMIN)
+  update(@Param('id') id: string, @Body() dto: any, @CurrentUser() actor: any) {
+    return this.videosService.update(id, dto, actor);
+  }
+
   @Delete(':id')
   @Roles(...STAFF_AND_ADMIN)
   remove(@Param('id') id: string, @CurrentUser() actor: any) { return this.videosService.remove(id, actor); }

@@ -131,17 +131,50 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
   const thumbnail = provider === 'youtube' && (video.providerVideoId || video.youtubeVideoId)
     ? `https://i.ytimg.com/vi/${video.providerVideoId || video.youtubeVideoId}/mqdefault.jpg`
     : undefined;
+
   const content = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, borderRadius: 10, background: video.isLocked ? 'rgba(148,163,184,.08)' : 'rgba(99,102,241,.08)', color: 'inherit', opacity: video.isLocked ? 0.72 : 1 }}>
-      <div style={{ width: 64, height: 40, borderRadius: 7, flexShrink: 0, background: thumbnail ? `url(${thumbnail}) center / cover` : 'linear-gradient(135deg,#312e81,#111827)', display: 'grid', placeItems: 'center' }}>
-        <Play size={15} fill="currentColor" />
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10,
+      background: video.isLocked ? 'rgba(239,68,68,0.04)' : 'rgba(99,102,241,0.06)',
+      border: `1px solid ${video.isLocked ? 'rgba(239,68,68,0.2)' : 'rgba(99,102,241,0.15)'}`,
+      color: 'inherit', opacity: video.isLocked ? 0.8 : 1, transition: 'all 0.15s ease',
+    }}>
+      <div style={{
+        width: 56, height: 38, borderRadius: 8, flexShrink: 0,
+        background: thumbnail ? `url(${thumbnail}) center / cover` : 'linear-gradient(135deg,#312e81,#111827)',
+        display: 'grid', placeItems: 'center', color: video.isLocked ? '#9ca3af' : '#fff',
+      }}>
+        {video.isLocked ? <span style={{ fontSize: 16 }}>🔒</span> : <Play size={16} fill="currentColor" />}
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 700, fontSize: 14 }}><Video size={14} style={{ color: '#818cf8' }} /> {video.title}</div>
-        {video.description && <p style={{ margin: '3px 0 0', color: 'var(--text-muted)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{video.description}</p>}
-        {video.isLocked && <p style={{ margin: '3px 0 0', color: '#f59e0b', fontSize: 12 }}>{video.lockReason}</p>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <strong style={{ fontSize: 14, color: video.isLocked ? 'var(--text-secondary)' : 'var(--text-primary)' }}>
+            {video.title}
+          </strong>
+          {provider === 'bunny' && (
+            <span className="badge" style={{ fontSize: 10, background: 'rgba(59,130,246,0.12)', color: '#60a5fa' }}>
+              Bunny Stream
+            </span>
+          )}
+        </div>
+        {video.description && (
+          <p style={{ margin: '3px 0 0', color: 'var(--text-muted)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {video.description}
+          </p>
+        )}
+        {video.isLocked && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4, padding: '2px 8px', borderRadius: 6, background: 'rgba(239,68,68,0.12)', color: '#f87171', fontSize: 11, fontWeight: 600 }}>
+            <span>🔒 مغلق:</span>
+            <span>{video.lockReason || 'أكمل المتطلبات السابقة لفتح هذا الفيديو'}</span>
+          </div>
+        )}
       </div>
     </div>
   );
-  return video.isLocked ? content : <Link href={`/student/courses/${encodeURIComponent(enrollmentId)}/videos/${encodeURIComponent(video.id)}`} style={{ color: 'inherit' }}>{content}</Link>;
+
+  return video.isLocked ? content : (
+    <Link href={`/student/courses/${encodeURIComponent(enrollmentId)}/videos/${encodeURIComponent(video.id)}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+      {content}
+    </Link>
+  );
 }

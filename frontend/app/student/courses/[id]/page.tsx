@@ -375,8 +375,9 @@ function AssignmentCard({
         )}
 
         {assignment.isLocked && (
-          <div style={{ color: '#f59e0b', fontSize: 13, background: 'rgba(245,158,11,.08)', borderRadius: 8, padding: '9px 12px' }}>
-            {assignment.lockReason}
+          <div style={{ color: '#f87171', fontSize: 12, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+            <span>🔒 مغلق:</span>
+            <span>{assignment.lockReason || 'أكمل المتطلبات السابقة لفتح هذا العنصر'}</span>
           </div>
         )}
         {/* Action button */}
@@ -591,6 +592,7 @@ export default function CourseDetailPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [videos, setVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'CONTENT' | 'GRADES'>('CONTENT');
 
   const loadAssignments = useCallback(async (courseName: string, groupName: string) => {
     const [assignmentsRes, videosRes] = await Promise.all([
@@ -723,14 +725,48 @@ export default function CourseDetailPage() {
         )}
       </div>
 
-      <StudentCourseHierarchy
-        enrollmentId={id}
-        assignments={assignments}
-        videos={videos}
-        renderAssignment={assignment => (
-          <AssignmentCard key={assignment.id} assignment={assignment} courseId={id} onRefresh={refresh} />
-        )}
-      />
+      {/* Tabs Switcher */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
+        <button
+          onClick={() => setActiveTab('CONTENT')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 18px', fontSize: 14, fontWeight: 700,
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            borderBottom: activeTab === 'CONTENT' ? `2px solid ${color}` : '2px solid transparent',
+            color: activeTab === 'CONTENT' ? color : 'var(--text-secondary)',
+            marginBottom: -1,
+          }}
+        >
+          <BookOpen size={16} /> Course Content (محتوى الكورس)
+        </button>
+        <button
+          onClick={() => setActiveTab('GRADES')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 18px', fontSize: 14, fontWeight: 700,
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            borderBottom: activeTab === 'GRADES' ? `2px solid ${color}` : '2px solid transparent',
+            color: activeTab === 'GRADES' ? color : 'var(--text-secondary)',
+            marginBottom: -1,
+          }}
+        >
+          <BarChart2 size={16} /> My Grades & Progress (درجاتي والإحصائيات)
+        </button>
+      </div>
+
+      {activeTab === 'CONTENT' ? (
+        <StudentCourseHierarchy
+          enrollmentId={id}
+          assignments={assignments}
+          videos={videos}
+          renderAssignment={assignment => (
+            <AssignmentCard key={assignment.id} assignment={assignment} courseId={id} onRefresh={refresh} />
+          )}
+        />
+      ) : (
+        <GradesTab assignments={assignments} />
+      )}
     </AppShell>
   );
 }

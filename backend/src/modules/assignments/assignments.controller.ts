@@ -173,6 +173,17 @@ export class AssignmentsController {
     return this.assignmentsService.reorderQuestions(assignmentId, orderedIds);
   }
 
+  // Teacher/Admin: update assignment
+  @Patch(':id')
+  @Roles(...STAFF_AND_ADMIN)
+  updateAssignment(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @CurrentUser() actor: any,
+  ) {
+    return this.assignmentsService.updateAssignment(id, dto, actor);
+  }
+
   // Teacher: delete assignment
   @Delete(':id')
   @Roles(...STAFF_AND_ADMIN)

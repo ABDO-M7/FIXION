@@ -13,6 +13,7 @@ import {
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import { useAuthStore } from '@/store';
 
 function MathText({ text }: { text: string }) {
   if (!text) return null;
@@ -52,6 +53,7 @@ type FilterStatus = 'ALL' | 'SUBMITTED' | 'NEEDS_GRADING' | 'GRADED' | 'NOT_SUBM
 export default function TeacherSubmissionsPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuthStore();
 
   const courseName = params.courseName as string;
   const groupName = params.groupName as string;
@@ -198,7 +200,7 @@ export default function TeacherSubmissionsPage() {
         {/* Top Navigation */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <Link
-            href={`/teacher/courses/${encodeURIComponent(decodedCourse)}/${encodeURIComponent(decodedGroup)}`}
+            href={user?.role === 'admin' ? `/admin/courses/${encodeURIComponent(decodedCourse)}/${encodeURIComponent(decodedGroup)}` : `/teacher/courses/${encodeURIComponent(decodedCourse)}/${encodeURIComponent(decodedGroup)}`}
             className="btn btn-ghost btn-sm"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, paddingLeft: 0 }}
           >

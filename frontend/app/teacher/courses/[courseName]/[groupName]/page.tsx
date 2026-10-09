@@ -4,10 +4,11 @@ import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi } from '@/lib/api';
 import TeacherVideosTab from '@/components/TeacherVideosTabV2';
+import CourseWorkflowBuilder from '@/components/CourseWorkflowBuilder';
 import {
   ArrowLeft, GraduationCap, Users, Plus, Trash2, X,
   ClipboardList, BookOpen, BarChart2, ChevronDown, ChevronRight,
-  CheckCircle, Clock, Upload, Edit3, Video
+  CheckCircle, Clock, Upload, Edit3, Video, Layers
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -21,7 +22,7 @@ const COURSE_COLORS: Record<string, string> = {
   'برمجه':  '#8b5cf6',
 };
 
-type Tab = 'QUIZ' | 'HOMEWORK' | 'VIDEOS' | 'GRADES';
+type Tab = 'WORKFLOW' | 'QUIZ' | 'HOMEWORK' | 'VIDEOS' | 'GRADES';
 
 // ── Create Assignment Modal ─────────────────────────────────────────────────
 function CreateModal({
@@ -286,7 +287,7 @@ export default function GroupDetailPage() {
   const decodedGroup = decodeURIComponent(groupName);
   const color = COURSE_COLORS[decoded] || '#6366f1';
 
-  const [tab, setTab] = useState<Tab>('QUIZ');
+  const [tab, setTab] = useState<Tab>('WORKFLOW');
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [createType, setCreateType] = useState<'QUIZ' | 'HOMEWORK' | null>(null);
@@ -301,7 +302,7 @@ export default function GroupDetailPage() {
   const visibleAssignments = assignments.filter(a => a.type === tab);
 
   useEffect(() => {
-    if (tab !== 'GRADES' && tab !== 'VIDEOS') fetchAssignments();
+    if (tab !== 'WORKFLOW' && tab !== 'GRADES' && tab !== 'VIDEOS') fetchAssignments();
   }, [tab, fetchAssignments]);
 
   const handleDelete = async (id: string) => {
@@ -328,6 +329,7 @@ export default function GroupDetailPage() {
   };
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
+    { id: 'WORKFLOW', label: 'Course Workflow (منهج الحصص)', icon: Layers },
     { id: 'QUIZ', label: 'Quiz', icon: ClipboardList },
     { id: 'HOMEWORK', label: 'Homework', icon: BookOpen },
     { id: 'VIDEOS', label: 'Videos', icon: Video },
@@ -359,7 +361,7 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
-        {tab !== 'GRADES' && tab !== 'VIDEOS' && (
+        {tab !== 'WORKFLOW' && tab !== 'GRADES' && tab !== 'VIDEOS' && (
           <button
             onClick={() => setCreateType(tab as 'QUIZ' | 'HOMEWORK')}
             className="btn btn-primary"
@@ -393,7 +395,9 @@ export default function GroupDetailPage() {
       </div>
 
       {/* Tab Content */}
-      {tab === 'GRADES' ? (
+      {tab === 'WORKFLOW' ? (
+        <CourseWorkflowBuilder courseName={decoded} groupName={decodedGroup} />
+      ) : tab === 'GRADES' ? (
         <GradesTab courseName={decoded} groupName={decodedGroup} />
       ) : tab === 'VIDEOS' ? (
         <TeacherVideosTab courseName={decoded} groupName={decodedGroup} prerequisiteAssignments={assignments} />

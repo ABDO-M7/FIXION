@@ -36,7 +36,7 @@ function providerUrl(video: InteractiveCourseVideo) {
   const id = video.providerVideoId || video.youtubeVideoId || '';
   if (provider === 'vimeo') return 'https://player.vimeo.com/video/' + id + '?api=1&background=1&controls=0&title=0&byline=0&portrait=0&dnt=1';
   if (provider === 'wistia') return 'https://fast.wistia.net/embed/iframe/' + id + '?controlsVisibleOnLoad=false&playbar=false&smallPlayButton=false&branding=false';
-  if (provider === 'bunny') return 'https://player.mediadelivery.net/embed/' + id + '?autoplay=false&controls=false&responsive=true&preload=true';
+  if (provider === 'bunny') return 'https://iframe.mediadelivery.net/embed/' + id + '?autoplay=false&controls=false&responsive=true&preload=true';
   const origin = typeof window !== 'undefined' ? '&origin=' + encodeURIComponent(window.location.origin) : '';
   return 'https://www.youtube.com/embed/' + id + '?enablejsapi=1&controls=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&fs=0' + origin;
 }
@@ -44,7 +44,7 @@ function providerUrl(video: InteractiveCourseVideo) {
 function playerOrigin(provider: string) {
   if (provider === 'vimeo') return 'https://player.vimeo.com';
   if (provider === 'wistia') return 'https://fast.wistia.net';
-  if (provider === 'bunny') return 'https://player.mediadelivery.net';
+  if (provider === 'bunny') return 'https://iframe.mediadelivery.net';
   return 'https://www.youtube-nocookie.com';
 }
 

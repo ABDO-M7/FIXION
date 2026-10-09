@@ -121,6 +121,7 @@ export const assignmentsApi = {
   gradeMatrix: (courseName: string, groupName: string) =>
     api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/grades`),
   delete: (id: string) => api.delete(`/assignments/${id}`),
+  update: (id: string, data: any) => api.patch(`/assignments/${id}`, data),
   publish: (id: string) => api.patch(`/assignments/${id}/publish`),
   // Student
   myAssignments: (courseName: string, groupName: string) =>
@@ -150,6 +151,7 @@ export const videosApi = {
     api.patch(`/videos/student/video/${encodeURIComponent(videoId)}/progress`, { watchedSeconds, durationSeconds }),
   answerCheckpoint: (videoId: string, checkpointId: string, data: any) => api.post('/videos/' + videoId + '/checkpoints/' + checkpointId + '/answer', data),
   create: (data: { courseName: string; groupName: string; title: string; description?: string; provider?: string; sourceUrl?: string; youtubeUrl?: string; chapterName?: string; lessonName?: string; contentOrder?: number; unlockRule?: string; unlockAssignmentId?: string; unlockScore?: number; unlockVideoId?: string; unlockPercent?: number }) => api.post('/videos', data),
+  update: (id: string, data: any) => api.patch(`/videos/${id}`, data),
   teacherList: (courseName: string, groupName: string) => api.get(`/videos/teacher/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`),
   studentList: (courseName: string, groupName: string) => api.get(`/videos/student/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`),
   delete: (id: string) => api.delete(`/videos/${id}`),

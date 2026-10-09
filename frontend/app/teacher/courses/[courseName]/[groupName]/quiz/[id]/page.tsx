@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '@/store';
 
 // ── LaTeX / Math renderer (pure CSS, no dep) ─────────────────────────────────
 // We render LaTeX inline using a simple approach: text between $$ is shown in a
@@ -74,6 +75,7 @@ const blankQuestion = (index: number): Question => ({
 export default function QuizBuilderPage() {
   const { courseName, groupName, id } = useParams<{ courseName: string; groupName: string; id: string }>();
   const router = useRouter();
+  const { user } = useAuthStore();
   const [assignment, setAssignment] = useState<any>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selected, setSelected] = useState(0);
@@ -224,7 +226,7 @@ export default function QuizBuilderPage() {
       <div className="page-header">
         <div>
           <Link
-            href={`/teacher/courses/${courseName}/${groupName}`}
+            href={user?.role === 'admin' ? `/admin/courses/${courseName}/${groupName}` : `/teacher/courses/${courseName}/${groupName}`}
             className="btn btn-ghost btn-sm"
             style={{ paddingLeft: 0, marginBottom: 8 }}
           >

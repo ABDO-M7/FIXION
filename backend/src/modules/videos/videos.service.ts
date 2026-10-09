@@ -268,6 +268,27 @@ export class VideosService {
     };
   }
 
+  async update(id: string, dto: any, actor: User) {
+    const video = await this.getOwnedVideo(id, actor);
+    if (dto.title !== undefined) video.title = dto.title.trim();
+    if (dto.description !== undefined) video.description = dto.description?.trim() || null;
+    if (dto.chapterName !== undefined) video.chapterName = dto.chapterName?.trim() || null;
+    if (dto.lessonName !== undefined) video.lessonName = dto.lessonName?.trim() || null;
+    if (dto.contentOrder !== undefined) video.contentOrder = Number.isFinite(Number(dto.contentOrder)) ? Number(dto.contentOrder) : 0;
+    if (dto.unlockRule !== undefined) video.unlockRule = dto.unlockRule || UnlockRuleType.NONE;
+    if (dto.unlockAssignmentId !== undefined) video.unlockAssignmentId = dto.unlockAssignmentId || null;
+    if (dto.unlockScore !== undefined) video.unlockScore = dto.unlockScore ?? null;
+    if (dto.unlockVideoId !== undefined) video.unlockVideoId = dto.unlockVideoId || null;
+    if (dto.unlockPercent !== undefined) video.unlockPercent = dto.unlockPercent ?? null;
+    if (dto.sourceUrl) {
+      const source = this.parseVideoSource(dto.sourceUrl, dto.provider);
+      video.provider = source.provider;
+      video.providerVideoId = source.providerVideoId;
+      video.youtubeVideoId = source.provider === 'youtube' ? source.providerVideoId : null;
+    }
+    return this.videosRepo.save(video);
+  }
+
   async remove(id: string, actor: User) {
     const video = await this.videosRepo.findOne({ where: { id } });
     if (!video) throw new NotFoundException('Video not found');

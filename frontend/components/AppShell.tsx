@@ -36,6 +36,7 @@ const teacherNav = [
 
 const adminNav = [
   { key: 'nav.dashboard',    href: '/admin',            icon: LayoutDashboard },
+  { key: 'nav.courses',      href: '/admin/courses',    icon: GraduationCap },
   { key: 'nav.users',        href: '/admin/users',      icon: Users },
   { key: 'nav.permissions', href: '/admin/permissions', icon: SlidersHorizontal },
   { key: 'nav.allQuestions', href: '/admin/questions',  icon: MessageSquare },
