@@ -11,6 +11,7 @@ import { dashboardPath } from '@/lib/roles';
 import { Phone, GraduationCap, ArrowRight, Loader } from 'lucide-react';
 import Image from 'next/image';
 import { EDUCATION_LEVELS } from '@/lib/education-levels';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const schema = z.object({
   phone: z.string().regex(/^\+?[0-9\s\-().]{7,20}$/, 'Invalid phone number'),
@@ -26,6 +27,7 @@ export default function OnboardingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { user, setUser } = useAuthStore();
+  const { locale } = useTranslation();
 
   const { register, handleSubmit, formState: { errors }, watch } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -110,7 +112,7 @@ export default function OnboardingPage() {
                 >
                   <option value="" disabled>Select your level...</option>
                   {EDUCATION_LEVELS.map(level => (
-                    <option key={level.value} value={level.value}>{level.en}</option>
+                    <option key={level.value} value={level.value}>{locale === 'ar' ? level.ar : level.en}</option>
                   ))}
                 </select>
               </div>

@@ -10,7 +10,7 @@ import { EDUCATION_LEVELS } from '@/lib/education-levels';
 
 export default function ProfileView() {
   const { user, setUser } = useAuthStore();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -163,7 +163,7 @@ export default function ProfileView() {
                   >
                     <option value="" disabled>Select level...</option>
                     {EDUCATION_LEVELS.map(level => (
-                      <option key={level.value} value={level.value}>{level.en}</option>
+                      <option key={level.value} value={level.value}>{locale === 'ar' ? level.ar : level.en}</option>
                     ))}
                   </select>
                 </div>
