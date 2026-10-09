@@ -7,6 +7,7 @@ import { QuizQuestion, QuizQuestionType, QuizOption } from './entities/quiz-ques
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
 import { User } from '../users/entities/user.entity';
 import { canManageOwnedWork, resolveStaffScope, workOwnerId, StaffScope, hasPermission } from '../../common/staff-access';
+import { UnlockRuleType } from '../learning/unlock-rule';
 
 @Injectable()
 export class AssignmentsService {
@@ -114,6 +115,9 @@ export class AssignmentsService {
     chapterName?: string;
     lessonName?: string;
     contentOrder?: number;
+    unlockRule?: UnlockRuleType;
+    unlockAssignmentId?: string;
+    unlockScore?: number;
   }, teacher: User): Promise<Assignment> {
     const scope = await this.staffScope(teacher);
     const assignment = this.assignmentsRepo.create({
@@ -123,6 +127,9 @@ export class AssignmentsService {
       chapterName: dto.chapterName?.trim() || null,
       lessonName: dto.lessonName?.trim() || null,
       contentOrder: Number.isFinite(Number(dto.contentOrder)) ? Number(dto.contentOrder) : 0,
+      unlockRule: dto.unlockRule || UnlockRuleType.NONE,
+      unlockAssignmentId: dto.unlockAssignmentId || null,
+      unlockScore: dto.unlockScore ?? null,
       teacherId: workOwnerId(scope, teacher),
     });
     return this.assignmentsRepo.save(assignment);
@@ -190,6 +197,7 @@ export class AssignmentsService {
     if (!hasPermission(student, 'student_assignments')) throw new ForbiddenException('Assignments are disabled for this account');
     const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
     if (!assignment) throw new NotFoundException('Assignment not found');
+    await this.assertAssignmentUnlocked(assignmentId, student.id);
 
     const existing = await this.submissionsRepo.findOne({
       where: { assignmentId, studentId: student.id },
@@ -213,6 +221,7 @@ export class AssignmentsService {
     if (!hasPermission(student, 'student_assignments')) throw new ForbiddenException('Assignments are disabled for this account');
     const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
     if (!assignment) throw new NotFoundException('Quiz not found');
+    await this.assertAssignmentUnlocked(assignmentId, student.id);
 
     const questions = await this.questionsRepo.find({
       where: { assignmentId },
@@ -315,10 +324,47 @@ export class AssignmentsService {
       where: { studentId },
     });
     const subMap = new Map(submissions.map((s) => [s.assignmentId, s]));
-    return assignments.map((a) => ({
-      ...a,
-      submission: subMap.get(a.id) || null,
+    return Promise.all(assignments.map(async (a) => {
+      const submission = subMap.get(a.id) || null;
+      const unlock = await this.getUnlockState(a.unlockRule, a.unlockAssignmentId, a.unlockScore, subMap);
+      return { ...a, submission, ...unlock };
     }));
+  }
+
+  async assertAssignmentUnlocked(assignmentId: string, studentId: string) {
+    const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+    const submission = assignment.unlockAssignmentId
+      ? await this.submissionsRepo.findOne({ where: { assignmentId: assignment.unlockAssignmentId, studentId } })
+      : null;
+    const unlock = await this.getUnlockState(
+      assignment.unlockRule,
+      assignment.unlockAssignmentId,
+      assignment.unlockScore,
+      new Map(assignment.unlockAssignmentId ? [[assignment.unlockAssignmentId, submission as AssignmentSubmission]] : []),
+    );
+    if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
+    return assignment;
+  }
+
+  private async getUnlockState(
+    rule: UnlockRuleType,
+    prerequisiteId: string | null,
+    requiredScore: number | null,
+    submissions: Map<string, AssignmentSubmission>,
+  ) {
+    if (!rule || rule === UnlockRuleType.NONE || !prerequisiteId) return { isLocked: false, lockReason: null };
+    const submission = submissions.get(prerequisiteId);
+    if (!submission) {
+      return { isLocked: true, lockReason: rule === UnlockRuleType.PASS_QUIZ ? 'Complete the previous quiz first' : 'Submit the previous assignment first' };
+    }
+    const percentage = submission.grade === null || submission.grade === undefined
+      ? 0
+      : (submission.grade / 100);
+    if (rule === UnlockRuleType.PASS_QUIZ && (submission.grade === null || submission.grade === undefined || percentage < (requiredScore ?? 50) / 100)) {
+      return { isLocked: true, lockReason: `You need at least ${requiredScore ?? 50}% in the previous quiz` };
+    }
+    return { isLocked: false, lockReason: null };
   }
 
   async getStudentSubmission(assignmentId: string, studentId: string) {
@@ -361,7 +407,8 @@ export class AssignmentsService {
   //  QUIZ QUESTIONS CRUD
   // ══════════════════════════════════════════════════════════════════════════
 
-  async getQuestions(assignmentId: string) {
+  async getQuestions(assignmentId: string, studentId?: string) {
+    if (studentId) await this.assertAssignmentUnlocked(assignmentId, studentId);
     return this.questionsRepo.find({
       where: { assignmentId },
       order: { orderIndex: 'ASC' },

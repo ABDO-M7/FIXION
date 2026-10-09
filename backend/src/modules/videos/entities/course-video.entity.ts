@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { UnlockRuleType } from '../../learning/unlock-rule';
 
 @Entity('course_videos')
 export class CourseVideo {
@@ -47,6 +48,15 @@ export class CourseVideo {
 
   @Column({ type: 'int', default: 0 })
   contentOrder: number;
+
+  @Column({ type: 'varchar', length: 32, default: UnlockRuleType.NONE })
+  unlockRule: UnlockRuleType;
+
+  @Column({ type: 'uuid', nullable: true })
+  unlockAssignmentId: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  unlockScore: number | null;
 
   // Store provider + normalized id, never an arbitrary source URL.
   // youtubeVideoId is kept for backwards compatibility with existing rows.

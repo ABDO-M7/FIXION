@@ -7,13 +7,13 @@ import { videosApi } from '@/lib/api';
 import InteractiveCourseVideoPlayer, { InteractiveCourseVideo } from './InteractiveCourseVideoPlayer';
 import VideoCheckpointEditor from './VideoCheckpointEditor';
 
-export default function TeacherVideosTabV2({ courseName, groupName }: { courseName: string; groupName: string }) {
+export default function TeacherVideosTabV2({ courseName, groupName, prerequisiteAssignments = [] }: { courseName: string; groupName: string; prerequisiteAssignments?: Array<{ id: string; title: string; type: 'QUIZ' | 'HOMEWORK' }> }) {
   const [videos, setVideos] = useState<InteractiveCourseVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0' });
+  const [form, setForm] = useState({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0', unlockRule: 'NONE', unlockAssignmentId: '', unlockScore: '50' });
 
   const load = useCallback(() => {
     videosApi.teacherList(courseName, groupName)
@@ -31,9 +31,9 @@ export default function TeacherVideosTabV2({ courseName, groupName }: { courseNa
     }
     setSaving(true);
     try {
-      await videosApi.create({ ...form, contentOrder: Number(form.contentOrder), courseName, groupName });
+      await videosApi.create({ ...form, contentOrder: Number(form.contentOrder), unlockScore: Number(form.unlockScore), courseName, groupName });
       toast.success('Video added');
-      setForm({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0' });
+      setForm({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0', unlockRule: 'NONE', unlockAssignmentId: '', unlockScore: '50' });
       setShowForm(false);
       setLoading(true);
       load();
@@ -101,6 +101,11 @@ export default function TeacherVideosTabV2({ courseName, groupName }: { courseNa
                 <div className="form-group"><label className="form-label">Chapter</label><input className="form-input" value={form.chapterName} onChange={event => setForm(previous => ({ ...previous, chapterName: event.target.value }))} placeholder="e.g. Chapter 1" /></div>
                 <div className="form-group"><label className="form-label">Lesson</label><input className="form-input" value={form.lessonName} onChange={event => setForm(previous => ({ ...previous, lessonName: event.target.value }))} placeholder="e.g. Lesson 1" /></div>
                 <div className="form-group"><label className="form-label">Order</label><input type="number" min={0} className="form-input" value={form.contentOrder} onChange={event => setForm(previous => ({ ...previous, contentOrder: event.target.value }))} /></div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px', gap: 10 }}>
+                <div className="form-group"><label className="form-label">Unlock rule</label><select className="form-input" value={form.unlockRule} onChange={event => setForm(previous => ({ ...previous, unlockRule: event.target.value }))}><option value="NONE">Available immediately</option><option value="SUBMIT_ASSIGNMENT">After submitting assignment</option><option value="PASS_QUIZ">After passing quiz</option></select></div>
+                <div className="form-group"><label className="form-label">Previous item</label><select className="form-input" value={form.unlockAssignmentId} onChange={event => setForm(previous => ({ ...previous, unlockAssignmentId: event.target.value }))} disabled={form.unlockRule === 'NONE'}><option value="">Choose previous item</option>{prerequisiteAssignments.map(item => <option key={item.id} value={item.id}>{item.type === 'QUIZ' ? 'Quiz' : 'Homework'}: {item.title}</option>)}</select></div>
+                <div className="form-group"><label className="form-label">Min %</label><input type="number" min={1} max={100} className="form-input" value={form.unlockScore} onChange={event => setForm(previous => ({ ...previous, unlockScore: event.target.value }))} disabled={form.unlockRule !== 'PASS_QUIZ'} /></div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button><button className="btn btn-primary" disabled={saving} onClick={save}>{saving ? 'Adding...' : 'Add Video'}</button></div>
             </div>

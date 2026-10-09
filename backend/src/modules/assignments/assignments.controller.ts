@@ -138,8 +138,8 @@ export class AssignmentsController {
   // Teacher: list questions for a quiz
   @Get(':id/questions')
   @Roles(...STAFF_AND_ADMIN, UserRole.STUDENT)
-  getQuestions(@Param('id') id: string) {
-    return this.assignmentsService.getQuestions(id);
+  getQuestions(@Param('id') id: string, @CurrentUser() actor: any) {
+    return this.assignmentsService.getQuestions(id, actor.role === UserRole.STUDENT ? actor.id : undefined);
   }
 
   // Teacher: add a question

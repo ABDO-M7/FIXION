@@ -37,6 +37,8 @@ type Assignment = {
     feedback: string | null;
     submittedAt: string;
   } | null;
+  isLocked?: boolean;
+  lockReason?: string | null;
 };
 
 // ── File icon by type ──────────────────────────────────────────────────────────
@@ -303,6 +305,9 @@ function AssignmentCard({
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{assignment.description}</div>
             )}
           </div>
+          {assignment.isLocked ? (
+            <span className="badge badge-pending"><Clock size={11} style={{ marginRight: 3 }} />Locked</span>
+          ) : null}
           {/* Grade badge */}
           {sub?.grade !== null && sub?.grade !== undefined ? (
             <div style={{
@@ -369,8 +374,13 @@ function AssignmentCard({
           </div>
         )}
 
+        {assignment.isLocked && (
+          <div style={{ color: '#f59e0b', fontSize: 13, background: 'rgba(245,158,11,.08)', borderRadius: 8, padding: '9px 12px' }}>
+            {assignment.lockReason}
+          </div>
+        )}
         {/* Action button */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        {!assignment.isLocked && <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           {assignment.type === 'QUIZ' ? (
             <Link
               href={`/student/courses/${courseId}/quiz/${assignment.id}`}
@@ -388,7 +398,7 @@ function AssignmentCard({
               {sub ? 'Update Submission' : 'Submit'}
             </button>
           )}
-        </div>
+        </div>}
       </div>
 
       {showModal && (

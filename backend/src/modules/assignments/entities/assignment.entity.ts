@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { AssignmentSubmission } from './assignment-submission.entity';
+import { UnlockRuleType } from '../../learning/unlock-rule';
 
 export enum AssignmentType {
   QUIZ = 'QUIZ',
@@ -54,6 +55,15 @@ export class Assignment {
 
   @Column({ type: 'int', default: 0 })
   contentOrder: number;
+
+  @Column({ type: 'varchar', length: 32, default: UnlockRuleType.NONE })
+  unlockRule: UnlockRuleType;
+
+  @Column({ type: 'uuid', nullable: true })
+  unlockAssignmentId: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  unlockScore: number | null;
 
   @Column({ type: 'text', nullable: true })
   description: string;

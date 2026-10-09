@@ -22,6 +22,8 @@ type Assignment = {
   chapterName?: string | null;
   lessonName?: string | null;
   contentOrder?: number;
+  isLocked?: boolean;
+  lockReason?: string | null;
 };
 
 type VideoItem = {
@@ -31,6 +33,8 @@ type VideoItem = {
   chapterName?: string | null;
   lessonName?: string | null;
   contentOrder?: number;
+  isLocked?: boolean;
+  lockReason?: string | null;
   provider?: string;
   providerVideoId?: string | null;
   youtubeVideoId?: string | null;
@@ -127,15 +131,17 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
   const thumbnail = provider === 'youtube' && (video.providerVideoId || video.youtubeVideoId)
     ? `https://i.ytimg.com/vi/${video.providerVideoId || video.youtubeVideoId}/mqdefault.jpg`
     : undefined;
-  return (
-    <Link href={`/student/courses/${encodeURIComponent(enrollmentId)}/videos/${encodeURIComponent(video.id)}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, borderRadius: 10, background: 'rgba(99,102,241,.08)', color: 'inherit' }}>
+  const content = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 10, borderRadius: 10, background: video.isLocked ? 'rgba(148,163,184,.08)' : 'rgba(99,102,241,.08)', color: 'inherit', opacity: video.isLocked ? 0.72 : 1 }}>
       <div style={{ width: 64, height: 40, borderRadius: 7, flexShrink: 0, background: thumbnail ? `url(${thumbnail}) center / cover` : 'linear-gradient(135deg,#312e81,#111827)', display: 'grid', placeItems: 'center' }}>
         <Play size={15} fill="currentColor" />
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 700, fontSize: 14 }}><Video size={14} style={{ color: '#818cf8' }} /> {video.title}</div>
         {video.description && <p style={{ margin: '3px 0 0', color: 'var(--text-muted)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{video.description}</p>}
+        {video.isLocked && <p style={{ margin: '3px 0 0', color: '#f59e0b', fontSize: 12 }}>{video.lockReason}</p>}
       </div>
-    </Link>
+    </div>
   );
+  return video.isLocked ? content : <Link href={`/student/courses/${encodeURIComponent(enrollmentId)}/videos/${encodeURIComponent(video.id)}`} style={{ color: 'inherit' }}>{content}</Link>;
 }

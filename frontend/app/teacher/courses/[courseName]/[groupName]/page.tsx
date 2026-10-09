@@ -25,16 +25,17 @@ type Tab = 'QUIZ' | 'HOMEWORK' | 'VIDEOS' | 'GRADES';
 
 // ── Create Assignment Modal ─────────────────────────────────────────────────
 function CreateModal({
-  type, courseName, groupName, onClose, onCreated,
+  type, courseName, groupName, prerequisiteAssignments, onClose, onCreated,
 }: {
   type: 'QUIZ' | 'HOMEWORK';
   courseName: string;
   groupName: string;
+  prerequisiteAssignments: Array<{ id: string; title: string; type: 'QUIZ' | 'HOMEWORK' }>;
   onClose: () => void;
   onCreated: (newId?: string) => void;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState({ title: '', description: '', dueDate: '', maxGrade: '100', chapterName: '', lessonName: '', contentOrder: '0' });
+  const [form, setForm] = useState({ title: '', description: '', dueDate: '', maxGrade: '100', chapterName: '', lessonName: '', contentOrder: '0', unlockRule: 'NONE', unlockAssignmentId: '', unlockScore: '50' });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -42,7 +43,7 @@ function CreateModal({
     if (!form.maxGrade || +form.maxGrade < 1) { toast.error('Max grade must be at least 1'); return; }
     setSaving(true);
     try {
-      const res = await assignmentsApi.create({ ...form, maxGrade: +form.maxGrade, contentOrder: +form.contentOrder, type, courseName, groupName });
+      const res = await assignmentsApi.create({ ...form, maxGrade: +form.maxGrade, contentOrder: +form.contentOrder, unlockScore: +form.unlockScore, type, courseName, groupName });
       toast.success(`${type === 'QUIZ' ? 'Quiz' : 'Homework'} created!`);
       onCreated((res.data as any).id);
       onClose();
@@ -66,6 +67,27 @@ function CreateModal({
             {type === 'QUIZ' ? '📝 New Quiz' : '📚 New Homework'}
           </h3>
           <button onClick={onClose} className="icon-btn" style={{ width: 28, height: 28 }}><X size={14} /></button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Unlock rule</label>
+            <select className="form-input" value={form.unlockRule} onChange={e => setForm(p => ({ ...p, unlockRule: e.target.value }))}>
+              <option value="NONE">Available immediately</option>
+              <option value="SUBMIT_ASSIGNMENT">After submitting assignment</option>
+              <option value="PASS_QUIZ">After passing quiz</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Previous item</label>
+            <select className="form-input" value={form.unlockAssignmentId} onChange={e => setForm(p => ({ ...p, unlockAssignmentId: e.target.value }))} disabled={form.unlockRule === 'NONE'}>
+              <option value="">Choose previous item</option>
+              {prerequisiteAssignments.map(item => <option key={item.id} value={item.id}>{item.type === 'QUIZ' ? 'Quiz' : 'Homework'}: {item.title}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Min %</label>
+            <input type="number" min={1} max={100} className="form-input" value={form.unlockScore} onChange={e => setForm(p => ({ ...p, unlockScore: e.target.value }))} disabled={form.unlockRule !== 'PASS_QUIZ'} />
+          </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="form-group">
@@ -271,12 +293,12 @@ export default function GroupDetailPage() {
 
   const fetchAssignments = useCallback(() => {
     setLoading(true);
-    const type = tab === 'GRADES' || tab === 'VIDEOS' ? undefined : tab;
-    (type ? assignmentsApi.list(decoded, decodedGroup, type) : Promise.resolve({ data: [] }))
+    assignmentsApi.list(decoded, decodedGroup)
       .then(r => setAssignments(Array.isArray(r.data) ? r.data : []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [decoded, decodedGroup, tab]);
+  const visibleAssignments = assignments.filter(a => a.type === tab);
 
   useEffect(() => {
     if (tab !== 'GRADES' && tab !== 'VIDEOS') fetchAssignments();
@@ -374,12 +396,12 @@ export default function GroupDetailPage() {
       {tab === 'GRADES' ? (
         <GradesTab courseName={decoded} groupName={decodedGroup} />
       ) : tab === 'VIDEOS' ? (
-        <TeacherVideosTab courseName={decoded} groupName={decodedGroup} />
+        <TeacherVideosTab courseName={decoded} groupName={decodedGroup} prerequisiteAssignments={assignments} />
       ) : loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 50 }}>
           <span className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
         </div>
-      ) : assignments.length === 0 ? (
+      ) : visibleAssignments.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '52px 24px' }}>
           <div style={{ fontSize: 52, marginBottom: 12 }}>
             {tab === 'QUIZ' ? '📝' : '📚'}
@@ -394,7 +416,7 @@ export default function GroupDetailPage() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {assignments.map(a => (
+          {visibleAssignments.map(a => (
             <div
               key={a.id}
               className="card"
@@ -471,6 +493,7 @@ export default function GroupDetailPage() {
           type={createType}
           courseName={decoded}
           groupName={decodedGroup}
+          prerequisiteAssignments={assignments}
           onClose={() => setCreateType(null)}
           onCreated={fetchAssignments}
         />

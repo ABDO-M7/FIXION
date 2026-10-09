@@ -7,6 +7,9 @@ import { CourseVideo } from './entities/course-video.entity';
 import { VideoCheckpoint, VideoCheckpointOption, VideoCheckpointType } from './entities/video-checkpoint.entity';
 import { VideoResponse } from './entities/video-response.entity';
 import { canManageOwnedWork, resolveStaffScope, workOwnerId } from '../../common/staff-access';
+import { Assignment } from '../assignments/entities/assignment.entity';
+import { AssignmentSubmission } from '../assignments/entities/assignment-submission.entity';
+import { UnlockRuleType } from '../learning/unlock-rule';
 
 type CreateVideoDto = {
   courseName: string;
@@ -20,6 +23,9 @@ type CreateVideoDto = {
   chapterName?: string;
   lessonName?: string;
   contentOrder?: number;
+  unlockRule?: UnlockRuleType;
+  unlockAssignmentId?: string;
+  unlockScore?: number;
 };
 
 type CheckpointDto = {
@@ -50,6 +56,8 @@ export class VideosService {
     @InjectRepository(VideoCheckpoint) private readonly checkpointsRepo: Repository<VideoCheckpoint>,
     @InjectRepository(VideoResponse) private readonly responsesRepo: Repository<VideoResponse>,
     @InjectRepository(User) private readonly usersRepo: Repository<User>,
+    @InjectRepository(Assignment) private readonly assignmentsRepo: Repository<Assignment>,
+    @InjectRepository(AssignmentSubmission) private readonly submissionsRepo: Repository<AssignmentSubmission>,
   ) {}
 
   async create(dto: CreateVideoDto, teacher: User) {
@@ -71,6 +79,9 @@ export class VideosService {
       chapterName: dto.chapterName?.trim() || null,
       lessonName: dto.lessonName?.trim() || null,
       contentOrder: Number.isFinite(Number(dto.contentOrder)) ? Number(dto.contentOrder) : 0,
+      unlockRule: dto.unlockRule || UnlockRuleType.NONE,
+      unlockAssignmentId: dto.unlockAssignmentId || null,
+      unlockScore: dto.unlockScore ?? null,
       provider: source.provider,
       providerVideoId: source.providerVideoId,
       youtubeVideoId: source.provider === 'youtube' ? source.providerVideoId : null,
@@ -100,8 +111,10 @@ export class VideosService {
     return Promise.all(videos.map(async video => {
       const checkpoints = await this.checkpointsRepo.find({ where: { videoId: video.id }, order: { orderIndex: 'ASC', timestampSeconds: 'ASC' } });
       const responses = checkpoints.length ? await this.responsesRepo.find({ where: { videoId: video.id, studentId } }) : [];
+      const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, studentId);
       return {
         ...this.publicVideo(video),
+        ...unlock,
         checkpointCount: checkpoints.length,
         completedCheckpointCount: responses.filter(response => response.isCorrect).length,
       };
@@ -144,6 +157,8 @@ export class VideosService {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
     await this.assertEnrollment(video.courseName, video.groupName, student.id);
+    const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, student.id);
+    if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
     const checkpoints = await this.checkpointsRepo.find({
       where: { videoId },
       order: { orderIndex: 'ASC', timestampSeconds: 'ASC' },
@@ -266,11 +281,26 @@ export class VideosService {
       chapterName: video.chapterName,
       lessonName: video.lessonName,
       contentOrder: video.contentOrder,
+      unlockRule: video.unlockRule,
+      unlockAssignmentId: video.unlockAssignmentId,
+      unlockScore: video.unlockScore,
       provider: video.provider || 'youtube',
       providerVideoId: video.providerVideoId || video.youtubeVideoId,
       createdAt: video.createdAt,
       updatedAt: video.updatedAt,
     };
+  }
+
+  private async getUnlockState(rule: UnlockRuleType, prerequisiteId: string | null, requiredScore: number | null, studentId: string) {
+    if (!rule || rule === UnlockRuleType.NONE || !prerequisiteId) return { isLocked: false, lockReason: null };
+    const submission = await this.submissionsRepo.findOne({ where: { assignmentId: prerequisiteId, studentId } });
+    if (!submission) {
+      return { isLocked: true, lockReason: rule === UnlockRuleType.PASS_QUIZ ? 'Complete the previous quiz first' : 'Submit the previous assignment first' };
+    }
+    if (rule === UnlockRuleType.PASS_QUIZ && (submission.grade === null || submission.grade === undefined || submission.grade < (requiredScore ?? 50))) {
+      return { isLocked: true, lockReason: `You need at least ${requiredScore ?? 50}% in the previous quiz` };
+    }
+    return { isLocked: false, lockReason: null };
   }
 
   private async assertEnrollment(courseName: string, groupName: string, studentId: string) {
