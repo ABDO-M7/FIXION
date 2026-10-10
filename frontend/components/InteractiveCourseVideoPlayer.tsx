@@ -26,6 +26,7 @@ export type InteractiveCourseVideo = {
   provider?: 'youtube' | 'vimeo' | 'wistia' | 'bunny' | string;
   providerVideoId?: string | null;
   youtubeVideoId?: string | null;
+  embedUrl?: string | null;
   watchedPercent?: number;
   attachments?: string[];
 };
@@ -33,6 +34,7 @@ export type InteractiveCourseVideo = {
 type Experience = { video: InteractiveCourseVideo; checkpoints: VideoCheckpoint[] };
 
 function providerUrl(video: InteractiveCourseVideo) {
+  if (video.embedUrl) return video.embedUrl;
   const provider = video.provider || 'youtube';
   const id = video.providerVideoId || video.youtubeVideoId || '';
   if (provider === 'vimeo') return 'https://player.vimeo.com/video/' + id + '?api=1&background=1&controls=0&title=0&byline=0&portrait=0&dnt=1';
@@ -438,7 +440,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   };
 
   return (
-    <article className="card" style={{ overflow: 'hidden', padding: 0 }}>
+    <article className="card" style={{ overflow: 'hidden', padding: 0 }} onContextMenu={e => e.preventDefault()}>
       <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#09090b', overflow: 'hidden', isolation: 'isolate' }}>
         {started || isBunny ? provider === 'wistia' ? (
           <div style={{ position: 'absolute', inset: 0, background: '#000' }}>

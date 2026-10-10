@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as crypto from 'crypto';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
 import { User } from '../users/entities/user.entity';
 import { CourseVideo } from './entities/course-video.entity';
@@ -337,7 +338,33 @@ export class VideosService {
     return { ...this.publicVideo(video), checkpoints };
   }
 
+  private generateSignedBunnyUrl(providerVideoId: string | null): string | null {
+    if (!providerVideoId) return null;
+    let cleanId = providerVideoId.trim();
+    if (cleanId.includes('iframe.mediadelivery.net/embed/')) {
+      cleanId = cleanId.split('iframe.mediadelivery.net/embed/')[1].split('?')[0];
+    }
+    const parts = cleanId.split('/').filter(Boolean);
+    if (parts.length < 2) return `https://iframe.mediadelivery.net/embed/${cleanId}`;
+
+    const libraryId = parts[0];
+    const videoId = parts[1];
+    const securityKey = process.env.BUNNY_STREAM_SECURITY_KEY || process.env.BUNNY_SECURITY_KEY;
+
+    if (!securityKey) {
+      return `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?autoplay=false&loop=false&muted=false&preload=true&responsive=true`;
+    }
+
+    // Bunny Token Authentication: SHA256(securityKey + videoId + expires)
+    const expires = Math.floor(Date.now() / 1000) + 7200; // valid for 2 hours
+    const hashable = securityKey + videoId + expires;
+    const token = crypto.createHash('sha256').update(hashable).digest('hex');
+
+    return `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}&autoplay=false&loop=false&muted=false&preload=true&responsive=true`;
+  }
+
   private publicVideo(video: CourseVideo) {
+    const isBunny = video.provider === 'bunny';
     return {
       id: video.id,
       courseName: video.courseName,
@@ -354,6 +381,7 @@ export class VideosService {
       unlockPercent: video.unlockPercent,
       provider: video.provider || 'youtube',
       providerVideoId: video.providerVideoId || video.youtubeVideoId,
+      embedUrl: isBunny ? this.generateSignedBunnyUrl(video.providerVideoId) : null,
       attachments: video.attachments || [],
       createdAt: video.createdAt,
       updatedAt: video.updatedAt,
