@@ -29,6 +29,7 @@ type Assignment = {
   dueDate?: string;
   createdAt?: string;
   maxGrade: number;
+  attachments?: string[];
   submission: {
     id: string;
     content: string;
@@ -303,6 +304,43 @@ function AssignmentCard({
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>{assignment.title}</div>
             {assignment.description && (
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{assignment.description}</div>
+            )}
+            {assignment.attachments && assignment.attachments.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {assignment.attachments.map((url, i) => (
+                  <a
+                    key={i}
+                    href={assignment.isLocked ? undefined : url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={e => {
+                      if (assignment.isLocked) {
+                        e.preventDefault();
+                        toast.error(assignment.lockReason || 'هذا المحتوى مغلق حتى إكمال المتطلبات السابقة');
+                      }
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: 'rgba(239,68,68,0.08)',
+                      border: '1px solid rgba(239,68,68,0.2)',
+                      borderRadius: 6,
+                      padding: '3px 8px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#f87171',
+                      textDecoration: 'none',
+                      cursor: assignment.isLocked ? 'not-allowed' : 'pointer',
+                      opacity: assignment.isLocked ? 0.6 : 1,
+                    }}
+                  >
+                    <FileIcon url={url} />
+                    <span>{url.includes('drive.google.com') ? `ملف Google Drive (${i + 1})` : fileName(url)}</span>
+                    <ExternalLink size={10} />
+                  </a>
+                ))}
+              </div>
             )}
           </div>
           {assignment.isLocked ? (

@@ -1,15 +1,16 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   BookOpen, Video as VideoIcon, ClipboardList, Plus, Trash2, Edit3,
   ArrowUp, ArrowDown, ExternalLink, Sparkles, CheckCircle2,
-  Lock, Unlock, Clock, FileText, ChevronDown, ChevronRight, X, AlertCircle
+  Lock, Unlock, Clock, FileText, ChevronDown, ChevronRight, X, AlertCircle,
+  Paperclip, FileUp, Link2, Loader2, Download
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { assignmentsApi, videosApi } from '@/lib/api';
+import { assignmentsApi, videosApi, uploadsApi } from '@/lib/api';
 
 export type WorkflowItemKind = 'video' | 'assignment';
 
@@ -30,6 +31,8 @@ export type WorkflowVideo = {
   unlockScore?: number | null;
   unlockVideoId?: string | null;
   unlockPercent?: number | null;
+  attachments?: string[];
+  createdAt?: string;
   checkpoints?: any[];
 };
 
@@ -51,6 +54,8 @@ export type WorkflowAssignment = {
   unlockScore?: number | null;
   unlockVideoId?: string | null;
   unlockPercent?: number | null;
+  attachments?: string[];
+  createdAt?: string;
 };
 
 export type UnifiedItem =
@@ -136,27 +141,19 @@ export default function CourseWorkflowBuilder({
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= lessonItems.length) return;
 
-    const current = lessonItems[index];
-    const target = lessonItems[targetIndex];
-
-    const currentOrder = current.item.contentOrder ?? index;
-    const targetOrder = target.item.contentOrder ?? targetIndex;
-
-    const newOrderForCurrent = targetOrder === currentOrder ? (direction === 'up' ? targetOrder - 1 : targetOrder + 1) : targetOrder;
-    const newOrderForTarget = currentOrder;
+    const reordered = [...lessonItems];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
 
     try {
-      if (current.kind === 'video') {
-        await videosApi.update(current.item.id, { contentOrder: newOrderForCurrent });
-      } else {
-        await assignmentsApi.update(current.item.id, { contentOrder: newOrderForCurrent });
-      }
-
-      if (target.kind === 'video') {
-        await videosApi.update(target.item.id, { contentOrder: newOrderForTarget });
-      } else {
-        await assignmentsApi.update(target.item.id, { contentOrder: newOrderForTarget });
-      }
+      await Promise.all(
+        reordered.map((unified, idx) => {
+          const newOrder = idx + 1;
+          return unified.kind === 'video'
+            ? videosApi.update(unified.item.id, { contentOrder: newOrder })
+            : assignmentsApi.update(unified.item.id, { contentOrder: newOrder });
+        })
+      );
 
       toast.success('Order updated');
       fetchData();
@@ -309,9 +306,13 @@ export default function CourseWorkflowBuilder({
                 {!isCollapsed && (
                   <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {Array.from(lessonMap.entries()).map(([lessonName, items]) => {
-                      const sortedItems = [...items].sort(
-                        (a, b) => (a.item.contentOrder ?? 0) - (b.item.contentOrder ?? 0)
-                      );
+                      const sortedItems = [...items].sort((a, b) => {
+                        const diff = (a.item.contentOrder ?? 0) - (b.item.contentOrder ?? 0);
+                        if (diff !== 0) return diff;
+                        const timeA = a.item.createdAt ? new Date(a.item.createdAt).getTime() : 0;
+                        const timeB = b.item.createdAt ? new Date(b.item.createdAt).getTime() : 0;
+                        return timeA - timeB;
+                      });
                       return (
                         <div
                           key={lessonName}
@@ -391,6 +392,7 @@ export default function CourseWorkflowBuilder({
           groupName={groupName}
           allVideos={allAvailableVideos}
           allAssignments={allAvailableAssignments}
+          existingLessonItems={hierarchy.get(activeChapter)?.get(activeLesson) || []}
           onClose={() => setShowAddItemModal(false)}
           onCreated={() => {
             setShowAddItemModal(false);
@@ -584,6 +586,12 @@ function WorkflowItemRow({
               Homework
             </span>
           )}
+          {item.attachments && item.attachments.length > 0 && (
+            <span className="badge" style={{ fontSize: 10, background: 'rgba(239,68,68,0.12)', color: '#f87171', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Paperclip size={10} />
+              {item.attachments.length} {item.attachments.length === 1 ? 'ملف مرفق / PDF' : 'ملفات مرفقة'}
+            </span>
+          )}
         </div>
 
         {/* Prerequisite & Unlock Rule */}
@@ -650,6 +658,475 @@ function WorkflowItemRow({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Sub-component: Attachments Manager (PDF Upload / Google Drive Link)
+// ─────────────────────────────────────────────────────────────────────────────
+function AttachmentsManager({
+  attachments,
+  onChange,
+}: {
+  attachments: string[];
+  onChange: (attachments: string[]) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [externalUrl, setExternalUrl] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (file: File) => {
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('حجم الملف يجب ألا يتجاوز 25 ميجابايت');
+      return;
+    }
+    setUploading(true);
+    try {
+      const res = await uploadsApi.upload(file);
+      onChange([...attachments, res.data.url]);
+      toast.success('تم رفع الملف بنجاح! ✅');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'فشل رفع الملف');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleAddLink = () => {
+    const trimmed = externalUrl.trim();
+    if (!trimmed) return;
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      toast.error('يرجى إدخال رابط صالح يبدأ بـ https://');
+      return;
+    }
+    onChange([...attachments, trimmed]);
+    setExternalUrl('');
+    toast.success('تمت إضافة الرابط بنجاح! 🔗');
+  };
+
+  const handleRemove = (index: number) => {
+    onChange(attachments.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.02)',
+      borderRadius: 10,
+      padding: 14,
+      border: '1px solid var(--border)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
+    }}>
+      <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+        <Paperclip size={14} style={{ color: '#ef4444' }} />
+        ملفات الحصة / ملزمة الدرس (PDF أو رابط Google Drive)
+      </label>
+
+      {/* Upload button & external link input */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".pdf,application/pdf,.doc,.docx"
+            style={{ display: 'none' }}
+            onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0])}
+          />
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, flexShrink: 0 }}
+          >
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <FileUp size={13} style={{ color: '#ef4444' }} />}
+            {uploading ? 'جاري رفع الملف...' : '📄 رفع ملف PDF من الجهاز'}
+          </button>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>أو ضع رابط من Google Drive بالأسفل</span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <Link2 size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              className="form-input"
+              style={{ paddingLeft: 32, fontSize: 12 }}
+              placeholder="رابط خارجي مثل https://drive.google.com/file/d/..."
+              value={externalUrl}
+              onChange={e => setExternalUrl(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddLink(); } }}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleAddLink}
+            disabled={!externalUrl.trim()}
+            style={{ fontSize: 12, flexShrink: 0 }}
+          >
+            + إضافة الرابط
+          </button>
+        </div>
+      </div>
+
+      {/* Attachments List */}
+      {attachments.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+          {attachments.map((url, i) => {
+            const isDrive = url.includes('drive.google.com');
+            const isPdf = url.toLowerCase().endsWith('.pdf');
+            return (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid var(--border)',
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                  {isDrive ? (
+                    <span style={{ fontSize: 14 }}>📁</span>
+                  ) : isPdf ? (
+                    <FileText size={14} style={{ color: '#ef4444', flexShrink: 0 }} />
+                  ) : (
+                    <Paperclip size={14} style={{ color: 'var(--primary-light)', flexShrink: 0 }} />
+                  )}
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      color: 'var(--text-primary)',
+                      textDecoration: 'none',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '85%',
+                    }}
+                    title={url}
+                  >
+                    {isDrive ? `رابط Google Drive (${i + 1})` : isPdf ? decodeURIComponent(url.split('/').pop() || 'ملف PDF') : url}
+                  </a>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="icon-btn"
+                    title="فتح الرابط"
+                    style={{ padding: 4 }}
+                  >
+                    <ExternalLink size={12} />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(i)}
+                    className="icon-btn"
+                    title="حذف"
+                    style={{ color: '#ef4444', padding: 4 }}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-component: Unified Prerequisite Lock Selector
+// ─────────────────────────────────────────────────────────────────────────────
+function PrerequisiteLockSelector({
+  allVideos,
+  allAssignments,
+  currentId,
+  unlockRule,
+  unlockVideoId,
+  unlockAssignmentId,
+  unlockPercent,
+  unlockScore,
+  onChange,
+}: {
+  allVideos: WorkflowVideo[];
+  allAssignments: WorkflowAssignment[];
+  currentId?: string;
+  unlockRule: string;
+  unlockVideoId: string;
+  unlockAssignmentId: string;
+  unlockPercent: string;
+  unlockScore: string;
+  onChange: (data: {
+    unlockRule: string;
+    unlockVideoId: string;
+    unlockAssignmentId: string;
+    unlockPercent: string;
+    unlockScore: string;
+  }) => void;
+}) {
+  const isLocked = unlockRule !== 'NONE' && (!!unlockVideoId || !!unlockAssignmentId);
+
+  // Group all available items by chapter & lesson
+  const groupedContent = useMemo(() => {
+    const chaptersMap = new Map<string, Map<string, Array<{
+      id: string;
+      kind: 'video' | 'quiz' | 'homework';
+      title: string;
+      valueKey: string;
+    }>>>();
+
+    const add = (chapter: string | null | undefined, lesson: string | null | undefined, item: any) => {
+      if (currentId && item.id === currentId) return;
+      const ch = chapter?.trim() || 'General Chapter';
+      const ls = lesson?.trim() || 'Lesson 1';
+      if (!chaptersMap.has(ch)) chaptersMap.set(ch, new Map());
+      const lsMap = chaptersMap.get(ch)!;
+      if (!lsMap.has(ls)) lsMap.set(ls, []);
+      lsMap.get(ls)!.push(item);
+    };
+
+    allVideos.forEach(v => {
+      add(v.chapterName, v.lessonName, {
+        id: v.id,
+        kind: 'video',
+        title: v.title,
+        valueKey: `video:${v.id}`,
+      });
+    });
+
+    allAssignments.forEach(a => {
+      add(a.chapterName, a.lessonName, {
+        id: a.id,
+        kind: a.type === 'QUIZ' ? 'quiz' : 'homework',
+        title: a.title,
+        valueKey: `assignment:${a.id}`,
+      });
+    });
+
+    return chaptersMap;
+  }, [allVideos, allAssignments, currentId]);
+
+  // Current selected key
+  const selectedKey = useMemo(() => {
+    if (unlockRule === 'WATCH_VIDEO' && unlockVideoId) return `video:${unlockVideoId}`;
+    if ((unlockRule === 'PASS_QUIZ' || unlockRule === 'SUBMIT_ASSIGNMENT') && unlockAssignmentId) return `assignment:${unlockAssignmentId}`;
+    return '';
+  }, [unlockRule, unlockVideoId, unlockAssignmentId]);
+
+  // Find selected item kind
+  const selectedItemKind = useMemo(() => {
+    if (selectedKey.startsWith('video:')) return 'video';
+    if (selectedKey.startsWith('assignment:')) {
+      const id = selectedKey.replace('assignment:', '');
+      const a = allAssignments.find(x => x.id === id);
+      return a?.type === 'QUIZ' ? 'quiz' : 'homework';
+    }
+    return null;
+  }, [selectedKey, allAssignments]);
+
+  const handleSelect = (key: string) => {
+    if (!key) {
+      onChange({
+        unlockRule: 'NONE',
+        unlockVideoId: '',
+        unlockAssignmentId: '',
+        unlockPercent,
+        unlockScore,
+      });
+      return;
+    }
+
+    if (key.startsWith('video:')) {
+      const id = key.replace('video:', '');
+      onChange({
+        unlockRule: 'WATCH_VIDEO',
+        unlockVideoId: id,
+        unlockAssignmentId: '',
+        unlockPercent: unlockPercent || '80',
+        unlockScore,
+      });
+    } else {
+      const id = key.replace('assignment:', '');
+      const a = allAssignments.find(x => x.id === id);
+      if (a?.type === 'QUIZ') {
+        onChange({
+          unlockRule: 'PASS_QUIZ',
+          unlockVideoId: '',
+          unlockAssignmentId: id,
+          unlockPercent,
+          unlockScore: unlockScore || '50',
+        });
+      } else {
+        onChange({
+          unlockRule: 'SUBMIT_ASSIGNMENT',
+          unlockVideoId: '',
+          unlockAssignmentId: id,
+          unlockPercent,
+          unlockScore,
+        });
+      }
+    }
+  };
+
+  const handleToggleLock = (active: boolean) => {
+    if (!active) {
+      onChange({
+        unlockRule: 'NONE',
+        unlockVideoId: '',
+        unlockAssignmentId: '',
+        unlockPercent,
+        unlockScore,
+      });
+    } else {
+      // Pick first available item if any
+      let firstKey = '';
+      for (const [, lsMap] of groupedContent.entries()) {
+        for (const [, items] of lsMap.entries()) {
+          if (items.length > 0) {
+            firstKey = items[0].valueKey;
+            break;
+          }
+        }
+        if (firstKey) break;
+      }
+      if (firstKey) {
+        handleSelect(firstKey);
+      } else {
+        onChange({
+          unlockRule: 'WATCH_VIDEO',
+          unlockVideoId: '',
+          unlockAssignmentId: '',
+          unlockPercent: '80',
+          unlockScore: '50',
+        });
+      }
+    }
+  };
+
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.03)',
+      borderRadius: 10,
+      padding: 14,
+      border: isLocked ? '1px solid rgba(239,68,68,0.3)' : '1px solid var(--border)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+          <Lock size={15} style={{ color: isLocked ? '#ef4444' : 'var(--text-muted)' }} />
+          قفل هذا العنصر بربطه بمحتوى أو حصة سابقة (Unlock Prerequisite)
+        </label>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: isLocked ? '#f87171' : 'var(--text-muted)' }}>
+          <input
+            type="checkbox"
+            checked={isLocked}
+            onChange={e => handleToggleLock(e.target.checked)}
+            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#ef4444' }}
+          />
+          {isLocked ? 'مقفول بقفل 🔒' : 'متاح مباشرة 🔓'}
+        </label>
+      </div>
+
+      {isLocked && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label" style={{ fontSize: 12, marginBottom: 4 }}>
+              اختر المحتوى المطلوب إكماله من قائمة كل الحصص والواجبات:
+            </label>
+            <select
+              className="form-input"
+              value={selectedKey}
+              onChange={e => handleSelect(e.target.value)}
+            >
+              <option value="">-- اضغط لاختيار المحتوى المطلوب لفتح هذا العنصر --</option>
+              {Array.from(groupedContent.entries()).map(([ch, lsMap]) =>
+                Array.from(lsMap.entries()).map(([ls, items]) => (
+                  <optgroup key={`${ch}-${ls}`} label={`📁 ${ch} ➔ 📌 ${ls}`}>
+                    {items.map(it => (
+                      <option key={it.valueKey} value={it.valueKey}>
+                        {it.kind === 'video' ? '🎬 [حصة/فيديو] ' : it.kind === 'quiz' ? '🎯 [كويز] ' : '📝 [واجب] '}
+                        {it.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))
+              )}
+            </select>
+          </div>
+
+          {selectedItemKind === 'video' && (
+            <div style={{ background: 'rgba(59,130,246,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(59,130,246,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
+                  🎥 نسبة المشاهدة المطلوبة للفتح:
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    className="form-input"
+                    style={{ width: 75, padding: '4px 8px' }}
+                    value={unlockPercent}
+                    onChange={e => onChange({ unlockRule, unlockVideoId, unlockAssignmentId, unlockPercent: e.target.value, unlockScore })}
+                  />
+                  <span style={{ fontSize: 12 }}>%</span>
+                </div>
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+                لن يتمكن الطالب من فتح هذا المحتوى إلا بعد أن يشاهد {unlockPercent || 80}% على الأقل من هذا الفيديو.
+              </p>
+            </div>
+          )}
+
+          {selectedItemKind === 'quiz' && (
+            <div style={{ background: 'rgba(139,92,246,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(139,92,246,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
+                  🎯 نسبة النجاح المطلوبة في الكويز:
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    className="form-input"
+                    style={{ width: 75, padding: '4px 8px' }}
+                    value={unlockScore}
+                    onChange={e => onChange({ unlockRule, unlockVideoId, unlockAssignmentId, unlockPercent, unlockScore: e.target.value })}
+                  />
+                  <span style={{ fontSize: 12 }}>%</span>
+                </div>
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+                يجب أن يحصل الطالب على درجة لا تقل عن {unlockScore || 50}% في هذا الكويز ليتم فتح العنصر.
+              </p>
+            </div>
+          )}
+
+          {selectedItemKind === 'homework' && (
+            <div style={{ background: 'rgba(245,158,11,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(245,158,11,0.2)', fontSize: 12, color: 'var(--text-primary)' }}>
+              📝 <strong>تسليم الواجب:</strong> سيتم فتح هذا العنصر للطالب تلقائياً بمجرد قيامه بتسليم الواجب المحدد.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Modal: Add Item to Lesson
 // ─────────────────────────────────────────────────────────────────────────────
 function AddItemModal({
@@ -659,6 +1136,7 @@ function AddItemModal({
   groupName,
   allVideos,
   allAssignments,
+  existingLessonItems = [],
   onClose,
   onCreated,
   router,
@@ -669,6 +1147,7 @@ function AddItemModal({
   groupName: string;
   allVideos: WorkflowVideo[];
   allAssignments: WorkflowAssignment[];
+  existingLessonItems?: UnifiedItem[];
   onClose: () => void;
   onCreated: () => void;
   router: any;
@@ -680,22 +1159,28 @@ function AddItemModal({
   const [provider, setProvider] = useState<'bunny' | 'youtube' | 'vimeo' | 'wistia'>('bunny');
   const [maxGrade, setMaxGrade] = useState('100');
   const [dueDate, setDueDate] = useState('');
+  const [attachments, setAttachments] = useState<string[]>([]);
 
   // Unlock rules
   const [unlockRule, setUnlockRule] = useState('NONE');
   const [unlockVideoId, setUnlockVideoId] = useState('');
   const [unlockPercent, setUnlockPercent] = useState('80');
   const [unlockAssignmentId, setUnlockAssignmentId] = useState('');
-  const [unlockScore, setUnlockScore] = useState('60');
+  const [unlockScore, setUnlockScore] = useState('50');
 
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    if (!title.trim()) { toast.error('Title is required'); return; }
+    if (!title.trim()) { toast.error('العنوان مطلوب'); return; }
     setSaving(true);
+
+    // Calculate sequential order so newly added items are placed chronologically below prior items
+    const maxOrder = existingLessonItems.reduce((max, u) => Math.max(max, u.item.contentOrder ?? 0), 0);
+    const contentOrder = existingLessonItems.length > 0 ? maxOrder + 1 : 1;
+
     try {
       if (kind === 'VIDEO') {
-        if (!sourceUrl.trim()) { toast.error('Video link or embed code is required'); setSaving(false); return; }
+        if (!sourceUrl.trim()) { toast.error('رابط الفيديو أو كود التضمين مطلوب'); setSaving(false); return; }
         await videosApi.create({
           courseName,
           groupName,
@@ -705,13 +1190,15 @@ function AddItemModal({
           sourceUrl: sourceUrl.trim(),
           chapterName,
           lessonName,
+          contentOrder,
+          attachments,
           unlockRule,
           unlockVideoId: unlockRule === 'WATCH_VIDEO' ? unlockVideoId : undefined,
           unlockPercent: unlockRule === 'WATCH_VIDEO' ? +unlockPercent : undefined,
           unlockAssignmentId: (unlockRule === 'PASS_QUIZ' || unlockRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
           unlockScore: unlockRule === 'PASS_QUIZ' ? +unlockScore : undefined,
         });
-        toast.success('Video added to lesson!');
+        toast.success('تمت إضافة الحصة بنجاح!');
         onCreated();
       } else {
         const res = await assignmentsApi.create({
@@ -722,6 +1209,8 @@ function AddItemModal({
           description: description.trim() || undefined,
           chapterName,
           lessonName,
+          contentOrder,
+          attachments,
           maxGrade: +maxGrade || 100,
           dueDate: dueDate || undefined,
           unlockRule,
@@ -730,14 +1219,14 @@ function AddItemModal({
           unlockAssignmentId: (unlockRule === 'PASS_QUIZ' || unlockRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
           unlockScore: unlockRule === 'PASS_QUIZ' ? +unlockScore : undefined,
         });
-        toast.success(`${kind === 'QUIZ' ? 'Quiz' : 'Homework'} created!`);
+        toast.success(`تم إنشاء ${kind === 'QUIZ' ? 'الكويز' : 'الواجب'} بنجاح!`);
         onCreated();
         if (kind === 'QUIZ') {
           router.push(`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/quiz/${(res.data as any).id}`);
         }
       }
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Failed to create item');
+      toast.error(e?.response?.data?.message || 'فشل إنشاء العنصر');
     } finally {
       setSaving(false);
     }
@@ -748,11 +1237,11 @@ function AddItemModal({
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
       display: 'grid', placeItems: 'center', zIndex: 1100, padding: 20, overflowY: 'auto',
     }}>
-      <div className="card" style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="card" style={{ width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Add Item to {lessonName}</h3>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Chapter: {chapterName}</span>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>إضافة عنصر إلى {lessonName}</h3>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>الفصل: {chapterName}</span>
           </div>
           <button className="icon-btn" onClick={onClose}><X size={15} /></button>
         </div>
@@ -765,7 +1254,7 @@ function AddItemModal({
             onClick={() => setKind('VIDEO')}
             style={{ fontSize: 13, justifyContent: 'center' }}
           >
-            <VideoIcon size={14} /> Video
+            <VideoIcon size={14} /> حصه / فيديو
           </button>
           <button
             type="button"
@@ -773,7 +1262,7 @@ function AddItemModal({
             onClick={() => setKind('QUIZ')}
             style={{ fontSize: 13, justifyContent: 'center' }}
           >
-            <ClipboardList size={14} /> Quiz
+            <ClipboardList size={14} /> كويز
           </button>
           <button
             type="button"
@@ -781,23 +1270,23 @@ function AddItemModal({
             onClick={() => setKind('HOMEWORK')}
             style={{ fontSize: 13, justifyContent: 'center' }}
           >
-            <FileText size={14} /> Homework
+            <FileText size={14} /> واجب
           </button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="form-group">
-            <label className="form-label">Title *</label>
+            <label className="form-label">العنوان *</label>
             <input
               className="form-input"
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder={
                 kind === 'VIDEO'
-                  ? 'e.g. Lecture 1: Motion in One Dimension'
+                  ? 'مثال: حصة 1: شرح الحركة في خط مستقيم'
                   : kind === 'QUIZ'
-                  ? 'e.g. Pre-lesson Quiz or Post-lesson Quiz'
-                  : 'e.g. Homework Assignment 1'
+                  ? 'مثال: كويز بعد الحصة'
+                  : 'مثال: واجب الدرس الأول'
               }
             />
           </div>
@@ -805,7 +1294,7 @@ function AddItemModal({
           {kind === 'VIDEO' && (
             <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 10 }}>
               <div className="form-group">
-                <label className="form-label">Provider</label>
+                <label className="form-label">السيرفر / المشغل</label>
                 <select className="form-input" value={provider} onChange={e => setProvider(e.target.value as any)}>
                   <option value="bunny">🐰 Bunny Stream</option>
                   <option value="youtube">YouTube</option>
@@ -814,7 +1303,7 @@ function AddItemModal({
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Video URL or Embed code *</label>
+                <label className="form-label">رابط الفيديو أو كود التضمين *</label>
                 <input
                   className="form-input"
                   value={sourceUrl}
@@ -832,7 +1321,7 @@ function AddItemModal({
           {kind !== 'VIDEO' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="form-group">
-                <label className="form-label">Max Grade</label>
+                <label className="form-label">الدرجة النهائية</label>
                 <input
                   type="number"
                   className="form-input"
@@ -842,7 +1331,7 @@ function AddItemModal({
               </div>
               {kind === 'HOMEWORK' && (
                 <div className="form-group">
-                  <label className="form-label">Due Date (optional)</label>
+                  <label className="form-label">موعد التسليم الأخير (اختياري)</label>
                   <input
                     type="datetime-local"
                     className="form-input"
@@ -855,80 +1344,44 @@ function AddItemModal({
           )}
 
           <div className="form-group">
-            <label className="form-label">Description (optional)</label>
+            <label className="form-label">الوصف والتعليمات (اختياري)</label>
             <textarea
               className="form-input"
               rows={2}
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="Instructions or notes for students..."
+              placeholder="ملاحظات أو تعليمات للطلاب..."
             />
           </div>
 
-          {/* ── Unlock Prerequisite Rules ── */}
-          <div style={{
-            background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 14,
-            border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10,
-          }}>
-            <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Lock size={14} style={{ color: 'var(--primary)' }} /> Unlock Rule (Prerequisites)
-            </label>
-            <select className="form-input" value={unlockRule} onChange={e => setUnlockRule(e.target.value)}>
-              <option value="NONE">🟢 Available immediately</option>
-              <option value="WATCH_VIDEO">🟣 After watching previous video</option>
-              <option value="PASS_QUIZ">🔵 After passing quiz with minimum score</option>
-              <option value="SUBMIT_ASSIGNMENT">🟠 After submitting homework</option>
-            </select>
+          {/* ── Attachments: PDF Upload & Google Drive Link ── */}
+          <AttachmentsManager
+            attachments={attachments}
+            onChange={setAttachments}
+          />
 
-            {unlockRule === 'WATCH_VIDEO' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 8 }}>
-                <select className="form-input" value={unlockVideoId} onChange={e => setUnlockVideoId(e.target.value)}>
-                  <option value="">Select prerequisite video</option>
-                  {allVideos.map(v => (
-                    <option key={v.id} value={v.id}>{v.title}</option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  className="form-input"
-                  placeholder="Min %"
-                  value={unlockPercent}
-                  onChange={e => setUnlockPercent(e.target.value)}
-                />
-              </div>
-            )}
-
-            {(unlockRule === 'PASS_QUIZ' || unlockRule === 'SUBMIT_ASSIGNMENT') && (
-              <div style={{ display: 'grid', gridTemplateColumns: unlockRule === 'PASS_QUIZ' ? '1fr 110px' : '1fr', gap: 8 }}>
-                <select className="form-input" value={unlockAssignmentId} onChange={e => setUnlockAssignmentId(e.target.value)}>
-                  <option value="">Select prerequisite assignment</option>
-                  {allAssignments
-                    .filter(a => unlockRule === 'PASS_QUIZ' ? a.type === 'QUIZ' : a.type === 'HOMEWORK')
-                    .map(a => (
-                      <option key={a.id} value={a.id}>{a.title}</option>
-                    ))}
-                </select>
-                {unlockRule === 'PASS_QUIZ' && (
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    className="form-input"
-                    placeholder="Min %"
-                    value={unlockScore}
-                    onChange={e => setUnlockScore(e.target.value)}
-                  />
-                )}
-              </div>
-            )}
-          </div>
+          {/* ── Unlock Prerequisite Rules with Unified Content Dropdown ── */}
+          <PrerequisiteLockSelector
+            allVideos={allVideos}
+            allAssignments={allAssignments}
+            unlockRule={unlockRule}
+            unlockVideoId={unlockVideoId}
+            unlockAssignmentId={unlockAssignmentId}
+            unlockPercent={unlockPercent}
+            unlockScore={unlockScore}
+            onChange={data => {
+              setUnlockRule(data.unlockRule);
+              setUnlockVideoId(data.unlockVideoId);
+              setUnlockAssignmentId(data.unlockAssignmentId);
+              setUnlockPercent(data.unlockPercent);
+              setUnlockScore(data.unlockScore);
+            }}
+          />
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
-            <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="btn btn-secondary" onClick={onClose}>إلغاء</button>
             <button className="btn btn-primary" disabled={saving} onClick={save}>
-              {saving ? <span className="spinner" style={{ width: 15, height: 15, borderWidth: 2 }} /> : (kind === 'QUIZ' ? 'Create & Build Quiz →' : 'Create Item')}
+              {saving ? <span className="spinner" style={{ width: 15, height: 15, borderWidth: 2 }} /> : (kind === 'QUIZ' ? 'إنشاء وبناء أسئلة الكويز →' : 'إنشاء وحفظ')}
             </button>
           </div>
         </div>
@@ -964,15 +1417,17 @@ function EditItemModal({
   const [provider, setProvider] = useState(isVideo ? (item as WorkflowVideo).provider || 'bunny' : 'bunny');
   const [maxGrade, setMaxGrade] = useState(!isVideo ? String((item as WorkflowAssignment).maxGrade || 100) : '100');
   const [dueDate, setDueDate] = useState(!isVideo && (item as WorkflowAssignment).dueDate ? (item as WorkflowAssignment).dueDate!.substring(0, 16) : '');
+  const [attachments, setAttachments] = useState<string[]>((item as any).attachments || []);
+
   const [unlockRule, setUnlockRule] = useState(item.unlockRule || 'NONE');
   const [unlockVideoId, setUnlockVideoId] = useState(item.unlockVideoId || '');
   const [unlockPercent, setUnlockPercent] = useState(String(item.unlockPercent || 80));
   const [unlockAssignmentId, setUnlockAssignmentId] = useState(item.unlockAssignmentId || '');
-  const [unlockScore, setUnlockScore] = useState(String(item.unlockScore || 60));
+  const [unlockScore, setUnlockScore] = useState(String(item.unlockScore || 50));
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    if (!title.trim()) { toast.error('Title is required'); return; }
+    if (!title.trim()) { toast.error('العنوان مطلوب'); return; }
     setSaving(true);
     try {
       const payload: any = {
@@ -980,6 +1435,7 @@ function EditItemModal({
         description: description.trim() || null,
         chapterName: chapterName.trim() || null,
         lessonName: lessonName.trim() || null,
+        attachments,
         unlockRule,
         unlockVideoId: unlockRule === 'WATCH_VIDEO' ? unlockVideoId : null,
         unlockPercent: unlockRule === 'WATCH_VIDEO' ? +unlockPercent : null,
@@ -999,10 +1455,10 @@ function EditItemModal({
         await assignmentsApi.update(item.id, payload);
       }
 
-      toast.success('Updated successfully');
+      toast.success('تم التحديث بنجاح! ✅');
       onUpdated();
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Failed to update item');
+      toast.error(e?.response?.data?.message || 'فشل التحديث');
     } finally {
       setSaving(false);
     }
@@ -1013,22 +1469,22 @@ function EditItemModal({
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
       display: 'grid', placeItems: 'center', zIndex: 1100, padding: 20, overflowY: 'auto',
     }}>
-      <div className="card" style={{ width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="card" style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Edit Item: {item.title}</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>تعديل العنصر: {item.title}</h3>
           <button className="icon-btn" onClick={onClose}><X size={15} /></button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="form-group">
-            <label className="form-label">Title *</label>
+            <label className="form-label">العنوان *</label>
             <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} />
           </div>
 
           {isVideo ? (
             <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 10 }}>
               <div className="form-group">
-                <label className="form-label">Provider</label>
+                <label className="form-label">المشغل</label>
                 <select className="form-input" value={provider} onChange={e => setProvider(e.target.value)}>
                   <option value="bunny">🐰 Bunny Stream</option>
                   <option value="youtube">YouTube</option>
@@ -1037,10 +1493,10 @@ function EditItemModal({
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Update Video Link / Embed</label>
+                <label className="form-label">تحديث رابط الفيديو</label>
                 <input
                   className="form-input"
-                  placeholder="Paste new link or leave blank to keep"
+                  placeholder="ضع الرابط الجديد أو اتركه فارغاً للإبقاء عليه"
                   value={sourceUrl}
                   onChange={e => setSourceUrl(e.target.value)}
                 />
@@ -1049,7 +1505,7 @@ function EditItemModal({
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="form-group">
-                <label className="form-label">Max Grade</label>
+                <label className="form-label">الدرجة النهائية</label>
                 <input
                   type="number"
                   className="form-input"
@@ -1058,7 +1514,7 @@ function EditItemModal({
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Due Date</label>
+                <label className="form-label">موعد التسليم الأخير</label>
                 <input
                   type="datetime-local"
                   className="form-input"
@@ -1071,68 +1527,49 @@ function EditItemModal({
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div className="form-group">
-              <label className="form-label">Chapter</label>
+              <label className="form-label">الفصل (Chapter)</label>
               <input className="form-input" value={chapterName} onChange={e => setChapterName(e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">Lesson</label>
+              <label className="form-label">الدرس (Lesson)</label>
               <input className="form-input" value={lessonName} onChange={e => setLessonName(e.target.value)} />
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Description</label>
+            <label className="form-label">الوصف والتعليمات</label>
             <textarea className="form-input" rows={2} value={description} onChange={e => setDescription(e.target.value)} />
           </div>
 
-          {/* Prerequisite Rules */}
-          <div style={{
-            background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 14,
-            border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10,
-          }}>
-            <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Lock size={14} style={{ color: 'var(--primary)' }} /> Unlock Rule (Prerequisites)
-            </label>
-            <select className="form-input" value={unlockRule} onChange={e => setUnlockRule(e.target.value)}>
-              <option value="NONE">🟢 Available immediately</option>
-              <option value="WATCH_VIDEO">🟣 After watching previous video</option>
-              <option value="PASS_QUIZ">🔵 After passing quiz with minimum score</option>
-              <option value="SUBMIT_ASSIGNMENT">🟠 After submitting homework</option>
-            </select>
+          {/* ── Attachments: PDF Upload & Google Drive Link ── */}
+          <AttachmentsManager
+            attachments={attachments}
+            onChange={setAttachments}
+          />
 
-            {unlockRule === 'WATCH_VIDEO' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 8 }}>
-                <select className="form-input" value={unlockVideoId} onChange={e => setUnlockVideoId(e.target.value)}>
-                  <option value="">Select video</option>
-                  {allVideos.filter(v => v.id !== item.id).map(v => (
-                    <option key={v.id} value={v.id}>{v.title}</option>
-                  ))}
-                </select>
-                <input type="number" min={1} max={100} className="form-input" placeholder="Min %" value={unlockPercent} onChange={e => setUnlockPercent(e.target.value)} />
-              </div>
-            )}
-
-            {(unlockRule === 'PASS_QUIZ' || unlockRule === 'SUBMIT_ASSIGNMENT') && (
-              <div style={{ display: 'grid', gridTemplateColumns: unlockRule === 'PASS_QUIZ' ? '1fr 110px' : '1fr', gap: 8 }}>
-                <select className="form-input" value={unlockAssignmentId} onChange={e => setUnlockAssignmentId(e.target.value)}>
-                  <option value="">Select assignment</option>
-                  {allAssignments
-                    .filter(a => a.id !== item.id && (unlockRule === 'PASS_QUIZ' ? a.type === 'QUIZ' : a.type === 'HOMEWORK'))
-                    .map(a => (
-                      <option key={a.id} value={a.id}>{a.title}</option>
-                    ))}
-                </select>
-                {unlockRule === 'PASS_QUIZ' && (
-                  <input type="number" min={1} max={100} className="form-input" placeholder="Min %" value={unlockScore} onChange={e => setUnlockScore(e.target.value)} />
-                )}
-              </div>
-            )}
-          </div>
+          {/* ── Prerequisite Rules ── */}
+          <PrerequisiteLockSelector
+            allVideos={allVideos}
+            allAssignments={allAssignments}
+            currentId={item.id}
+            unlockRule={unlockRule}
+            unlockVideoId={unlockVideoId}
+            unlockAssignmentId={unlockAssignmentId}
+            unlockPercent={unlockPercent}
+            unlockScore={unlockScore}
+            onChange={data => {
+              setUnlockRule(data.unlockRule);
+              setUnlockVideoId(data.unlockVideoId);
+              setUnlockAssignmentId(data.unlockAssignmentId);
+              setUnlockPercent(data.unlockPercent);
+              setUnlockScore(data.unlockScore);
+            }}
+          />
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
-            <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="btn btn-secondary" onClick={onClose}>إلغاء</button>
             <button className="btn btn-primary" disabled={saving} onClick={save}>
-              {saving ? <span className="spinner" style={{ width: 15, height: 15, borderWidth: 2 }} /> : 'Save Changes'}
+              {saving ? <span className="spinner" style={{ width: 15, height: 15, borderWidth: 2 }} /> : 'حفظ التعديلات'}
             </button>
           </div>
         </div>

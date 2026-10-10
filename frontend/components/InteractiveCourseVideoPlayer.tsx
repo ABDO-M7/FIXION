@@ -27,6 +27,7 @@ export type InteractiveCourseVideo = {
   providerVideoId?: string | null;
   youtubeVideoId?: string | null;
   watchedPercent?: number;
+  attachments?: string[];
 };
 
 type Experience = { video: InteractiveCourseVideo; checkpoints: VideoCheckpoint[] };

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { BookOpen, ChevronDown, ChevronRight, ClipboardList, Play, Video } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, ClipboardList, Play, Video, FileText, Download, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import type React from 'react';
 
@@ -22,6 +22,8 @@ type Assignment = {
   chapterName?: string | null;
   lessonName?: string | null;
   contentOrder?: number;
+  attachments?: string[];
+  createdAt?: string;
   isLocked?: boolean;
   lockReason?: string | null;
 };
@@ -33,6 +35,8 @@ type VideoItem = {
   chapterName?: string | null;
   lessonName?: string | null;
   contentOrder?: number;
+  attachments?: string[];
+  createdAt?: string;
   isLocked?: boolean;
   lockReason?: string | null;
   provider?: string;
@@ -108,8 +112,26 @@ function ChapterSection({ name, defaultOpen, children }: { name: string; default
   );
 }
 
+function formatAttachmentLabel(url: string, index: number) {
+  if (url.includes('drive.google.com')) return `ملزمة الدرس (Google Drive ${index > 0 ? index + 1 : ''})`;
+  const lower = url.toLowerCase();
+  if (lower.endsWith('.pdf')) {
+    const name = decodeURIComponent(url.split('/').pop() || 'ملف PDF');
+    return `ملف PDF: ${name}`;
+  }
+  return `ملف مرفق ${index + 1}`;
+}
+
 function LessonSection({ name, items, enrollmentId, renderAssignment }: { name: string; items: Lesson['items']; enrollmentId: string; renderAssignment: (assignment: Assignment) => React.ReactNode }) {
-  const sorted = [...items].sort((a, b) => (a.value.contentOrder || 0) - (b.value.contentOrder || 0));
+  const sorted = [...items].sort((a, b) => {
+    const orderA = a.value.contentOrder ?? 0;
+    const orderB = b.value.contentOrder ?? 0;
+    if (orderA !== orderB) return orderA - orderB;
+    const timeA = (a.value as any).createdAt ? new Date((a.value as any).createdAt).getTime() : 0;
+    const timeB = (b.value as any).createdAt ? new Date((b.value as any).createdAt).getTime() : 0;
+    return timeA - timeB;
+  });
+
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,.025)' }}>
       <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, margin: '0 0 10px' }}>
@@ -166,6 +188,44 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4, padding: '2px 8px', borderRadius: 6, background: 'rgba(239,68,68,0.12)', color: '#f87171', fontSize: 11, fontWeight: 600 }}>
             <span>🔒 مغلق:</span>
             <span>{video.lockReason || 'أكمل المتطلبات السابقة لفتح هذا الفيديو'}</span>
+          </div>
+        )}
+        {video.attachments && video.attachments.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            {video.attachments.map((url, i) => (
+              <a
+                key={i}
+                href={video.isLocked ? undefined : url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => {
+                  e.stopPropagation();
+                  if (video.isLocked) {
+                    e.preventDefault();
+                    alert(video.lockReason || 'هذا المحتوى مغلق حتى إكمال المتطلبات السابقة');
+                  }
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  background: 'rgba(239,68,68,0.08)',
+                  color: '#f87171',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                  textDecoration: 'none',
+                  cursor: video.isLocked ? 'not-allowed' : 'pointer',
+                  opacity: video.isLocked ? 0.6 : 1,
+                }}
+              >
+                <FileText size={12} />
+                <span>{formatAttachmentLabel(url, i)}</span>
+                <Download size={11} />
+              </a>
+            ))}
           </div>
         )}
       </div>

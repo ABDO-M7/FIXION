@@ -29,6 +29,7 @@ type CreateVideoDto = {
   unlockScore?: number;
   unlockVideoId?: string;
   unlockPercent?: number;
+  attachments?: string[];
 };
 
 type CheckpointDto = {
@@ -91,6 +92,7 @@ export class VideosService {
       provider: source.provider,
       providerVideoId: source.providerVideoId,
       youtubeVideoId: source.provider === 'youtube' ? source.providerVideoId : null,
+      attachments: Array.isArray(dto.attachments) ? dto.attachments : [],
       teacherId: workOwnerId(scope, teacher),
     }));
   }
@@ -280,6 +282,9 @@ export class VideosService {
     if (dto.unlockScore !== undefined) video.unlockScore = dto.unlockScore ?? null;
     if (dto.unlockVideoId !== undefined) video.unlockVideoId = dto.unlockVideoId || null;
     if (dto.unlockPercent !== undefined) video.unlockPercent = dto.unlockPercent ?? null;
+    if (dto.attachments !== undefined) {
+      video.attachments = Array.isArray(dto.attachments) ? dto.attachments : [];
+    }
     if (dto.sourceUrl) {
       const source = this.parseVideoSource(dto.sourceUrl, dto.provider);
       video.provider = source.provider;
@@ -332,6 +337,7 @@ export class VideosService {
       unlockPercent: video.unlockPercent,
       provider: video.provider || 'youtube',
       providerVideoId: video.providerVideoId || video.youtubeVideoId,
+      attachments: video.attachments || [],
       createdAt: video.createdAt,
       updatedAt: video.updatedAt,
     };

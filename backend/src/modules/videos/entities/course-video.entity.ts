@@ -75,6 +75,9 @@ export class CourseVideo {
   @Column({ type: 'varchar', length: 20, nullable: true })
   youtubeVideoId: string | null;
 
+  @Column({ type: 'jsonb', nullable: true, default: [] })
+  attachments: string[];
+
   @CreateDateColumn()
   createdAt: Date;
 
