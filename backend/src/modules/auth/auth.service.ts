@@ -129,12 +129,12 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('jwt.secret'),
-      expiresIn: '15m',
+      expiresIn: (this.configService.get<string>('jwt.expiresIn') || '30d') as any,
     });
 
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('jwt.refreshSecret'),
-      expiresIn: '7d',
+      expiresIn: (this.configService.get<string>('jwt.refreshExpiresIn') || '90d') as any,
     });
 
     const refreshHash = await bcrypt.hash(refreshToken, 10);
@@ -147,11 +147,12 @@ export class AuthService {
       sameSite: isProd ? 'none' as const : 'lax' as const,
     };
 
-    res.cookie('accessToken', accessToken, { ...cookieOpts, maxAge: 15 * 60 * 1000 });
-    res.cookie('refreshToken', refreshToken, { ...cookieOpts, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('accessToken', accessToken, { ...cookieOpts, maxAge: 30 * 24 * 60 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, { ...cookieOpts, maxAge: 90 * 24 * 60 * 60 * 1000 });
 
     return {
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         name: user.name,

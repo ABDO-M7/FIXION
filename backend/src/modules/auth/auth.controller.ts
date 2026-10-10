@@ -35,8 +35,8 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Req() req: any, @Res({ passthrough: true }) res: any) {
-    const refreshToken = req.cookies?.['refreshToken'];
+  async refresh(@Req() req: any, @Body() body: any, @Res({ passthrough: true }) res: any) {
+    const refreshToken = req.cookies?.['refreshToken'] || body?.refreshToken;
     return this.authService.refresh(refreshToken, res);
   }
 
@@ -61,10 +61,11 @@ export class AuthController {
   async googleCallback(@Req() req: any, @Res() res: Response) {
     const result = await this.authService.googleLogin(req.user, res);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    // Pass token in URL so the frontend callback page can store it in localStorage
+    // Pass tokens in URL so the frontend callback page can store them in localStorage
     // (cross-site cookies set during redirects are blocked by modern browsers)
     const token = encodeURIComponent(result.accessToken);
-    res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+    const refreshToken = encodeURIComponent(result.refreshToken || '');
+    res.redirect(`${frontendUrl}/auth/callback?token=${token}&refreshToken=${refreshToken}`);
   }
 
   @Post('verify-email')

@@ -62,13 +62,14 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       const res = await authApi.login(data);
-      const { user, accessToken } = res.data;
+      const { user, accessToken, refreshToken } = res.data;
       if (accessToken) localStorage.setItem('accessToken', accessToken);
+      if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
       if (accessToken) {
         await fetch('/api/auth/set-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: accessToken }),
+          body: JSON.stringify({ token: accessToken, refreshToken }),
         });
       }
       setUser(user);

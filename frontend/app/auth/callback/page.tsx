@@ -14,19 +14,23 @@ function AuthCallbackInner() {
   const { setUser } = useAuthStore();
 
   useEffect(() => {
-    // Read the access token passed in the redirect URL from the backend
+    // Read the access token and refresh token passed in the redirect URL from the backend
     const token = searchParams.get('token');
+    const refreshToken = searchParams.get('refreshToken');
 
     const initialize = async () => {
       if (token) {
         // Store in localStorage for api.ts Bearer header
         localStorage.setItem('accessToken', token);
+        if (refreshToken) {
+          localStorage.setItem('refreshToken', refreshToken);
+        }
 
         // Set cookie on Vercel's own domain so middleware can authenticate requests
         await fetch('/api/auth/set-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token, refreshToken }),
         });
       }
 
