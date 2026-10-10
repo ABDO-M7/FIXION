@@ -7,7 +7,7 @@ import StudentCourseHierarchy from '@/components/StudentCourseHierarchy';
 import {
   GraduationCap, User, Users, ArrowLeft, BookOpen, HelpCircle, Calendar,
   ClipboardList, Upload, X, FileText, Image, CheckCircle,
-  Clock, Loader2, ExternalLink, Star, BarChart2, TrendingUp, Video,
+  Clock, Loader2, ExternalLink, Star, BarChart2, TrendingUp, Video, Lock, Search,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -136,7 +136,7 @@ function SubmitModal({
       if (failedUploads.length > 0) {
         toast.success('Submitted, but some files could not be uploaded.');
       } else {
-        toast.success('Submitted successfully! ✅');
+        toast.success('Submitted successfully!');
       }
       onSubmitted();
       onClose();
@@ -167,7 +167,7 @@ function SubmitModal({
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
-              {isUpdate ? '✏️ Update Submission' : '📤 Submit Assignment'}
+              {isUpdate ? 'Update Submission' : 'Submit Assignment'}
             </h3>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{assignment.title}</div>
           </div>
@@ -256,7 +256,7 @@ function SubmitModal({
                 {uploading ? ' Uploading…' : ' Saving…'}
               </>
             ) : (
-              <>{isUpdate ? '✏️ Update' : '📤 Submit'}</>
+              <>{isUpdate ? 'Update' : 'Submit'}</>
             )}
           </button>
         </div>
@@ -414,7 +414,8 @@ function AssignmentCard({
 
         {assignment.isLocked && (
           <div style={{ color: '#f87171', fontSize: 12, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-            <span>🔒 مغلق:</span>
+            <Lock size={12} />
+            <span>مغلق:</span>
             <span>{assignment.lockReason || 'أكمل المتطلبات السابقة لفتح هذا العنصر'}</span>
           </div>
         )}
@@ -535,7 +536,7 @@ function GradesTab({ assignments }: { assignments: Assignment[] }) {
                   <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600 }}>{a.title}</td>
                   <td style={{ padding: '12px 16px' }}>
                     <span className={`badge ${a.type === 'QUIZ' ? 'badge-active' : 'badge-pending'}`} style={{ fontSize: 10 }}>
-                      {a.type === 'QUIZ' ? '📝 Quiz' : '📚 Homework'}
+                      {a.type === 'QUIZ' ? 'Quiz' : 'Homework'}
                     </span>
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)' }}>
@@ -677,7 +678,9 @@ export default function CourseDetailPage() {
     return (
       <AppShell>
         <div className="card" style={{ textAlign: 'center', padding: '60px 24px', maxWidth: 480, margin: '0 auto' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
+          <div style={{ display: 'grid', placeItems: 'center', marginBottom: 12 }}>
+            <Search size={40} style={{ color: 'var(--text-muted)' }} />
+          </div>
           <h2 style={{ fontWeight: 700 }}>Course not found</h2>
           <Link href="/student/courses" className="btn btn-primary" style={{ marginTop: 16 }}>
             Back to Courses

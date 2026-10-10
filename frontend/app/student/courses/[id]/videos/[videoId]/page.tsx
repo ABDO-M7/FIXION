@@ -59,7 +59,74 @@ export default function StudentVideoPage() {
           </div>
         ) : video ? (
           <div>
-            <InteractiveCourseVideoPlayer video={video} />
+            {video.provider === 'document' ? (
+              <div
+                className="card"
+                style={{
+                  padding: '24px 28px',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 14,
+                  marginBottom: 20,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(14,165,233,0.12)', display: 'grid', placeItems: 'center' }}>
+                    <FileText size={22} style={{ color: '#38bdf8' }} />
+                  </div>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{video.title}</h2>
+                    <span className="badge" style={{ marginTop: 4, fontSize: 11, background: 'rgba(14,165,233,0.12)', color: '#38bdf8' }}>
+                      ملف / ملزمة (PDF)
+                    </span>
+                  </div>
+                </div>
+
+                {video.description && (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>
+                    {video.description}
+                  </p>
+                )}
+
+                {video.attachments && video.attachments.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                      {video.attachments.map((url, i) => (
+                        <a
+                          key={i}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-primary"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}
+                        >
+                          <Download size={15} />
+                          <span>تحميل {formatAttachmentLabel(url, i)}</span>
+                          <ExternalLink size={13} />
+                        </a>
+                      ))}
+                    </div>
+
+                    {/* Preview iframe if direct PDF or Google Drive preview */}
+                    {video.attachments[0] && (
+                      <div style={{ marginTop: 16, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                        <iframe
+                          src={
+                            video.attachments[0].includes('drive.google.com')
+                              ? video.attachments[0].replace('/view', '/preview')
+                              : video.attachments[0]
+                          }
+                          title={video.title}
+                          style={{ width: '100%', height: 650, border: 'none', background: '#fff' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <InteractiveCourseVideoPlayer video={video} />
+            )}
 
             {/* Attached lesson materials / PDF / Google Drive */}
             {video.attachments && video.attachments.length > 0 && (

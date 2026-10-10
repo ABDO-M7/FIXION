@@ -188,7 +188,7 @@ export default function QuizBuilderPage() {
           ));
         }
       }
-      toast.success('Quiz saved! ✅');
+      toast.success('Quiz saved');
     } catch {
       toast.error('Failed to save');
     } finally {
@@ -210,7 +210,7 @@ export default function QuizBuilderPage() {
       await saveAll();
       await assignmentsApi.publish(id);
       setAssignment((prev: any) => ({ ...prev, isPublished: true }));
-      toast.success('Quiz published successfully! It is now visible to students. 🎉');
+      toast.success('Quiz published successfully! It is now visible to students.');
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Failed to publish quiz');
     } finally {
@@ -233,7 +233,7 @@ export default function QuizBuilderPage() {
             <ArrowLeft size={14} /> Back to Group
           </Link>
           <h1 className="page-title" style={{ marginBottom: 2 }}>
-            📝 {assignment?.title || 'Quiz Builder'}
+            {assignment?.title || 'Quiz Builder'}
           </h1>
           <p className="page-subtitle">
             {questions.length} question{questions.length !== 1 ? 's' : ''} · {totalPoints} total points · Max grade: {assignment?.maxGrade ?? 100}
@@ -390,7 +390,7 @@ export default function QuizBuilderPage() {
                         border: 'none', cursor: 'pointer', transition: 'var(--transition)',
                       }}
                     >
-                      {t === 'MULTIPLE_CHOICE' ? '🔘 MCQ' : '✏️ Text'}
+                      {t === 'MULTIPLE_CHOICE' ? 'MCQ' : 'Written / Text'}
                     </button>
                   ))}
                 </div>

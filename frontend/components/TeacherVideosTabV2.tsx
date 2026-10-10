@@ -13,7 +13,7 @@ export default function TeacherVideosTabV2({ courseName, groupName, prerequisite
   const [showForm, setShowForm] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0', unlockRule: 'NONE', unlockAssignmentId: '', unlockVideoId: '', unlockScore: '50', unlockPercent: '80' });
+  const [form, setForm] = useState({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0', unlockRule: 'NONE', unlockAssignmentId: '', unlockVideoId: '', unlockScore: '50', unlockPercent: '100' });
 
   const load = useCallback(() => {
     videosApi.teacherList(courseName, groupName)
@@ -33,7 +33,7 @@ export default function TeacherVideosTabV2({ courseName, groupName, prerequisite
     try {
       await videosApi.create({ ...form, contentOrder: Number(form.contentOrder), unlockScore: Number(form.unlockScore), unlockPercent: Number(form.unlockPercent), courseName, groupName });
       toast.success('Video added');
-      setForm({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0', unlockRule: 'NONE', unlockAssignmentId: '', unlockVideoId: '', unlockScore: '50', unlockPercent: '80' });
+      setForm({ title: '', description: '', provider: 'youtube', sourceUrl: '', chapterName: '', lessonName: '', contentOrder: '0', unlockRule: 'NONE', unlockAssignmentId: '', unlockVideoId: '', unlockScore: '50', unlockPercent: '100' });
       setShowForm(false);
       setLoading(true);
       load();

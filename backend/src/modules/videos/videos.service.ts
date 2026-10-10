@@ -75,7 +75,16 @@ export class VideosService {
     if (scope.type === 'subjects' && !scope.subjects.includes(courseName)) {
       throw new ForbiddenException('This course is not in your subject');
     }
-    const source = this.parseVideoSource(dto.sourceUrl || dto.videoUrl || dto.youtubeUrl, dto.provider);
+    let source: { provider: string; providerVideoId: string | null };
+    if (dto.provider === 'document' || dto.provider === 'pdf') {
+      const firstAttachment = Array.isArray(dto.attachments) && dto.attachments.length > 0 ? dto.attachments[0] : null;
+      source = {
+        provider: 'document',
+        providerVideoId: dto.sourceUrl || firstAttachment || 'document',
+      };
+    } else {
+      source = this.parseVideoSource(dto.sourceUrl || dto.videoUrl || dto.youtubeUrl, dto.provider);
+    }
     return this.videosRepo.save(this.videosRepo.create({
       courseName,
       groupName: dto.groupName.trim(),
@@ -285,11 +294,19 @@ export class VideosService {
     if (dto.attachments !== undefined) {
       video.attachments = Array.isArray(dto.attachments) ? dto.attachments : [];
     }
-    if (dto.sourceUrl) {
-      const source = this.parseVideoSource(dto.sourceUrl, dto.provider);
-      video.provider = source.provider;
-      video.providerVideoId = source.providerVideoId;
-      video.youtubeVideoId = source.provider === 'youtube' ? source.providerVideoId : null;
+    if (dto.provider === 'document' || dto.provider === 'pdf') {
+      video.provider = 'document';
+      if (dto.sourceUrl) video.providerVideoId = dto.sourceUrl;
+      video.youtubeVideoId = null;
+    } else if (dto.sourceUrl) {
+      if (video.provider === 'document') {
+        video.providerVideoId = dto.sourceUrl;
+      } else {
+        const source = this.parseVideoSource(dto.sourceUrl, dto.provider);
+        video.provider = source.provider;
+        video.providerVideoId = source.providerVideoId;
+        video.youtubeVideoId = source.provider === 'youtube' ? source.providerVideoId : null;
+      }
     }
     return this.videosRepo.save(video);
   }
@@ -348,8 +365,9 @@ export class VideosService {
     if (rule === UnlockRuleType.WATCH_VIDEO) {
       if (!prerequisiteVideoId) return { isLocked: false, lockReason: null };
       const progress = await this.progressRepo.findOne({ where: { videoId: prerequisiteVideoId, studentId } });
-      if (!progress || progress.watchedPercent < (requiredPercent ?? 80)) {
-        return { isLocked: true, lockReason: `Watch at least ${requiredPercent ?? 80}% of the previous video` };
+      const threshold = requiredPercent != null ? requiredPercent : 100;
+      if (!progress || progress.watchedPercent < threshold) {
+        return { isLocked: true, lockReason: `Watch at least ${threshold}% of the previous video` };
       }
       return { isLocked: false, lockReason: null };
     }

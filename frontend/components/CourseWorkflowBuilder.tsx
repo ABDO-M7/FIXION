@@ -329,8 +329,9 @@ export default function CourseWorkflowBuilder({
                             marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)',
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
-                                📌 {lessonName}
+                              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <BookOpen size={15} style={{ color: 'var(--primary-light)' }} />
+                                {lessonName}
                               </span>
                               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                                 ({sortedItems.length} items)
@@ -514,7 +515,7 @@ function WorkflowItemRow({
 }) {
   const isVideo = unified.kind === 'video';
   const item = unified.item;
-
+  const isDoc = isVideo && (item as WorkflowVideo).provider === 'document';
   const isQuiz = !isVideo && (item as WorkflowAssignment).type === 'QUIZ';
   const isHW = !isVideo && (item as WorkflowAssignment).type === 'HOMEWORK';
 
@@ -523,7 +524,7 @@ function WorkflowItemRow({
     if (!item.unlockRule || item.unlockRule === 'NONE') return 'Available immediately';
     if (item.unlockRule === 'WATCH_VIDEO') {
       const v = allVideos.find(x => x.id === item.unlockVideoId);
-      return `After watching ${item.unlockPercent || 80}% of video "${v?.title || 'previous video'}"`;
+      return `After watching ${item.unlockPercent || 100}% of video "${v?.title || 'previous video'}"`;
     }
     if (item.unlockRule === 'PASS_QUIZ') {
       const a = allAssignments.find(x => x.id === item.unlockAssignmentId);
@@ -555,10 +556,12 @@ function WorkflowItemRow({
       {/* Type Icon */}
       <div style={{
         width: 38, height: 38, borderRadius: 8,
-        background: isVideo ? 'rgba(59,130,246,0.12)' : isQuiz ? 'rgba(139,92,246,0.12)' : 'rgba(245,158,11,0.12)',
+        background: isDoc ? 'rgba(14,165,233,0.12)' : isVideo ? 'rgba(59,130,246,0.12)' : isQuiz ? 'rgba(139,92,246,0.12)' : 'rgba(245,158,11,0.12)',
         display: 'grid', placeItems: 'center', flexShrink: 0,
       }}>
-        {isVideo ? (
+        {isDoc ? (
+          <FileText size={18} style={{ color: '#0ea5e9' }} />
+        ) : isVideo ? (
           <VideoIcon size={18} style={{ color: '#3b82f6' }} />
         ) : isQuiz ? (
           <ClipboardList size={18} style={{ color: '#8b5cf6' }} />
@@ -571,9 +574,14 @@ function WorkflowItemRow({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>{item.title}</strong>
-          {isVideo && (
+          {isDoc && (
+            <span className="badge" style={{ fontSize: 10, background: 'rgba(14,165,233,0.12)', color: '#38bdf8' }}>
+              ملف / ملزمة (PDF)
+            </span>
+          )}
+          {isVideo && !isDoc && (
             <span className="badge" style={{ fontSize: 10, background: 'rgba(59,130,246,0.12)', color: '#60a5fa' }}>
-              {(item as WorkflowVideo).provider === 'bunny' ? '🐰 Bunny Stream' : (item as WorkflowVideo).provider || 'Video'}
+              {(item as WorkflowVideo).provider === 'bunny' ? 'Bunny Stream' : (item as WorkflowVideo).provider || 'Video'}
             </span>
           )}
           {isQuiz && (
@@ -681,7 +689,7 @@ function AttachmentsManager({
     try {
       const res = await uploadsApi.upload(file);
       onChange([...attachments, res.data.url]);
-      toast.success('تم رفع الملف بنجاح! ✅');
+      toast.success('تم رفع الملف بنجاح');
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'فشل رفع الملف');
     } finally {
@@ -699,7 +707,7 @@ function AttachmentsManager({
     }
     onChange([...attachments, trimmed]);
     setExternalUrl('');
-    toast.success('تمت إضافة الرابط بنجاح! 🔗');
+    toast.success('تمت إضافة الرابط بنجاح');
   };
 
   const handleRemove = (index: number) => {
@@ -739,7 +747,7 @@ function AttachmentsManager({
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, flexShrink: 0 }}
           >
             {uploading ? <Loader2 size={13} className="animate-spin" /> : <FileUp size={13} style={{ color: '#ef4444' }} />}
-            {uploading ? 'جاري رفع الملف...' : '📄 رفع ملف PDF من الجهاز'}
+            {uploading ? 'جاري رفع الملف...' : 'رفع ملف PDF من الجهاز'}
           </button>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>أو ضع رابط من Google Drive بالأسفل</span>
         </div>
@@ -790,7 +798,7 @@ function AttachmentsManager({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
                   {isDrive ? (
-                    <span style={{ fontSize: 14 }}>📁</span>
+                    <ExternalLink size={14} style={{ color: '#38bdf8', flexShrink: 0 }} />
                   ) : isPdf ? (
                     <FileText size={14} style={{ color: '#ef4444', flexShrink: 0 }} />
                   ) : (
@@ -873,13 +881,13 @@ function PrerequisiteLockSelector({
     unlockScore: string;
   }) => void;
 }) {
-  const isLocked = unlockRule !== 'NONE' && (!!unlockVideoId || !!unlockAssignmentId);
+  const isLocked = unlockRule !== 'NONE';
 
   // Group all available items by chapter & lesson
   const groupedContent = useMemo(() => {
     const chaptersMap = new Map<string, Map<string, Array<{
       id: string;
-      kind: 'video' | 'quiz' | 'homework';
+      kind: 'video' | 'quiz' | 'homework' | 'document';
       title: string;
       valueKey: string;
     }>>>();
@@ -895,9 +903,10 @@ function PrerequisiteLockSelector({
     };
 
     allVideos.forEach(v => {
+      const isDoc = v.provider === 'document';
       add(v.chapterName, v.lessonName, {
         id: v.id,
-        kind: 'video',
+        kind: isDoc ? 'document' : 'video',
         title: v.title,
         valueKey: `video:${v.id}`,
       });
@@ -924,19 +933,23 @@ function PrerequisiteLockSelector({
 
   // Find selected item kind
   const selectedItemKind = useMemo(() => {
-    if (selectedKey.startsWith('video:')) return 'video';
+    if (selectedKey.startsWith('video:')) {
+      const id = selectedKey.replace('video:', '');
+      const v = allVideos.find(x => x.id === id);
+      return v?.provider === 'document' ? 'document' : 'video';
+    }
     if (selectedKey.startsWith('assignment:')) {
       const id = selectedKey.replace('assignment:', '');
       const a = allAssignments.find(x => x.id === id);
       return a?.type === 'QUIZ' ? 'quiz' : 'homework';
     }
     return null;
-  }, [selectedKey, allAssignments]);
+  }, [selectedKey, allVideos, allAssignments]);
 
   const handleSelect = (key: string) => {
     if (!key) {
       onChange({
-        unlockRule: 'NONE',
+        unlockRule: 'SELECT_REQUIRED',
         unlockVideoId: '',
         unlockAssignmentId: '',
         unlockPercent,
@@ -947,11 +960,13 @@ function PrerequisiteLockSelector({
 
     if (key.startsWith('video:')) {
       const id = key.replace('video:', '');
+      const v = allVideos.find(x => x.id === id);
+      const isDoc = v?.provider === 'document';
       onChange({
         unlockRule: 'WATCH_VIDEO',
         unlockVideoId: id,
         unlockAssignmentId: '',
-        unlockPercent: unlockPercent || '80',
+        unlockPercent: isDoc ? '100' : (unlockPercent || '100'),
         unlockScore,
       });
     } else {
@@ -983,32 +998,18 @@ function PrerequisiteLockSelector({
         unlockRule: 'NONE',
         unlockVideoId: '',
         unlockAssignmentId: '',
-        unlockPercent,
-        unlockScore,
+        unlockPercent: '',
+        unlockScore: '',
       });
     } else {
-      // Pick first available item if any
-      let firstKey = '';
-      for (const [, lsMap] of groupedContent.entries()) {
-        for (const [, items] of lsMap.entries()) {
-          if (items.length > 0) {
-            firstKey = items[0].valueKey;
-            break;
-          }
-        }
-        if (firstKey) break;
-      }
-      if (firstKey) {
-        handleSelect(firstKey);
-      } else {
-        onChange({
-          unlockRule: 'WATCH_VIDEO',
-          unlockVideoId: '',
-          unlockAssignmentId: '',
-          unlockPercent: '80',
-          unlockScore: '50',
-        });
-      }
+      // User must choose prerequisite explicitly - no auto-default video or 80%
+      onChange({
+        unlockRule: 'SELECT_REQUIRED',
+        unlockVideoId: '',
+        unlockAssignmentId: '',
+        unlockPercent: '',
+        unlockScore: '',
+      });
     }
   };
 
@@ -1034,7 +1035,7 @@ function PrerequisiteLockSelector({
             onChange={e => handleToggleLock(e.target.checked)}
             style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#ef4444' }}
           />
-          {isLocked ? 'مقفول بقفل 🔒' : 'متاح مباشرة 🔓'}
+          {isLocked ? 'مقفول بمتطلب سابق' : 'متاح مباشرة (بدون قفل)'}
         </label>
       </div>
 
@@ -1052,10 +1053,10 @@ function PrerequisiteLockSelector({
               <option value="">-- اضغط لاختيار المحتوى المطلوب لفتح هذا العنصر --</option>
               {Array.from(groupedContent.entries()).map(([ch, lsMap]) =>
                 Array.from(lsMap.entries()).map(([ls, items]) => (
-                  <optgroup key={`${ch}-${ls}`} label={`📁 ${ch} ➔ 📌 ${ls}`}>
+                  <optgroup key={`${ch}-${ls}`} label={`${ch} / ${ls}`}>
                     {items.map(it => (
                       <option key={it.valueKey} value={it.valueKey}>
-                        {it.kind === 'video' ? '🎬 [حصة/فيديو] ' : it.kind === 'quiz' ? '🎯 [كويز] ' : '📝 [واجب] '}
+                        {it.kind === 'document' ? '[ملف] ' : it.kind === 'video' ? '[حصة] ' : it.kind === 'quiz' ? '[كويز] ' : '[واجب] '}
                         {it.title}
                       </option>
                     ))}
@@ -1069,7 +1070,7 @@ function PrerequisiteLockSelector({
             <div style={{ background: 'rgba(59,130,246,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(59,130,246,0.2)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
-                  🎥 نسبة المشاهدة المطلوبة للفتح:
+                  نسبة المشاهدة المطلوبة للفتح (%):
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <input
@@ -1079,14 +1080,21 @@ function PrerequisiteLockSelector({
                     className="form-input"
                     style={{ width: 75, padding: '4px 8px' }}
                     value={unlockPercent}
+                    placeholder="100"
                     onChange={e => onChange({ unlockRule, unlockVideoId, unlockAssignmentId, unlockPercent: e.target.value, unlockScore })}
                   />
                   <span style={{ fontSize: 12 }}>%</span>
                 </div>
               </div>
               <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
-                لن يتمكن الطالب من فتح هذا المحتوى إلا بعد أن يشاهد {unlockPercent || 80}% على الأقل من هذا الفيديو.
+                لن يتمكن الطالب من فتح هذا المحتوى إلا بعد أن يشاهد {unlockPercent || 100}% على الأقل من هذا الفيديو.
               </p>
+            </div>
+          )}
+
+          {selectedItemKind === 'document' && (
+            <div style={{ background: 'rgba(14,165,233,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(14,165,233,0.2)', fontSize: 12, color: 'var(--text-primary)' }}>
+              <strong>تحميل / فتح الملف:</strong> سيتم فتح هذا المحتوى للطالب بعد توفر الملف ومراجعته.
             </div>
           )}
 
@@ -1094,7 +1102,7 @@ function PrerequisiteLockSelector({
             <div style={{ background: 'rgba(139,92,246,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(139,92,246,0.2)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
-                  🎯 نسبة النجاح المطلوبة في الكويز:
+                  نسبة النجاح المطلوبة في الكويز (%):
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <input
@@ -1104,6 +1112,7 @@ function PrerequisiteLockSelector({
                     className="form-input"
                     style={{ width: 75, padding: '4px 8px' }}
                     value={unlockScore}
+                    placeholder="50"
                     onChange={e => onChange({ unlockRule, unlockVideoId, unlockAssignmentId, unlockPercent, unlockScore: e.target.value })}
                   />
                   <span style={{ fontSize: 12 }}>%</span>
@@ -1117,7 +1126,7 @@ function PrerequisiteLockSelector({
 
           {selectedItemKind === 'homework' && (
             <div style={{ background: 'rgba(245,158,11,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(245,158,11,0.2)', fontSize: 12, color: 'var(--text-primary)' }}>
-              📝 <strong>تسليم الواجب:</strong> سيتم فتح هذا العنصر للطالب تلقائياً بمجرد قيامه بتسليم الواجب المحدد.
+              <strong>تسليم الواجب:</strong> سيتم فتح هذا العنصر للطالب تلقائياً بمجرد قيامه بتسليم الواجب المحدد.
             </div>
           )}
         </div>
@@ -1152,7 +1161,7 @@ function AddItemModal({
   onCreated: () => void;
   router: any;
 }) {
-  const [kind, setKind] = useState<'VIDEO' | 'QUIZ' | 'HOMEWORK'>('VIDEO');
+  const [kind, setKind] = useState<'VIDEO' | 'QUIZ' | 'HOMEWORK' | 'DOCUMENT'>('VIDEO');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
@@ -1161,12 +1170,12 @@ function AddItemModal({
   const [dueDate, setDueDate] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
 
-  // Unlock rules
+  // Unlock rules - default NONE, no auto-lock or forced percentages
   const [unlockRule, setUnlockRule] = useState('NONE');
   const [unlockVideoId, setUnlockVideoId] = useState('');
-  const [unlockPercent, setUnlockPercent] = useState('80');
+  const [unlockPercent, setUnlockPercent] = useState('');
   const [unlockAssignmentId, setUnlockAssignmentId] = useState('');
-  const [unlockScore, setUnlockScore] = useState('50');
+  const [unlockScore, setUnlockScore] = useState('');
 
   const [saving, setSaving] = useState(false);
 
@@ -1177,9 +1186,35 @@ function AddItemModal({
     // Calculate sequential order so newly added items are placed chronologically below prior items
     const maxOrder = existingLessonItems.reduce((max, u) => Math.max(max, u.item.contentOrder ?? 0), 0);
     const contentOrder = existingLessonItems.length > 0 ? maxOrder + 1 : 1;
+    const effectiveRule = unlockRule === 'SELECT_REQUIRED' ? 'NONE' : unlockRule;
 
     try {
-      if (kind === 'VIDEO') {
+      if (kind === 'DOCUMENT') {
+        if (attachments.length === 0 && !sourceUrl.trim()) {
+          toast.error('يرجى رفع ملف PDF أو وضع رابط Google Drive للملف');
+          setSaving(false);
+          return;
+        }
+        await videosApi.create({
+          courseName,
+          groupName,
+          title: title.trim(),
+          description: description.trim() || undefined,
+          provider: 'document',
+          sourceUrl: sourceUrl.trim() || attachments[0],
+          chapterName,
+          lessonName,
+          contentOrder,
+          attachments,
+          unlockRule: effectiveRule,
+          unlockVideoId: effectiveRule === 'WATCH_VIDEO' ? unlockVideoId : undefined,
+          unlockPercent: effectiveRule === 'WATCH_VIDEO' ? (+unlockPercent || 100) : undefined,
+          unlockAssignmentId: (effectiveRule === 'PASS_QUIZ' || effectiveRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
+          unlockScore: effectiveRule === 'PASS_QUIZ' ? (+unlockScore || 50) : undefined,
+        });
+        toast.success('تمت إضافة الملف / الملزمة بنجاح');
+        onCreated();
+      } else if (kind === 'VIDEO') {
         if (!sourceUrl.trim()) { toast.error('رابط الفيديو أو كود التضمين مطلوب'); setSaving(false); return; }
         await videosApi.create({
           courseName,
@@ -1192,13 +1227,13 @@ function AddItemModal({
           lessonName,
           contentOrder,
           attachments,
-          unlockRule,
-          unlockVideoId: unlockRule === 'WATCH_VIDEO' ? unlockVideoId : undefined,
-          unlockPercent: unlockRule === 'WATCH_VIDEO' ? +unlockPercent : undefined,
-          unlockAssignmentId: (unlockRule === 'PASS_QUIZ' || unlockRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
-          unlockScore: unlockRule === 'PASS_QUIZ' ? +unlockScore : undefined,
+          unlockRule: effectiveRule,
+          unlockVideoId: effectiveRule === 'WATCH_VIDEO' ? unlockVideoId : undefined,
+          unlockPercent: effectiveRule === 'WATCH_VIDEO' ? (+unlockPercent || 100) : undefined,
+          unlockAssignmentId: (effectiveRule === 'PASS_QUIZ' || effectiveRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
+          unlockScore: effectiveRule === 'PASS_QUIZ' ? (+unlockScore || 50) : undefined,
         });
-        toast.success('تمت إضافة الحصة بنجاح!');
+        toast.success('تمت إضافة الحصة بنجاح');
         onCreated();
       } else {
         const res = await assignmentsApi.create({
@@ -1213,13 +1248,13 @@ function AddItemModal({
           attachments,
           maxGrade: +maxGrade || 100,
           dueDate: dueDate || undefined,
-          unlockRule,
-          unlockVideoId: unlockRule === 'WATCH_VIDEO' ? unlockVideoId : undefined,
-          unlockPercent: unlockRule === 'WATCH_VIDEO' ? +unlockPercent : undefined,
-          unlockAssignmentId: (unlockRule === 'PASS_QUIZ' || unlockRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
-          unlockScore: unlockRule === 'PASS_QUIZ' ? +unlockScore : undefined,
+          unlockRule: effectiveRule,
+          unlockVideoId: effectiveRule === 'WATCH_VIDEO' ? unlockVideoId : undefined,
+          unlockPercent: effectiveRule === 'WATCH_VIDEO' ? (+unlockPercent || 100) : undefined,
+          unlockAssignmentId: (effectiveRule === 'PASS_QUIZ' || effectiveRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
+          unlockScore: effectiveRule === 'PASS_QUIZ' ? (+unlockScore || 50) : undefined,
         });
-        toast.success(`تم إنشاء ${kind === 'QUIZ' ? 'الكويز' : 'الواجب'} بنجاح!`);
+        toast.success(`تم إنشاء ${kind === 'QUIZ' ? 'الكويز' : 'الواجب'} بنجاح`);
         onCreated();
         if (kind === 'QUIZ') {
           router.push(`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/quiz/${(res.data as any).id}`);
@@ -1237,7 +1272,7 @@ function AddItemModal({
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
       display: 'grid', placeItems: 'center', zIndex: 1100, padding: 20, overflowY: 'auto',
     }}>
-      <div className="card" style={{ width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="card" style={{ width: '100%', maxWidth: 580, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>إضافة عنصر إلى {lessonName}</h3>
@@ -1246,13 +1281,13 @@ function AddItemModal({
           <button className="icon-btn" onClick={onClose}><X size={15} /></button>
         </div>
 
-        {/* Item Type Switcher */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+        {/* Item Type Switcher (4 items) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 16 }}>
           <button
             type="button"
             className={`btn ${kind === 'VIDEO' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setKind('VIDEO')}
-            style={{ fontSize: 13, justifyContent: 'center' }}
+            style={{ fontSize: 12, justifyContent: 'center', padding: '8px 6px' }}
           >
             <VideoIcon size={14} /> حصه / فيديو
           </button>
@@ -1260,7 +1295,7 @@ function AddItemModal({
             type="button"
             className={`btn ${kind === 'QUIZ' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setKind('QUIZ')}
-            style={{ fontSize: 13, justifyContent: 'center' }}
+            style={{ fontSize: 12, justifyContent: 'center', padding: '8px 6px' }}
           >
             <ClipboardList size={14} /> كويز
           </button>
@@ -1268,9 +1303,17 @@ function AddItemModal({
             type="button"
             className={`btn ${kind === 'HOMEWORK' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setKind('HOMEWORK')}
-            style={{ fontSize: 13, justifyContent: 'center' }}
+            style={{ fontSize: 12, justifyContent: 'center', padding: '8px 6px' }}
           >
             <FileText size={14} /> واجب
+          </button>
+          <button
+            type="button"
+            className={`btn ${kind === 'DOCUMENT' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setKind('DOCUMENT')}
+            style={{ fontSize: 12, justifyContent: 'center', padding: '8px 6px' }}
+          >
+            <FileUp size={14} /> ملف / ملزمة
           </button>
         </div>
 
@@ -1282,7 +1325,9 @@ function AddItemModal({
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder={
-                kind === 'VIDEO'
+                kind === 'DOCUMENT'
+                  ? 'مثال: ملزمة شرح الدرس الأول (PDF)'
+                  : kind === 'VIDEO'
                   ? 'مثال: حصة 1: شرح الحركة في خط مستقيم'
                   : kind === 'QUIZ'
                   ? 'مثال: كويز بعد الحصة'
@@ -1296,7 +1341,7 @@ function AddItemModal({
               <div className="form-group">
                 <label className="form-label">السيرفر / المشغل</label>
                 <select className="form-input" value={provider} onChange={e => setProvider(e.target.value as any)}>
-                  <option value="bunny">🐰 Bunny Stream</option>
+                  <option value="bunny">Bunny Stream</option>
                   <option value="youtube">YouTube</option>
                   <option value="vimeo">Vimeo</option>
                   <option value="wistia">Wistia</option>
@@ -1318,7 +1363,7 @@ function AddItemModal({
             </div>
           )}
 
-          {kind !== 'VIDEO' && (
+          {(kind === 'QUIZ' || kind === 'HOMEWORK') && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="form-group">
                 <label className="form-label">الدرجة النهائية</label>
@@ -1381,7 +1426,7 @@ function AddItemModal({
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
             <button className="btn btn-secondary" onClick={onClose}>إلغاء</button>
             <button className="btn btn-primary" disabled={saving} onClick={save}>
-              {saving ? <span className="spinner" style={{ width: 15, height: 15, borderWidth: 2 }} /> : (kind === 'QUIZ' ? 'إنشاء وبناء أسئلة الكويز →' : 'إنشاء وحفظ')}
+              {saving ? <span className="spinner" style={{ width: 15, height: 15, borderWidth: 2 }} /> : (kind === 'QUIZ' ? 'إنشاء وبناء أسئلة الكويز' : 'إنشاء وحفظ')}
             </button>
           </div>
         </div>
@@ -1408,6 +1453,7 @@ function EditItemModal({
 }) {
   const isVideo = unified.kind === 'video';
   const item = unified.item;
+  const isDoc = isVideo && (item as WorkflowVideo).provider === 'document';
 
   const [title, setTitle] = useState(item.title || '');
   const [description, setDescription] = useState(item.description || '');
@@ -1421,14 +1467,15 @@ function EditItemModal({
 
   const [unlockRule, setUnlockRule] = useState(item.unlockRule || 'NONE');
   const [unlockVideoId, setUnlockVideoId] = useState(item.unlockVideoId || '');
-  const [unlockPercent, setUnlockPercent] = useState(String(item.unlockPercent || 80));
+  const [unlockPercent, setUnlockPercent] = useState(item.unlockPercent != null ? String(item.unlockPercent) : '');
   const [unlockAssignmentId, setUnlockAssignmentId] = useState(item.unlockAssignmentId || '');
-  const [unlockScore, setUnlockScore] = useState(String(item.unlockScore || 50));
+  const [unlockScore, setUnlockScore] = useState(item.unlockScore != null ? String(item.unlockScore) : '');
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     if (!title.trim()) { toast.error('العنوان مطلوب'); return; }
     setSaving(true);
+    const effectiveRule = unlockRule === 'SELECT_REQUIRED' ? 'NONE' : unlockRule;
     try {
       const payload: any = {
         title: title.trim(),
@@ -1436,14 +1483,18 @@ function EditItemModal({
         chapterName: chapterName.trim() || null,
         lessonName: lessonName.trim() || null,
         attachments,
-        unlockRule,
-        unlockVideoId: unlockRule === 'WATCH_VIDEO' ? unlockVideoId : null,
-        unlockPercent: unlockRule === 'WATCH_VIDEO' ? +unlockPercent : null,
-        unlockAssignmentId: (unlockRule === 'PASS_QUIZ' || unlockRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : null,
-        unlockScore: unlockRule === 'PASS_QUIZ' ? +unlockScore : null,
+        unlockRule: effectiveRule,
+        unlockVideoId: effectiveRule === 'WATCH_VIDEO' ? unlockVideoId : null,
+        unlockPercent: effectiveRule === 'WATCH_VIDEO' ? (+unlockPercent || 100) : null,
+        unlockAssignmentId: (effectiveRule === 'PASS_QUIZ' || effectiveRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : null,
+        unlockScore: effectiveRule === 'PASS_QUIZ' ? (+unlockScore || 50) : null,
       };
 
-      if (isVideo) {
+      if (isDoc) {
+        payload.provider = 'document';
+        if (sourceUrl.trim()) payload.sourceUrl = sourceUrl.trim();
+        await videosApi.update(item.id, payload);
+      } else if (isVideo) {
         if (sourceUrl.trim()) {
           payload.sourceUrl = sourceUrl.trim();
           payload.provider = provider;
@@ -1455,7 +1506,7 @@ function EditItemModal({
         await assignmentsApi.update(item.id, payload);
       }
 
-      toast.success('تم التحديث بنجاح! ✅');
+      toast.success('تم التحديث بنجاح');
       onUpdated();
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'فشل التحديث');
@@ -1471,7 +1522,10 @@ function EditItemModal({
     }}>
       <div className="card" style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>تعديل العنصر: {item.title}</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+            {isDoc ? 'تعديل ملف / ملزمة (PDF): ' : isVideo ? 'تعديل الحصة: ' : 'تعديل العنصر: '}
+            {item.title}
+          </h3>
           <button className="icon-btn" onClick={onClose}><X size={15} /></button>
         </div>
 
@@ -1481,12 +1535,12 @@ function EditItemModal({
             <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} />
           </div>
 
-          {isVideo ? (
+          {isVideo && !isDoc && (
             <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 10 }}>
               <div className="form-group">
                 <label className="form-label">المشغل</label>
                 <select className="form-input" value={provider} onChange={e => setProvider(e.target.value)}>
-                  <option value="bunny">🐰 Bunny Stream</option>
+                  <option value="bunny">Bunny Stream</option>
                   <option value="youtube">YouTube</option>
                   <option value="vimeo">Vimeo</option>
                   <option value="wistia">Wistia</option>
@@ -1502,7 +1556,9 @@ function EditItemModal({
                 />
               </div>
             </div>
-          ) : (
+          )}
+
+          {!isVideo && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="form-group">
                 <label className="form-label">الدرجة النهائية</label>
@@ -1617,20 +1673,20 @@ function TemplateModal({
         const postQuiz = await assignmentsApi.create({
           courseName, groupName, type: 'QUIZ', title: 'Post-Lesson Quiz (كويز بعد الحصة)',
           chapterName: chapter, lessonName: lesson, contentOrder: 3,
-          unlockRule: 'WATCH_VIDEO', unlockVideoId: (video.data as any).id, unlockPercent: 80, maxGrade: 10,
+          unlockRule: 'NONE', maxGrade: 10,
         });
         // Step 4: Homework
         const hw = await assignmentsApi.create({
           courseName, groupName, type: 'HOMEWORK', title: 'Homework Assignment (الواجب المنزلي)',
           chapterName: chapter, lessonName: lesson, contentOrder: 4,
-          unlockRule: 'PASS_QUIZ', unlockAssignmentId: (postQuiz.data as any).id, unlockScore: 60, maxGrade: 20,
+          unlockRule: 'NONE', maxGrade: 20,
         });
         // Step 5: HW Solution Video
         await videosApi.create({
           courseName, groupName, title: 'Homework Solution (فيديو حل الواجب)',
           chapterName: chapter, lessonName: lesson, contentOrder: 5, provider: 'bunny',
           sourceUrl: 'https://iframe.mediadelivery.net/embed/demo/solution-video-guid',
-          unlockRule: 'SUBMIT_ASSIGNMENT', unlockAssignmentId: (hw.data as any).id,
+          unlockRule: 'NONE',
         });
       } else if (templateType === 'LANGUAGES') {
         // Step 1: Lecture Video
@@ -1643,13 +1699,13 @@ function TemplateModal({
         const hw = await assignmentsApi.create({
           courseName, groupName, type: 'HOMEWORK', title: 'Exercises & Writing Practice (تدريبات الواجب)',
           chapterName: chapter, lessonName: lesson, contentOrder: 2,
-          unlockRule: 'WATCH_VIDEO', unlockVideoId: (video.data as any).id, unlockPercent: 80, maxGrade: 20,
+          unlockRule: 'NONE', maxGrade: 20,
         });
         // Step 3: Unit Exam
         await assignmentsApi.create({
           courseName, groupName, type: 'QUIZ', title: 'Lesson Comprehensive Quiz (امتحان الحصة)',
           chapterName: chapter, lessonName: lesson, contentOrder: 3,
-          unlockRule: 'SUBMIT_ASSIGNMENT', unlockAssignmentId: (hw.data as any).id, maxGrade: 20,
+          unlockRule: 'NONE', maxGrade: 20,
         });
       } else {
         // Math Template
@@ -1661,22 +1717,22 @@ function TemplateModal({
         const hw = await assignmentsApi.create({
           courseName, groupName, type: 'HOMEWORK', title: 'Problem Set (مسائل وتدريبات)',
           chapterName: chapter, lessonName: lesson, contentOrder: 2,
-          unlockRule: 'WATCH_VIDEO', unlockVideoId: (video.data as any).id, unlockPercent: 70, maxGrade: 20,
+          unlockRule: 'NONE', maxGrade: 20,
         });
         const solVideo = await videosApi.create({
           courseName, groupName, title: 'Problems Solution Video (حل المسائل والأفكار)',
           chapterName: chapter, lessonName: lesson, contentOrder: 3, provider: 'bunny',
           sourceUrl: 'https://iframe.mediadelivery.net/embed/demo/solution-video-guid',
-          unlockRule: 'SUBMIT_ASSIGNMENT', unlockAssignmentId: (hw.data as any).id,
+          unlockRule: 'NONE',
         });
         await assignmentsApi.create({
           courseName, groupName, type: 'QUIZ', title: 'Quick Speed Quiz (كويز سريع)',
           chapterName: chapter, lessonName: lesson, contentOrder: 4,
-          unlockRule: 'WATCH_VIDEO', unlockVideoId: (solVideo.data as any).id, unlockPercent: 80, maxGrade: 10,
+          unlockRule: 'NONE', maxGrade: 10,
         });
       }
 
-      toast.success('Template applied successfully with sequential unlock rules!');
+      toast.success('Template applied successfully');
       onApplied();
     } catch {
       toast.error('Failed to apply template');
@@ -1699,7 +1755,7 @@ function TemplateModal({
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-          Automatically builds a standardized lesson pipeline with linked unlock rules:
+          Automatically builds a standardized lesson pipeline:
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
@@ -1722,9 +1778,9 @@ function TemplateModal({
               background: templateType === 'SCIENCE' ? 'rgba(99,102,241,0.08)' : 'transparent', cursor: 'pointer',
             }}
           >
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>🧪 Science / Physics Pipeline (قالب الفيزياء والعلوم)</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Science / Physics Pipeline (قالب الفيزياء والعلوم)</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              Pre-quiz ➔ Lecture Video ➔ Post-quiz ➔ Homework ➔ Solution Video
+              Pre-quiz → Lecture Video → Post-quiz → Homework → Solution Video
             </div>
           </label>
 
@@ -1735,9 +1791,9 @@ function TemplateModal({
               background: templateType === 'LANGUAGES' ? 'rgba(99,102,241,0.08)' : 'transparent', cursor: 'pointer',
             }}
           >
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>🌍 Languages Pipeline (قالب اللغات)</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Languages Pipeline (قالب اللغات)</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              Lecture Video ➔ Homework Practice ➔ Comprehensive Lesson Quiz
+              Lecture Video → Homework Practice → Comprehensive Lesson Quiz
             </div>
           </label>
 
@@ -1748,9 +1804,9 @@ function TemplateModal({
               background: templateType === 'MATH' ? 'rgba(99,102,241,0.08)' : 'transparent', cursor: 'pointer',
             }}
           >
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>📐 Math Pipeline (قالب الرياضيات)</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Math Pipeline (قالب الرياضيات)</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              Theories Video ➔ Problem Set ➔ Solutions Video ➔ Quick Speed Quiz
+              Theories Video → Problem Set → Solutions Video → Quick Speed Quiz
             </div>
           </label>
         </div>

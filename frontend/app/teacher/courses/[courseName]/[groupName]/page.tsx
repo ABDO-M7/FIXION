@@ -8,7 +8,7 @@ import CourseWorkflowBuilder from '@/components/CourseWorkflowBuilder';
 import {
   ArrowLeft, GraduationCap, Users, Plus, Trash2, X,
   ClipboardList, BookOpen, BarChart2, ChevronDown, ChevronRight,
-  CheckCircle, Clock, Upload, Edit3, Video, Layers
+  CheckCircle, Clock, Upload, Edit3, Video, Layers, FileText,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -65,7 +65,7 @@ function CreateModal({
       <div className="card" style={{ width: '100%', maxWidth: 480 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}>
           <h3 style={{ fontWeight: 700, fontSize: 16 }}>
-            {type === 'QUIZ' ? '📝 New Quiz' : '📚 New Homework'}
+            {type === 'QUIZ' ? 'New Quiz' : 'New Homework'}
           </h3>
           <button onClick={onClose} className="icon-btn" style={{ width: 28, height: 28 }}><X size={14} /></button>
         </div>
@@ -148,7 +148,7 @@ function CreateModal({
           </div>
           {type === 'QUIZ' && (
             <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'var(--primary-light)' }}>
-              📝 After creating, you'll be taken to the <strong>Quiz Builder</strong> to add questions.
+              After creating, you will be taken to the <strong>Quiz Builder</strong> to add questions.
             </div>
           )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
@@ -182,7 +182,9 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
   if (!data || data.students.length === 0) {
     return (
       <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>📊</div>
+        <div style={{ display: 'grid', placeItems: 'center', marginBottom: 12 }}>
+          <Users size={44} style={{ color: 'var(--text-muted)' }} />
+        </div>
         <h3 style={{ fontWeight: 700, marginBottom: 8 }}>No students yet</h3>
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No students enrolled in this group.</p>
       </div>
@@ -216,12 +218,12 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
             <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 700, minWidth: 160 }}>Student</th>
             {quizzes.length > 0 && (
               <th colSpan={quizzes.length} style={{ padding: '10px 14px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--primary-light)', borderLeft: '2px solid var(--border)' }}>
-                📝 QUIZZES
+                QUIZZES
               </th>
             )}
             {homeworks.length > 0 && (
               <th colSpan={homeworks.length} style={{ padding: '10px 14px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#f59e0b', borderLeft: '2px solid var(--border)' }}>
-                📚 HOMEWORK
+                HOMEWORK
               </th>
             )}
           </tr>
@@ -407,8 +409,8 @@ export default function GroupDetailPage() {
         </div>
       ) : visibleAssignments.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '52px 24px' }}>
-          <div style={{ fontSize: 52, marginBottom: 12 }}>
-            {tab === 'QUIZ' ? '📝' : '📚'}
+          <div style={{ display: 'grid', placeItems: 'center', marginBottom: 12 }}>
+            {tab === 'QUIZ' ? <ClipboardList size={44} style={{ color: 'var(--primary-light)' }} /> : <FileText size={44} style={{ color: '#f59e0b' }} />}
           </div>
           <h3 style={{ fontWeight: 700, fontSize: 17, marginBottom: 8 }}>No {tab === 'QUIZ' ? 'quizzes' : 'homework'} yet</h3>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>

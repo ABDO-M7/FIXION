@@ -613,8 +613,9 @@ export class AssignmentsService {
     if (rule === UnlockRuleType.WATCH_VIDEO) {
       if (!prerequisiteVideoId) return { isLocked: false, lockReason: null };
       const progress = await this.videoProgressRepo.findOne({ where: { videoId: prerequisiteVideoId, studentId } });
-      if (!progress || progress.watchedPercent < (requiredPercent ?? 80)) {
-        return { isLocked: true, lockReason: `Watch at least ${requiredPercent ?? 80}% of the previous video` };
+      const threshold = requiredPercent != null ? requiredPercent : 100;
+      if (!progress || progress.watchedPercent < threshold) {
+        return { isLocked: true, lockReason: `Watch at least ${threshold}% of the previous video` };
       }
       return { isLocked: false, lockReason: null };
     }

@@ -94,7 +94,7 @@ function ReviewScreen({
 
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}>
-              {isPending ? 'Submitted! Awaiting Grading' : (passed ? 'Great Job! 🎉' : 'Keep Practicing 💪')}
+              {isPending ? 'Submitted! Awaiting Grading' : (passed ? 'Great Job!' : 'Keep Practicing')}
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
               {isPending
