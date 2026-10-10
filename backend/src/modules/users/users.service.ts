@@ -105,6 +105,12 @@ export class UsersService {
     return this.findById(id) as Promise<User>;
   }
 
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    await this.usersRepo.update(id, { passwordHash, refreshTokenHash: null as any });
+  }
+
   async remove(id: string): Promise<void> {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi } from '@/lib/api';
-import { GraduationCap, ChevronRight, Layers, BookOpen, Users, Plus, X, Trash2 } from 'lucide-react';
+import { GraduationCap, ChevronRight, Layers, BookOpen, Users, Plus, X, Trash2, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -22,6 +22,8 @@ export default function AdminCoursesPage() {
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [newCourseName, setNewCourseName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editCourseModal, setEditCourseModal] = useState<{ originalName: string; newName: string } | null>(null);
+  const [renaming, setRenaming] = useState(false);
 
   const router = useRouter();
 
@@ -72,6 +74,36 @@ export default function AdminCoursesPage() {
       toast.success(`Course "${courseName}" deleted`);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to delete course');
+    }
+  };
+
+  const handleOpenEditCourse = (e: React.MouseEvent, courseName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditCourseModal({ originalName: courseName, newName: courseName });
+  };
+
+  const handleRenameCourse = async () => {
+    if (!editCourseModal) return;
+    const targetName = editCourseModal.newName.trim();
+    if (!targetName) {
+      toast.error('Course name is required');
+      return;
+    }
+    if (targetName === editCourseModal.originalName) {
+      setEditCourseModal(null);
+      return;
+    }
+    try {
+      setRenaming(true);
+      await assignmentsApi.updateCourse(editCourseModal.originalName, { name: targetName });
+      setCourses(prev => prev.map(c => c === editCourseModal.originalName ? targetName : c));
+      toast.success(`Course renamed to "${targetName}"!`);
+      setEditCourseModal(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to rename course');
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -139,16 +171,28 @@ export default function AdminCoursesPage() {
                         </span>
                       </div>
                     </div>
-                    <button
-                      onClick={e => handleDeleteCourse(e, course)}
-                      className="icon-btn"
-                      title="Delete Course"
-                      style={{ color: 'var(--text-muted)', opacity: 0.6 }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.6'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        onClick={e => handleOpenEditCourse(e, course)}
+                        className="icon-btn"
+                        title="Rename Course"
+                        style={{ color: 'var(--text-muted)', opacity: 0.7 }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.color = 'var(--primary-light)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.7'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={e => handleDeleteCourse(e, course)}
+                        className="icon-btn"
+                        title="Delete Course"
+                        style={{ color: 'var(--text-muted)', opacity: 0.6 }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.6'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
                     <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -196,6 +240,47 @@ export default function AdminCoursesPage() {
                 </button>
                 <button className="btn btn-primary" onClick={handleCreateCourse} disabled={submitting}>
                   {submitting ? 'Creating…' : 'Create Course'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Course Modal */}
+      {editCourseModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+          display: 'grid', placeItems: 'center', zIndex: 1100, padding: 20,
+        }}>
+          <div className="card" style={{ width: '100%', maxWidth: 420 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Pencil size={16} style={{ color: 'var(--primary-light)' }} /> Rename Course
+              </h3>
+              <button className="icon-btn" onClick={() => setEditCourseModal(null)}><X size={15} /></button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+              Renaming <strong>"{editCourseModal.originalName}"</strong> will seamlessly update all connected lessons, videos, enrollments, and codes.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: 12 }}>New Course Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editCourseModal.newName}
+                  onChange={e => setEditCourseModal(prev => prev ? { ...prev, newName: e.target.value } : null)}
+                  onKeyDown={e => e.key === 'Enter' && !renaming && handleRenameCourse()}
+                  disabled={renaming}
+                  autoFocus
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+                <button className="btn btn-secondary" onClick={() => setEditCourseModal(null)} disabled={renaming}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" onClick={handleRenameCourse} disabled={renaming}>
+                  {renaming ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
             </div>

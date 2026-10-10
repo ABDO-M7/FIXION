@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi, adminApi } from '@/lib/api';
-import { Users, ArrowLeft, GraduationCap, Plus, ChevronRight, Layers, X, User, Calendar, Trash2 } from 'lucide-react';
+import { Users, ArrowLeft, GraduationCap, Plus, ChevronRight, Layers, X, User, Calendar, Trash2, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -37,6 +37,9 @@ export default function AdminCourseGroupsPage() {
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showEditCourse, setShowEditCourse] = useState(false);
+  const [editCourseName, setEditCourseName] = useState('');
+  const [renamingCourse, setRenamingCourse] = useState(false);
 
   const loadGroups = () => {
     assignmentsApi.groupsDetailed(decoded)
@@ -91,6 +94,29 @@ export default function AdminCourseGroupsPage() {
     }
   };
 
+  const handleRenameCourse = async () => {
+    const target = editCourseName.trim();
+    if (!target) {
+      toast.error('Course name is required');
+      return;
+    }
+    if (target === decoded) {
+      setShowEditCourse(false);
+      return;
+    }
+    try {
+      setRenamingCourse(true);
+      await assignmentsApi.updateCourse(decoded, { name: target });
+      toast.success(`Course renamed to "${target}"!`);
+      setShowEditCourse(false);
+      router.push(`/admin/courses/${encodeURIComponent(target)}`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to rename course');
+    } finally {
+      setRenamingCourse(false);
+    }
+  };
+
   const handleDeleteGroup = async (e: React.MouseEvent, groupName: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -120,7 +146,17 @@ export default function AdminCourseGroupsPage() {
               <GraduationCap size={24} style={{ color }} />
             </div>
             <div>
-              <h1 className="page-title" style={{ marginBottom: 2 }}>{decoded}</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h1 className="page-title" style={{ marginBottom: 2 }}>{decoded}</h1>
+                <button
+                  onClick={() => { setEditCourseName(decoded); setShowEditCourse(true); }}
+                  className="icon-btn"
+                  title="Rename Course"
+                  style={{ color: 'var(--text-muted)', width: 28, height: 28 }}
+                >
+                  <Pencil size={14} />
+                </button>
+              </div>
               <p className="page-subtitle">Select or create a group to manage its lesson workflow</p>
             </div>
           </div>
@@ -259,7 +295,7 @@ export default function AdminCourseGroupsPage() {
                   <option value="">— اختر المدرس —</option>
                   {teachers.map(t => (
                     <option key={t.id} value={t.id}>
-                      {t.name} {t.subjects?.includes(decoded) ? '⭐ (مدرس المادة)' : ''}
+                      {t.name} {t.subjects?.includes(decoded) ? '(مدرس المادة)' : ''}
                     </option>
                   ))}
                 </select>
@@ -269,6 +305,47 @@ export default function AdminCourseGroupsPage() {
                 <button className="btn btn-secondary" onClick={() => setShowAddGroup(false)} disabled={submitting}>Cancel</button>
                 <button className="btn btn-primary" onClick={handleCreateGroup} disabled={submitting}>
                   {submitting ? 'Creating…' : 'Create & Open Workflow →'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Course Modal */}
+      {showEditCourse && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+          display: 'grid', placeItems: 'center', zIndex: 1100, padding: 20,
+        }}>
+          <div className="card" style={{ width: '100%', maxWidth: 420 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Pencil size={16} style={{ color: 'var(--primary-light)' }} /> Rename Course
+              </h3>
+              <button className="icon-btn" onClick={() => setShowEditCourse(false)}><X size={15} /></button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+              Renaming <strong>"{decoded}"</strong> will update all related lessons, videos, enrollments, and subscription codes.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: 12 }}>New Course Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editCourseName}
+                  onChange={e => setEditCourseName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !renamingCourse && handleRenameCourse()}
+                  disabled={renamingCourse}
+                  autoFocus
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+                <button className="btn btn-secondary" onClick={() => setShowEditCourse(false)} disabled={renamingCourse}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" onClick={handleRenameCourse} disabled={renamingCourse}>
+                  {renamingCourse ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
             </div>

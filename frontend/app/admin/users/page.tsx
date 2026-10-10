@@ -2,7 +2,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import AppShell from '@/components/AppShell';
 import { adminApi } from '@/lib/api';
-import { Search, UserX, UserCheck, Trash2, BookOpen, X, Check, UserPlus } from 'lucide-react';
+import { Search, UserX, UserCheck, Trash2, BookOpen, X, Check, UserPlus, KeyRound, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -29,6 +29,8 @@ export default function AdminUsersPage() {
   const [savingSubjects, setSavingSubjects] = useState(false);
   const [staffModal, setStaffModal] = useState(false);
   const [creatingStaff, setCreatingStaff] = useState(false);
+  const [passwordModal, setPasswordModal] = useState<{ user: any; password: string; confirm: string; show: boolean } | null>(null);
+  const [savingPassword, setSavingPassword] = useState(false);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [staffForm, setStaffForm] = useState({
     name: '',
@@ -77,6 +79,33 @@ export default function AdminUsersPage() {
       setUsers(prev => prev.filter(u => u.id !== id));
       toast.success('User deleted');
     } catch { toast.error('Failed to delete user'); }
+  };
+
+  const openPasswordModal = (u: any) => {
+    setPasswordModal({ user: u, password: '', confirm: '', show: false });
+  };
+
+  const handleSavePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!passwordModal) return;
+    if (passwordModal.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    if (passwordModal.password !== passwordModal.confirm) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await adminApi.updateUserPassword(passwordModal.user.id, passwordModal.password);
+      toast.success(`Password updated for "${passwordModal.user.name}"`);
+      setPasswordModal(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update password');
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   const openSubjectsModal = (u: any) => {
@@ -271,7 +300,14 @@ export default function AdminUsersPage() {
                 </td>
                 <td style={{ fontSize: 12 }}>{formatDistanceToNow(new Date(u.createdAt), { addSuffix: true })}</td>
                 <td>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <button
+                      onClick={() => openPasswordModal(u)}
+                      className="btn btn-secondary btn-sm"
+                      title="Change Password"
+                    >
+                      <KeyRound size={13} /> Password
+                    </button>
                     <button
                       onClick={() => toggleStatus(u.id, u.isActive)}
                       className={`btn btn-sm ${u.isActive ? 'btn-secondary' : 'btn-primary'}`}
@@ -432,6 +468,80 @@ export default function AdminUsersPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+      {/* Password Reset Modal */}
+      {passwordModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20,
+        }}>
+          <div className="card" style={{ width: '100%', maxWidth: 420, padding: 26 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <KeyRound size={17} style={{ color: 'var(--primary-light)' }} /> Change User Password
+              </h3>
+              <button onClick={() => setPasswordModal(null)} className="icon-btn" style={{ width: 28, height: 28 }}>
+                <X size={15} />
+              </button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 18 }}>
+              Setting a new password for <strong>{passwordModal.user.name}</strong> ({passwordModal.user.email || 'Student'}).
+            </p>
+            <form onSubmit={handleSavePassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: 12 }}>New Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={passwordModal.show ? 'text' : 'password'}
+                    value={passwordModal.password}
+                    onChange={e => setPasswordModal(p => p ? { ...p, password: e.target.value } : null)}
+                    className="form-input"
+                    placeholder="Min. 6 characters"
+                    required
+                    minLength={6}
+                    autoFocus
+                    style={{ paddingRight: 36 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPasswordModal(p => p ? { ...p, show: !p.show } : null)}
+                    className="icon-btn"
+                    style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', opacity: 0.7, width: 26, height: 26 }}
+                    title={passwordModal.show ? 'Hide password' : 'Show password'}
+                  >
+                    {passwordModal.show ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: 12 }}>Confirm New Password</label>
+                <input
+                  type={passwordModal.show ? 'text' : 'password'}
+                  value={passwordModal.confirm}
+                  onChange={e => setPasswordModal(p => p ? { ...p, confirm: e.target.value } : null)}
+                  className="form-input"
+                  placeholder="Repeat new password"
+                  required
+                  minLength={6}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+                <button type="button" onClick={() => setPasswordModal(null)} className="btn btn-secondary" disabled={savingPassword}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={savingPassword}>
+                  {savingPassword ? (
+                    <><span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Updating...</>
+                  ) : (
+                    'Update Password'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </AppShell>

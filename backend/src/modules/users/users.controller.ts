@@ -168,6 +168,22 @@ export class UsersController {
     return this.usersService.update(id, { permissions: safePermissions });
   }
 
+  @Patch(':id/password')
+  @Roles(UserRole.ADMIN)
+  async updatePassword(
+    @Param('id') id: string,
+    @Body('password') password: string,
+  ) {
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      throw new BadRequestException('Password must be at least 6 characters');
+    }
+    const user = await this.usersService.findById(id);
+    if (!user) throw new BadRequestException('User not found');
+    const passwordHash = await bcrypt.hash(password, 12);
+    await this.usersService.updatePassword(id, passwordHash);
+    return { success: true, message: 'Password updated successfully' };
+  }
+
   @Delete(':id')
   @Roles(UserRole.ADMIN)
   remove(@Param('id') id: string) {

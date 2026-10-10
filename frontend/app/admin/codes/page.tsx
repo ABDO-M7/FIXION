@@ -19,6 +19,9 @@ export default function AdminCodesPage() {
   const [usageTotal, setUsageTotal] = useState(0);
   const [teachers, setTeachers] = useState<{ id: string; name: string; email: string; subjects?: string[] }[]>([]);
   const [availableCourses, setAvailableCourses] = useState<string[]>(['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه']);
+  const [availableGroups, setAvailableGroups] = useState<string[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [customGroup, setCustomGroup] = useState(false);
   const [form, setForm] = useState({
     plan: 'monthly',
     quantity: '10',
@@ -66,6 +69,45 @@ export default function AdminCodesPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!form.courseName) {
+      setAvailableGroups([]);
+      setForm(p => ({ ...p, groupName: '' }));
+      setCustomGroup(false);
+      return;
+    }
+    setLoadingGroups(true);
+    assignmentsApi.groupsDetailed(form.courseName)
+      .then(res => {
+        const list = Array.isArray(res.data) ? res.data : [];
+        const groupNames = list.map((g: any) => typeof g === 'string' ? g : g.groupName).filter(Boolean);
+        const resolvedGroups = groupNames.length > 0 ? groupNames : ['Group 1'];
+        setAvailableGroups(resolvedGroups);
+        setCustomGroup(false);
+        setForm(p => {
+          const nextGroup = p.groupName && resolvedGroups.includes(p.groupName) ? p.groupName : (resolvedGroups[0] || '');
+          const matchedGroup = list.find((g: any) => g.groupName === nextGroup);
+          const nextTeacherId = (!p.teacherId && matchedGroup?.teacherId) ? matchedGroup.teacherId : p.teacherId;
+          return { ...p, groupName: nextGroup, teacherId: nextTeacherId || p.teacherId };
+        });
+      })
+      .catch(() => {
+        assignmentsApi.groups(form.courseName)
+          .then(res => {
+            const list = Array.isArray(res.data) ? res.data : [];
+            const resolvedGroups = list.length > 0 ? list : ['Group 1'];
+            setAvailableGroups(resolvedGroups);
+            setCustomGroup(false);
+            setForm(p => ({
+              ...p,
+              groupName: p.groupName && resolvedGroups.includes(p.groupName) ? p.groupName : (resolvedGroups[0] || ''),
+            }));
+          })
+          .catch(() => setAvailableGroups([]));
+      })
+      .finally(() => setLoadingGroups(false));
+  }, [form.courseName]);
 
 
   const generate = async () => {
@@ -207,14 +249,59 @@ export default function AdminCodesPage() {
                     </select>
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: 12 }}>Group Name</label>
-                    <input
-                      value={form.groupName}
-                      onChange={e => setForm(p => ({ ...p, groupName: e.target.value }))}
-                      className="form-input"
-                      placeholder="e.g. Group A"
-                      style={{ fontSize: 13 }}
-                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <label className="form-label" style={{ fontSize: 12, marginBottom: 0 }}>Group Name</label>
+                      {form.courseName && availableGroups.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomGroup(!customGroup)}
+                          className="btn-link"
+                          style={{ fontSize: 11, color: 'var(--primary-light)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        >
+                          {customGroup ? 'Pick from list' : '+ Custom'}
+                        </button>
+                      )}
+                    </div>
+                    {loadingGroups ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
+                        <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Loading groups...
+                      </div>
+                    ) : customGroup ? (
+                      <input
+                        value={form.groupName}
+                        onChange={e => setForm(p => ({ ...p, groupName: e.target.value }))}
+                        className="form-input"
+                        placeholder="e.g. Group A"
+                        style={{ fontSize: 13 }}
+                      />
+                    ) : (
+                      <select
+                        value={form.groupName}
+                        onChange={e => {
+                          if (e.target.value === '__custom__') {
+                            setCustomGroup(true);
+                            setForm(p => ({ ...p, groupName: '' }));
+                          } else {
+                            setForm(p => ({ ...p, groupName: e.target.value }));
+                          }
+                        }}
+                        className="form-input"
+                        style={{ fontSize: 13, appearance: 'auto' }}
+                        disabled={!form.courseName}
+                      >
+                        {!form.courseName ? (
+                          <option value="">— Select course first —</option>
+                        ) : (
+                          <>
+                            <option value="">— No group —</option>
+                            {availableGroups.map(g => (
+                              <option key={g} value={g}>{g}</option>
+                            ))}
+                            <option value="__custom__">+ Enter custom group...</option>
+                          </>
+                        )}
+                      </select>
+                    )}
                   </div>
                 </div>
               </div>

@@ -181,6 +181,8 @@ export const assignmentsApi = {
   myCourses: () => api.get('/assignments/courses/mine'),
   createCourse: (data: { name: string; color?: string; description?: string }) =>
     api.post('/assignments/courses', data),
+  updateCourse: (courseName: string, data: { name?: string; color?: string; description?: string }) =>
+    api.patch(`/assignments/courses/${encodeURIComponent(courseName)}`, data),
   deleteCourse: (courseName: string) =>
     api.delete(`/assignments/courses/${encodeURIComponent(courseName)}`),
   groups: (courseName: string) => api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups`),
@@ -265,6 +267,8 @@ export const adminApi = {
   updateUserPermissions: (id: string, permissions: Record<string, boolean>) => api.patch(`/users/${id}/permissions`, { permissions }),
   updateAssignedTeacher: (id: string, assignedTeacherId: string) =>
     api.patch(`/users/${id}/assigned-teacher`, { assignedTeacherId }),
+  updateUserPassword: (id: string, password: string) =>
+    api.patch(`/users/${id}/password`, { password }),
   deleteUser: (id: string) => api.delete(`/users/${id}`),
 };
 

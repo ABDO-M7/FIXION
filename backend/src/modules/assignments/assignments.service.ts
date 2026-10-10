@@ -13,6 +13,8 @@ import { VideoProgress } from '../videos/entities/video-progress.entity';
 import { Course } from './entities/course.entity';
 import { CourseGroup } from './entities/course-group.entity';
 import { CourseVideo } from '../videos/entities/course-video.entity';
+import { SubscriptionCode } from '../subscriptions/entities/subscription-code.entity';
+import { Question } from '../questions/entities/question.entity';
 
 @Injectable()
 export class AssignmentsService {
@@ -91,6 +93,73 @@ export class AssignmentsService {
     await this.coursesRepo.delete({ name: courseName });
     await this.courseGroupsRepo.delete({ courseName });
     return { success: true };
+  }
+
+  // ─── ADMIN: update course ────────────────────────────────────────────────
+  async updateCourse(currentName: string, dto: { name?: string; color?: string; description?: string }) {
+    const rawNewName = dto.name !== undefined ? dto.name.trim() : currentName;
+    if (!rawNewName) throw new BadRequestException('Course name cannot be empty');
+
+    const nameChanged = rawNewName !== currentName;
+
+    if (nameChanged) {
+      const existingNew = await this.coursesRepo.findOne({ where: { name: rawNewName } });
+      if (existingNew) {
+        throw new BadRequestException(`Course with name "${rawNewName}" already exists`);
+      }
+    }
+
+    let course = await this.coursesRepo.findOne({ where: { name: currentName } });
+    if (!course) {
+      course = this.coursesRepo.create({
+        name: rawNewName,
+        color: dto.color !== undefined ? dto.color : null,
+        description: dto.description !== undefined ? dto.description : null,
+      });
+      await this.coursesRepo.save(course);
+    } else {
+      if (nameChanged) course.name = rawNewName;
+      if (dto.color !== undefined) course.color = dto.color || null;
+      if (dto.description !== undefined) course.description = dto.description || null;
+      await this.coursesRepo.save(course);
+    }
+
+    if (nameChanged) {
+      // 1. Update CourseGroup
+      await this.courseGroupsRepo.update({ courseName: currentName }, { courseName: rawNewName });
+
+      // 2. Update Assignment
+      await this.assignmentsRepo.update({ courseName: currentName }, { courseName: rawNewName });
+
+      // 3. Update CourseVideo
+      await this.videosRepo.update({ courseName: currentName }, { courseName: rawNewName });
+
+      // 4. Update CourseEnrollment
+      await this.enrollmentsRepo.update({ courseName: currentName }, { courseName: rawNewName });
+
+      // 5. Update SubscriptionCode
+      await this.coursesRepo.manager.getRepository(SubscriptionCode).update(
+        { courseName: currentName },
+        { courseName: rawNewName },
+      );
+
+      // 6. Update Question
+      await this.coursesRepo.manager.getRepository(Question).update(
+        { courseName: currentName },
+        { courseName: rawNewName },
+      );
+
+      // 7. Update Users subjects array
+      const allUsers = await this.usersRepo.find();
+      for (const u of allUsers) {
+        if (Array.isArray(u.subjects) && u.subjects.includes(currentName)) {
+          const updatedSubjects = u.subjects.map(s => s === currentName ? rawNewName : s);
+          await this.usersRepo.update(u.id, { subjects: updatedSubjects });
+        }
+      }
+    }
+
+    return course;
   }
 
   // ─── ADMIN/STAFF: create/update course group ─────────────────────────────

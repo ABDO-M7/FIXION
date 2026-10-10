@@ -38,6 +38,16 @@ export class AssignmentsController {
     return this.assignmentsService.deleteCourse(courseName);
   }
 
+  // ── Admin: update course ───────────────────────────────────────────────────
+  @Patch('courses/:courseName')
+  @Roles(UserRole.ADMIN)
+  updateCourse(
+    @Param('courseName') courseName: string,
+    @Body() dto: { name?: string; color?: string; description?: string },
+  ) {
+    return this.assignmentsService.updateCourse(courseName, dto);
+  }
+
   // ── Admin/Staff: create or update group ────────────────────────────────────
   @Post('courses/:courseName/groups')
   @Roles(...STAFF_AND_ADMIN)
