@@ -36,8 +36,13 @@ function providerUrl(video: InteractiveCourseVideo) {
   const provider = video.provider || 'youtube';
   const id = video.providerVideoId || video.youtubeVideoId || '';
   if (provider === 'vimeo') return 'https://player.vimeo.com/video/' + id + '?api=1&background=1&controls=0&title=0&byline=0&portrait=0&dnt=1';
-  if (provider === 'wistia') return 'https://fast.wistia.net/embed/iframe/' + id + '?controlsVisibleOnLoad=false&playbar=false&smallPlayButton=false&branding=false';
-  if (provider === 'bunny') return 'https://iframe.mediadelivery.net/embed/' + id + '?autoplay=false&controls=false&responsive=true&preload=true';
+  if (provider === 'bunny') {
+    let cleanId = id;
+    if (cleanId.includes('iframe.mediadelivery.net/embed/')) {
+      cleanId = cleanId.split('iframe.mediadelivery.net/embed/')[1].split('?')[0];
+    }
+    return 'https://iframe.mediadelivery.net/embed/' + cleanId + '?autoplay=false&loop=false&muted=false&preload=true&responsive=true';
+  }
   const origin = typeof window !== 'undefined' ? '&origin=' + encodeURIComponent(window.location.origin) : '';
   return 'https://www.youtube.com/embed/' + id + '?enablejsapi=1&controls=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&fs=0' + origin;
 }
@@ -54,7 +59,9 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const wistiaElementRef = useRef<HTMLElement>(null);
   const providerPlayerRef = useRef<any>(null);
   const checkpointPauseLockRef = useRef(false);
-  const [started, setStarted] = useState(false);
+  const provider = video.provider || 'youtube';
+  const isBunny = provider === 'bunny';
+  const [started, setStarted] = useState(isBunny);
   const [playing, setPlaying] = useState(false);
   const [experience, setExperience] = useState<Experience | null>(null);
   const [loadingExperience, setLoadingExperience] = useState(false);
@@ -68,7 +75,6 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const [playerError, setPlayerError] = useState<string | null>(null);
   const lastProgressReportRef = useRef(0);
 
-  const provider = video.provider || 'youtube';
   const checkpoints = experience?.checkpoints || [];
   const solvedIds = useMemo(() => new Set(checkpoints.filter(item => item.response?.isCorrect).map(item => item.id)), [checkpoints]);
 
@@ -434,12 +440,19 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   return (
     <article className="card" style={{ overflow: 'hidden', padding: 0 }}>
       <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#09090b', overflow: 'hidden', isolation: 'isolate' }}>
-        {started ? provider === 'wistia' ? (
+        {started || isBunny ? provider === 'wistia' ? (
           <div style={{ position: 'absolute', inset: 0, background: '#000' }}>
             {createElement('wistia-player', { ref: wistiaElementRef, 'media-id': video.providerVideoId, style: { display: 'block', width: '100%', height: '100%' } })}
           </div>
         ) : (
-          <iframe ref={iframeRef} title={video.title} src={providerUrl(video)} allow="autoplay; encrypted-media; picture-in-picture" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, zIndex: 0 }} />
+          <iframe
+            ref={iframeRef}
+            title={video.title}
+            src={providerUrl(video)}
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+            allowFullScreen
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, zIndex: 0 }}
+          />
         ) : (
           <button
             onClick={start}
@@ -449,7 +462,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
             <span style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--primary)', display: 'grid', placeItems: 'center', boxShadow: '0 8px 32px rgba(0,0,0,.45)' }}><Play fill="currentColor" size={26} /></span>
           </button>
         )}
-        {started && (
+        {started && !isBunny && (
           <div style={{ position: 'absolute', inset: 0, pointerEvents: pending ? 'auto' : 'none', zIndex: 2 }}>
             <div style={{ position: 'absolute', inset: '0 0 auto', height: 40, background: 'linear-gradient(#080d15 0%, rgba(8,13,21,.72) 68%, transparent 100%)' }} />
             <div style={{ position: 'absolute', left: 18, top: 16, color: 'rgba(255,255,255,.88)', fontSize: 12, fontWeight: 700 }}>FIXION · {video.title}</div>
@@ -509,7 +522,6 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         </div>
         {video.description && <p style={{ margin: '7px 0 0', color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.5 }}>{video.description}</p>}
         {solution && (solution.text || solution.url) && <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.2)', color: 'var(--text-secondary)', fontSize: 13 }}><div style={{ color: '#86efac', fontWeight: 700, marginBottom: 4 }}><CheckCircle2 size={14} style={{ verticalAlign: 'middle', marginRight: 5 }} />Solution</div>{solution.text && <div>{solution.text}</div>}{solution.url && <a href={solution.url} target="_blank" rel="noreferrer" style={{ color: '#67e8f9', display: 'inline-block', marginTop: 5 }}>Open solution file</a>}</div>}
-        {started && <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8 }}>Playback position: {Math.floor(currentTime)}s</div>}
       </div>
     </article>
   );

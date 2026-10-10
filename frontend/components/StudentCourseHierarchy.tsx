@@ -195,15 +195,11 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
           <strong style={{ fontSize: 14, color: video.isLocked ? 'var(--text-secondary)' : 'var(--text-primary)' }}>
             {video.title}
           </strong>
-          {isDoc ? (
+          {isDoc && (
             <span className="badge" style={{ fontSize: 10, background: 'rgba(14,165,233,0.12)', color: '#38bdf8' }}>
               ملف / ملزمة (PDF)
             </span>
-          ) : provider === 'bunny' ? (
-            <span className="badge" style={{ fontSize: 10, background: 'rgba(59,130,246,0.12)', color: '#60a5fa' }}>
-              Bunny Stream
-            </span>
-          ) : null}
+          )}
         </div>
         {video.description && (
           <p style={{ margin: '3px 0 0', color: 'var(--text-muted)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
