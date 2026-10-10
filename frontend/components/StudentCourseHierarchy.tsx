@@ -1,7 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { BookOpen, ChevronDown, ChevronRight, ClipboardList, Play, Video, FileText, Download, ExternalLink, Lock } from 'lucide-react';
+import {
+  BookOpen, ChevronDown, ChevronRight, Play, FileText,
+  Download, ExternalLink, Lock, CheckCircle2, Layers, Clock
+} from 'lucide-react';
 import { useState } from 'react';
 import type React from 'react';
 
@@ -49,8 +52,6 @@ type Lesson = {
   items: Array<{ kind: 'video'; value: VideoItem } | { kind: 'assignment'; value: Assignment }>;
 };
 
-type Chapter = { name: string; lessons: Lesson[] };
-
 export default function StudentCourseHierarchy({
   enrollmentId,
   assignments,
@@ -64,8 +65,8 @@ export default function StudentCourseHierarchy({
 }) {
   const chapters = new Map<string, Map<string, Lesson['items']>>();
   const add = (chapterName: string | null | undefined, lessonName: string | null | undefined, item: Lesson['items'][number]) => {
-    const chapter = chapterName?.trim() || 'General content';
-    const lesson = lessonName?.trim() || 'Unassigned lesson';
+    const chapter = chapterName?.trim() || 'المحتوى العام (General Content)';
+    const lesson = lessonName?.trim() || 'الدرس الأول (Lesson 1)';
     if (!chapters.has(chapter)) chapters.set(chapter, new Map());
     const lessons = chapters.get(chapter)!;
     if (!lessons.has(lesson)) lessons.set(lesson, []);
@@ -77,20 +78,48 @@ export default function StudentCourseHierarchy({
 
   if (chapters.size === 0) {
     return (
-      <div className="card" style={{ textAlign: 'center', padding: '52px 24px' }}>
-        <BookOpen size={42} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-        <h3 style={{ marginBottom: 8 }}>No course content yet</h3>
-        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Your teacher has not posted any lessons for this course yet.</p>
+      <div className="card" style={{
+        textAlign: 'center', padding: '64px 24px',
+        background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)',
+        borderRadius: 18,
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%',
+          background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)',
+          display: 'grid', placeItems: 'center', margin: '0 auto 16px',
+          color: 'var(--primary-light)',
+        }}>
+          <BookOpen size={26} />
+        </div>
+        <h3 style={{ marginBottom: 6, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+          لا يوجد محتوى متاح حالياً
+        </h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>
+          لم يقم المدرس برفع أي دروس أو حصص لهذه المادة بعد.
+        </p>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {Array.from(chapters.entries()).map(([chapterName, lessonMap], chapterIndex) => (
-        <ChapterSection key={chapterName} name={chapterName} defaultOpen={chapterIndex === 0}>
+        <ChapterSection
+          key={chapterName}
+          name={chapterName}
+          chapterIndex={chapterIndex}
+          defaultOpen={chapterIndex === 0}
+          lessonCount={lessonMap.size}
+          itemCount={Array.from(lessonMap.values()).reduce((acc, curr) => acc + curr.length, 0)}
+        >
           {Array.from(lessonMap.entries()).map(([lessonName, items]) => (
-            <LessonSection key={lessonName} name={lessonName} items={items} enrollmentId={enrollmentId} renderAssignment={renderAssignment} />
+            <LessonSection
+              key={lessonName}
+              name={lessonName}
+              items={items}
+              enrollmentId={enrollmentId}
+              renderAssignment={renderAssignment}
+            />
           ))}
         </ChapterSection>
       ))}
@@ -98,16 +127,89 @@ export default function StudentCourseHierarchy({
   );
 }
 
-function ChapterSection({ name, defaultOpen, children }: { name: string; defaultOpen: boolean; children: React.ReactNode }) {
+function ChapterSection({
+  name,
+  chapterIndex,
+  defaultOpen,
+  lessonCount,
+  itemCount,
+  children,
+}: {
+  name: string;
+  chapterIndex: number;
+  defaultOpen: boolean;
+  lessonCount: number;
+  itemCount: number;
+  children: React.ReactNode;
+}) {
   const [open, setOpen] = useState(defaultOpen);
+
   return (
-    <section className="card" style={{ padding: 0, overflow: 'hidden' }}>
-      <button onClick={() => setOpen(value => !value)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '18px 20px', color: 'inherit', textAlign: 'start' }}>
-        {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-        <BookOpen size={18} style={{ color: 'var(--primary-light)' }} />
-        <span style={{ fontWeight: 800, fontSize: 17 }}>{name}</span>
+    <section className="card" style={{
+      padding: 0,
+      overflow: 'hidden',
+      borderRadius: 16,
+      border: open ? '1px solid rgba(99,102,241,0.28)' : '1px solid var(--border)',
+      background: 'linear-gradient(180deg, rgba(26,26,30,0.9) 0%, rgba(18,18,22,0.95) 100%)',
+      transition: 'border-color 0.2s ease',
+    }}>
+      <button
+        onClick={() => setOpen(prev => !prev)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 14,
+          padding: '18px 22px',
+          color: 'inherit',
+          textAlign: 'start',
+          background: open ? 'rgba(99,102,241,0.06)' : 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          transition: 'background 0.15s ease',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: open ? 'var(--gradient-primary)' : 'rgba(255,255,255,0.06)',
+            display: 'grid', placeItems: 'center',
+            color: '#fff', fontSize: 13, fontWeight: 800, flexShrink: 0,
+          }}>
+            {String(chapterIndex + 1).padStart(2, '0')}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              {name}
+            </h3>
+            <div style={{ display: 'flex', gap: 10, fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+              <span>{lessonCount} {lessonCount === 1 ? 'درس' : 'دروس'}</span>
+              <span>•</span>
+              <span>{itemCount} {itemCount === 1 ? 'عنصر تدريبي' : 'عناصر تدريبية'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
+          display: 'grid', placeItems: 'center', color: 'var(--text-secondary)',
+          flexShrink: 0,
+        }}>
+          {open ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+        </div>
       </button>
-      {open && <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 16px 16px' }}>{children}</div>}
+
+      {open && (
+        <div style={{
+          padding: '16px 20px 22px',
+          display: 'flex', flexDirection: 'column', gap: 14,
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+        }}>
+          {children}
+        </div>
+      )}
     </section>
   );
 }
@@ -122,7 +224,17 @@ function formatAttachmentLabel(url: string, index: number) {
   return `ملف مرفق ${index + 1}`;
 }
 
-function LessonSection({ name, items, enrollmentId, renderAssignment }: { name: string; items: Lesson['items']; enrollmentId: string; renderAssignment: (assignment: Assignment) => React.ReactNode }) {
+function LessonSection({
+  name,
+  items,
+  enrollmentId,
+  renderAssignment,
+}: {
+  name: string;
+  items: Lesson['items'];
+  enrollmentId: string;
+  renderAssignment: (assignment: Assignment) => React.ReactNode;
+}) {
   const sorted = [...items].sort((a, b) => {
     const orderA = a.value.contentOrder ?? 0;
     const orderB = b.value.contentOrder ?? 0;
@@ -133,15 +245,33 @@ function LessonSection({ name, items, enrollmentId, renderAssignment }: { name: 
   });
 
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, background: 'rgba(255,255,255,.025)' }}>
-      <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, margin: '0 0 10px' }}>
-        <ChevronRight size={15} style={{ color: 'var(--text-muted)' }} /> {name}
-      </h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{
+      border: '1px solid rgba(255,255,255,0.06)',
+      borderRadius: 14,
+      padding: '16px 18px',
+      background: 'rgba(255,255,255,0.015)',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        marginBottom: 12, paddingBottom: 10,
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+      }}>
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--primary-light)' }} />
+        <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-secondary)' }}>
+          {name}
+        </h4>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+          {sorted.length} {sorted.length === 1 ? 'مهمة' : 'مهام'}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {sorted.map(item => item.kind === 'video' ? (
           <VideoRow key={`video-${item.value.id}`} video={item.value} enrollmentId={enrollmentId} />
         ) : (
-          <div key={`assignment-${item.value.id}`}>{renderAssignment(item.value)}</div>
+          <div key={`assignment-${item.value.id}`}>
+            {renderAssignment(item.value)}
+          </div>
         ))}
       </div>
     </div>
@@ -156,31 +286,63 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
     : undefined;
 
   const content = (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10,
-      background: video.isLocked
-        ? 'rgba(239,68,68,0.04)'
-        : isDoc
-        ? 'rgba(14,165,233,0.05)'
-        : 'rgba(99,102,241,0.06)',
-      border: `1px solid ${
-        video.isLocked
-          ? 'rgba(239,68,68,0.2)'
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        padding: '12px 16px',
+        borderRadius: 12,
+        background: video.isLocked
+          ? 'rgba(239,68,68,0.03)'
           : isDoc
-          ? 'rgba(14,165,233,0.2)'
-          : 'rgba(99,102,241,0.15)'
-      }`,
-      color: 'inherit', opacity: video.isLocked ? 0.8 : 1, transition: 'all 0.15s ease',
-    }}>
+          ? 'rgba(14,165,233,0.04)'
+          : 'rgba(99,102,241,0.04)',
+        border: `1px solid ${
+          video.isLocked
+            ? 'rgba(239,68,68,0.18)'
+            : isDoc
+            ? 'rgba(14,165,233,0.18)'
+            : 'rgba(99,102,241,0.15)'
+        }`,
+        color: 'inherit',
+        opacity: video.isLocked ? 0.75 : 1,
+        transition: 'all 0.18s ease',
+      }}
+      onMouseEnter={e => {
+        if (!video.isLocked) {
+          const target = e.currentTarget as HTMLElement;
+          target.style.transform = 'translateY(-1px)';
+          target.style.background = isDoc ? 'rgba(14,165,233,0.08)' : 'rgba(99,102,241,0.08)';
+          target.style.borderColor = isDoc ? 'rgba(14,165,233,0.35)' : 'rgba(99,102,241,0.3)';
+        }
+      }}
+      onMouseLeave={e => {
+        const target = e.currentTarget as HTMLElement;
+        target.style.transform = 'none';
+        target.style.background = video.isLocked
+          ? 'rgba(239,68,68,0.03)'
+          : isDoc
+          ? 'rgba(14,165,233,0.04)'
+          : 'rgba(99,102,241,0.04)';
+        target.style.borderColor = video.isLocked
+          ? 'rgba(239,68,68,0.18)'
+          : isDoc
+          ? 'rgba(14,165,233,0.18)'
+          : 'rgba(99,102,241,0.15)';
+      }}
+    >
+      {/* Icon / Thumbnail Box */}
       <div style={{
-        width: 56, height: 38, borderRadius: 8, flexShrink: 0,
+        width: 50, height: 40, borderRadius: 10, flexShrink: 0,
         background: thumbnail
           ? `url(${thumbnail}) center / cover`
           : isDoc
-          ? 'linear-gradient(135deg,#0369a1,#0f172a)'
-          : 'linear-gradient(135deg,#312e81,#111827)',
+          ? 'linear-gradient(135deg, rgba(14,165,233,0.25), rgba(15,23,42,0.9))'
+          : 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(15,23,42,0.9))',
+        border: `1px solid ${isDoc ? 'rgba(14,165,233,0.3)' : 'rgba(99,102,241,0.3)'}`,
         display: 'grid', placeItems: 'center',
-        color: video.isLocked ? '#ef4444' : isDoc ? '#38bdf8' : '#fff',
+        color: video.isLocked ? '#ef4444' : isDoc ? '#38bdf8' : '#818cf8',
       }}>
         {video.isLocked ? (
           <Lock size={16} style={{ color: '#ef4444' }} />
@@ -190,29 +352,42 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
           <Play size={16} fill="currentColor" />
         )}
       </div>
+
+      {/* Title & Metadata */}
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <strong style={{ fontSize: 14, color: video.isLocked ? 'var(--text-secondary)' : 'var(--text-primary)' }}>
+          <strong style={{
+            fontSize: 14, fontWeight: 700,
+            color: video.isLocked ? 'var(--text-secondary)' : 'var(--text-primary)',
+          }}>
             {video.title}
           </strong>
-          {isDoc && (
+          {isDoc ? (
             <span className="badge" style={{ fontSize: 10, background: 'rgba(14,165,233,0.12)', color: '#38bdf8' }}>
               ملف / ملزمة (PDF)
             </span>
+          ) : (
+            <span className="badge" style={{ fontSize: 10, background: 'rgba(99,102,241,0.12)', color: 'var(--primary-light)' }}>
+              حصة دراسية
+            </span>
           )}
         </div>
+
         {video.description && (
           <p style={{ margin: '3px 0 0', color: 'var(--text-muted)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {video.description}
           </p>
         )}
+
+        {/* Lock warning */}
         {video.isLocked && (
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 4, padding: '2px 8px', borderRadius: 6, background: 'rgba(239,68,68,0.12)', color: '#f87171', fontSize: 11, fontWeight: 600 }}>
             <Lock size={11} />
-            <span>مغلق:</span>
-            <span>{video.lockReason || 'أكمل المتطلبات السابقة لفتح هذا المحتوى'}</span>
+            <span>مغلق: {video.lockReason || 'أكمل المتطلبات السابقة لفتح هذا المحتوى'}</span>
           </div>
         )}
+
+        {/* Attachments pills */}
         {video.attachments && video.attachments.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
             {video.attachments.map((url, i) => (
@@ -236,9 +411,9 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
                   borderRadius: 6,
                   fontSize: 11,
                   fontWeight: 600,
-                  background: isDoc ? 'rgba(14,165,233,0.1)' : 'rgba(239,68,68,0.08)',
-                  color: isDoc ? '#38bdf8' : '#f87171',
-                  border: `1px solid ${isDoc ? 'rgba(14,165,233,0.25)' : 'rgba(239,68,68,0.2)'}`,
+                  background: isDoc ? 'rgba(14,165,233,0.1)' : 'rgba(99,102,241,0.08)',
+                  color: isDoc ? '#38bdf8' : 'var(--primary-light)',
+                  border: `1px solid ${isDoc ? 'rgba(14,165,233,0.25)' : 'rgba(99,102,241,0.2)'}`,
                   textDecoration: 'none',
                   cursor: video.isLocked ? 'not-allowed' : 'pointer',
                   opacity: video.isLocked ? 0.6 : 1,
@@ -252,12 +427,32 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
           </div>
         )}
       </div>
+
+      {/* Action button */}
+      {!video.isLocked && (
+        <div style={{ flexShrink: 0, paddingLeft: 6 }}>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '6px 12px',
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 700,
+            background: isDoc ? 'rgba(14,165,233,0.12)' : 'rgba(99,102,241,0.12)',
+            color: isDoc ? '#38bdf8' : 'var(--primary-light)',
+            border: `1px solid ${isDoc ? 'rgba(14,165,233,0.25)' : 'rgba(99,102,241,0.25)'}`,
+          }}>
+            {isDoc ? 'عرض الملزمة' : 'مشاهدة الحصة'}
+            <ChevronRight size={13} />
+          </span>
+        </div>
+      )}
     </div>
   );
 
   if (video.isLocked) return content;
 
-  // If document and has single attachment, click opens the attachment directly
   if (isDoc && video.attachments && video.attachments.length === 1) {
     return (
       <a href={video.attachments[0]} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
