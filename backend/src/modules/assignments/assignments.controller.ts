@@ -107,7 +107,7 @@ export class AssignmentsController {
 
   // ── Teacher: create assignment ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.TEACHER, UserRole.ASSISTANT, UserRole.ADMIN)
   createAssignment(@Body() dto: any, @CurrentUser() teacher: any) {
     return this.assignmentsService.createAssignment(dto, teacher);
   }
@@ -173,6 +173,16 @@ export class AssignmentsController {
     return this.assignmentsService.getGradeMatrix(courseName, groupName);
   }
 
+  @Get('courses/:courseName/groups/:groupName/analytics')
+  @Roles(...STAFF_AND_ADMIN)
+  getGroupAnalytics(
+    @Param('courseName') courseName: string,
+    @Param('groupName') groupName: string,
+    @CurrentUser() actor: any,
+  ) {
+    return this.assignmentsService.getGroupAnalytics(courseName, groupName, actor);
+  }
+
   // ── Student: view their own assignments+submissions for a course/group ──────
   @Get('student/courses/:courseName/groups/:groupName')
   @Roles(UserRole.STUDENT)
@@ -192,38 +202,43 @@ export class AssignmentsController {
   @Get(':id/questions')
   @Roles(...STAFF_AND_ADMIN, UserRole.STUDENT)
   getQuestions(@Param('id') id: string, @CurrentUser() actor: any) {
-    return this.assignmentsService.getQuestions(id, actor.role === UserRole.STUDENT ? actor.id : undefined);
+    return this.assignmentsService.getQuestions(
+      id,
+      actor,
+      actor.role === UserRole.STUDENT ? actor.id : undefined,
+    );
   }
 
   // Teacher: add a question
   @Post(':id/questions')
-  @Roles(UserRole.ADMIN)
-  createQuestion(@Param('id') assignmentId: string, @Body() dto: any) {
-    return this.assignmentsService.createQuestion(assignmentId, dto);
+  @Roles(UserRole.TEACHER, UserRole.ASSISTANT, UserRole.ADMIN)
+  createQuestion(@Param('id') assignmentId: string, @Body() dto: any, @CurrentUser() actor: any) {
+    return this.assignmentsService.createQuestion(assignmentId, dto, actor);
   }
 
   // Teacher: update a question
   @Patch(':id/questions/:qid')
-  @Roles(UserRole.ADMIN)
-  updateQuestion(@Param('qid') qid: string, @Body() dto: any) {
-    return this.assignmentsService.updateQuestion(qid, dto);
+  @Roles(UserRole.TEACHER, UserRole.ASSISTANT, UserRole.ADMIN)
+  updateQuestion(@Param('id') assignmentId: string, @Param('qid') qid: string, @Body() dto: any, @CurrentUser() actor: any) {
+    return this.assignmentsService.updateQuestion(assignmentId, qid, dto, actor);
   }
 
   // Teacher: delete a question
   @Delete(':id/questions/:qid')
-  @Roles(UserRole.ADMIN)
-  deleteQuestion(@Param('qid') qid: string) {
-    return this.assignmentsService.deleteQuestion(qid);
+  @Roles(UserRole.TEACHER, UserRole.ASSISTANT, UserRole.ADMIN)
+  deleteQuestion(@Param('id') assignmentId: string, @Param('qid') qid: string, @CurrentUser() actor: any) {
+    return this.assignmentsService.deleteQuestion(assignmentId, qid, actor);
   }
 
   // Teacher: reorder questions
   @Patch(':id/questions/reorder')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.TEACHER, UserRole.ASSISTANT, UserRole.ADMIN)
   reorderQuestions(
     @Param('id') assignmentId: string,
     @Body('orderedIds') orderedIds: string[],
+    @CurrentUser() actor: any,
   ) {
-    return this.assignmentsService.reorderQuestions(assignmentId, orderedIds);
+    return this.assignmentsService.reorderQuestions(assignmentId, orderedIds, actor);
   }
 
   // Teacher/Admin: update assignment
@@ -246,7 +261,7 @@ export class AssignmentsController {
 
   // Teacher: publish assignment
   @Patch(':id/publish')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.TEACHER, UserRole.ASSISTANT, UserRole.ADMIN)
   publishAssignment(@Param('id') id: string, @CurrentUser() actor: any) {
     return this.assignmentsService.publishAssignment(id, actor);
   }

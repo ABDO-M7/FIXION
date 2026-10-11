@@ -43,6 +43,29 @@ export class AssignmentsService {
     return resolveStaffScope(this.usersRepo, user);
   }
 
+  private async assertCanManageGroup(courseName: string, groupName: string, actor: User) {
+    const scope = await this.staffScope(actor);
+    if (scope.type === 'admin') return scope;
+    if (scope.type === 'subjects') {
+      if (!scope.subjects.includes(courseName)) {
+        throw new ForbiddenException('This course is not in your subject');
+      }
+      return scope;
+    }
+
+    const groups = await this.getGroupsForCourse(courseName, actor);
+    if (!groups.includes(groupName)) throw new ForbiddenException('You do not have access to this group');
+    return scope;
+  }
+
+  private async assertCanManageAssignment(assignmentId: string, actor: User) {
+    const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+    const scope = await this.staffScope(actor);
+    if (!canManageOwnedWork(scope, actor, assignment.teacherId)) throw new ForbiddenException();
+    return assignment;
+  }
+
   private applyEnrollmentScope(qb: ReturnType<Repository<CourseEnrollment>['createQueryBuilder']>, scope: StaffScope) {
     if (scope.type === 'teacher') {
       if (!scope.teacherName) {
@@ -487,7 +510,7 @@ export class AssignmentsService {
       where: { courseName, groupName },
       select: ['studentId'],
     });
-    const studentIds = enrollments.map((e) => e.studentId).filter(Boolean);
+    const studentIds = Array.from(new Set(enrollments.map((e) => e.studentId).filter(Boolean)));
     if (studentIds.length === 0) return [];
 
     // Step 2: directly fetch user rows by primary key — 100% reliable
@@ -527,10 +550,22 @@ export class AssignmentsService {
     unlockPercent?: number;
     isPublished?: boolean;
   }, teacher: User): Promise<Assignment> {
-    const scope = await this.staffScope(teacher);
+    if (![AssignmentType.QUIZ, AssignmentType.HOMEWORK].includes(dto.type)) {
+      throw new BadRequestException('Only quizzes and homework can be created here');
+    }
+    const courseName = dto.courseName?.trim();
+    const groupName = dto.groupName?.trim();
+    if (!courseName || !groupName) throw new BadRequestException('Course and group are required');
+    const scope = await this.assertCanManageGroup(courseName, groupName, teacher);
     const assignment = this.assignmentsRepo.create({
       ...dto,
-      isPublished: dto.isPublished !== undefined ? Boolean(dto.isPublished) : (dto.type === AssignmentType.HOMEWORK),
+      courseName,
+      groupName,
+      isPublished: scope.type === 'admin' && dto.isPublished !== undefined
+        ? Boolean(dto.isPublished)
+        : dto.type === AssignmentType.QUIZ
+          ? false
+          : true,
       maxGrade: dto.maxGrade ?? 100,
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
       chapterName: dto.chapterName?.trim() || null,
@@ -563,7 +598,14 @@ export class AssignmentsService {
       .orderBy('a.createdAt', 'DESC');
 
     if (type) qb.andWhere('a.type = :type', { type });
-    return qb.getMany();
+    const assignments = await qb.getMany();
+    if (!actor) return assignments;
+
+    const scope = await this.staffScope(actor);
+    return assignments.map(assignment => ({
+      ...assignment,
+      canManage: canManageOwnedWork(scope, actor, assignment.teacherId),
+    }));
   }
 
   // ─── GET single assignment with submissions ────────────────────────────────
@@ -616,6 +658,7 @@ export class AssignmentsService {
     if (!hasPermission(student, 'student_assignments')) throw new ForbiddenException('Assignments are disabled for this account');
     const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
     if (!assignment) throw new NotFoundException('Assignment not found');
+    if (!assignment.isPublished) throw new ForbiddenException('This assignment is not published');
     await this.assertAssignmentUnlocked(assignmentId, student.id);
 
     const existing = await this.submissionsRepo.findOne({
@@ -640,6 +683,7 @@ export class AssignmentsService {
     if (!hasPermission(student, 'student_assignments')) throw new ForbiddenException('Assignments are disabled for this account');
     const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
     if (!assignment) throw new NotFoundException('Quiz not found');
+    if (!assignment.isPublished) throw new ForbiddenException('This quiz is not published');
     await this.assertAssignmentUnlocked(assignmentId, student.id);
 
     const questions = await this.questionsRepo.find({
@@ -734,6 +778,130 @@ export class AssignmentsService {
     };
   }
 
+  async getGroupAnalytics(courseName: string, groupName: string, actor: User) {
+    const scope = await this.staffScope(actor);
+    if (scope.type === 'subjects' && !scope.subjects.includes(courseName)) {
+      throw new ForbiddenException('This course is not in your subject');
+    }
+    if (scope.type === 'teacher') {
+      const groups = await this.getGroupsForCourse(courseName, actor);
+      if (!groups.includes(groupName)) throw new ForbiddenException('You do not have access to this group');
+    }
+
+    const [students, allAssignments, videos] = await Promise.all([
+      this.getStudentsInGroup(courseName, groupName),
+      this.getAssignments(courseName, groupName),
+      this.videosRepo.find({ where: { courseName, groupName } }),
+    ]);
+    const assignments = allAssignments.filter(assignment => assignment.isPublished);
+    const studentIds = students.map(student => student.id);
+    const assignmentIds = assignments.map(assignment => assignment.id);
+    const videoIds = videos.map(video => video.id);
+
+    const [submissions, progress] = await Promise.all([
+      assignmentIds.length && studentIds.length
+        ? this.submissionsRepo.createQueryBuilder('submission')
+          .where('submission.assignmentId IN (:...assignmentIds)', { assignmentIds })
+          .andWhere('submission.studentId IN (:...studentIds)', { studentIds })
+          .getMany()
+        : Promise.resolve([]),
+      videoIds.length && studentIds.length
+        ? this.videoProgressRepo.createQueryBuilder('progress')
+          .where('progress.videoId IN (:...videoIds)', { videoIds })
+          .andWhere('progress.studentId IN (:...studentIds)', { studentIds })
+          .getMany()
+        : Promise.resolve([]),
+    ]);
+
+    const submissionsByStudent = new Map<string, AssignmentSubmission[]>();
+    submissions.forEach(submission => {
+      const rows = submissionsByStudent.get(submission.studentId) || [];
+      rows.push(submission);
+      submissionsByStudent.set(submission.studentId, rows);
+    });
+    const progressByStudent = new Map<string, VideoProgress[]>();
+    progress.forEach(row => {
+      const rows = progressByStudent.get(row.studentId) || [];
+      rows.push(row);
+      progressByStudent.set(row.studentId, rows);
+    });
+
+    const assignmentById = new Map(assignments.map(assignment => [assignment.id, assignment]));
+    const studentsWithStats = students.map(student => {
+      const studentSubmissions = submissionsByStudent.get(student.id) || [];
+      const studentProgress = progressByStudent.get(student.id) || [];
+      const gradedSubmissions = studentSubmissions.filter(submission => submission.grade !== null);
+      const gradePercentages = gradedSubmissions.flatMap(submission => {
+        const assignment = assignmentById.get(submission.assignmentId);
+        return assignment
+          ? [Math.min(100, Math.max(0, (submission.grade! / Math.max(assignment.maxGrade, 1)) * 100))]
+          : [];
+      });
+      const averageGradePercent = gradePercentages.length
+        ? Math.round(gradePercentages.reduce((sum, value) => sum + value, 0) / gradePercentages.length)
+        : null;
+      const progressByVideo = new Map(studentProgress.map(row => [row.videoId, row.watchedPercent]));
+      const completedVideos = videos.filter(video => (progressByVideo.get(video.id) || 0) >= 90).length;
+      const videoProgressPercent = videos.length
+        ? Math.round(videos.reduce((sum, video) => sum + (progressByVideo.get(video.id) || 0), 0) / videos.length)
+        : null;
+      const activityDates = [
+        ...studentSubmissions.map(submission => submission.submittedAt),
+        ...studentProgress.map(row => row.updatedAt),
+      ].filter(Boolean);
+
+      return {
+        ...student,
+        submittedAssignments: studentSubmissions.length,
+        gradedAssignments: gradedSubmissions.length,
+        averageGradePercent,
+        completedVideos,
+        totalVideos: videos.length,
+        videoProgressPercent,
+        lastActivityAt: activityDates.length
+          ? new Date(Math.max(...activityDates.map(date => new Date(date).getTime()))).toISOString()
+          : null,
+        assignmentGrades: Object.fromEntries(studentSubmissions.map(submission => [
+          submission.assignmentId,
+          submission.grade,
+        ])),
+        videoProgress: Object.fromEntries(studentProgress.map(row => [row.videoId, row.watchedPercent])),
+      };
+    });
+
+    const average = (values: Array<number | null>) => {
+      const available = values.filter((value): value is number => value !== null);
+      return available.length
+        ? Math.round(available.reduce((sum, value) => sum + value, 0) / available.length)
+        : null;
+    };
+    const possibleSubmissions = students.length * assignments.length;
+    const possibleVideoViews = students.length * videos.length;
+
+    return {
+      summary: {
+        studentCount: students.length,
+        assignmentCount: assignments.length,
+        videoCount: videos.length,
+        averageGradePercent: average(studentsWithStats.map(student => student.averageGradePercent)),
+        assignmentSubmissionRate: possibleSubmissions
+          ? Math.round((submissions.length / possibleSubmissions) * 100)
+          : null,
+        videoCompletionRate: possibleVideoViews
+          ? Math.round((progress.filter(row => row.watchedPercent >= 90).length / possibleVideoViews) * 100)
+          : null,
+      },
+      assignments: assignments.map(assignment => ({
+        id: assignment.id,
+        title: assignment.title,
+        type: assignment.type,
+        maxGrade: assignment.maxGrade,
+      })),
+      videos: videos.map(video => ({ id: video.id, title: video.title })),
+      students: studentsWithStats,
+    };
+  }
+
   // ─── STUDENT: get their assignments for a course/group ────────────────────
   async getStudentAssignments(studentId: string, courseName: string, groupName: string) {
     const allAssignments = await this.getAssignments(courseName, groupName);
@@ -753,6 +921,7 @@ export class AssignmentsService {
   async assertAssignmentUnlocked(assignmentId: string, studentId: string) {
     const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
     if (!assignment) throw new NotFoundException('Assignment not found');
+    if (studentId && !assignment.isPublished) throw new ForbiddenException('This assignment is not published');
     const submission = assignment.unlockAssignmentId
       ? await this.submissionsRepo.findOne({ where: { assignmentId: assignment.unlockAssignmentId, studentId } })
       : null;
@@ -818,6 +987,9 @@ export class AssignmentsService {
 
     if (a.type === 'QUIZ') {
       const questions = await this.questionsRepo.find({ where: { assignmentId: id } });
+      if (questions.length === 0) {
+        throw new BadRequestException('A quiz must have at least one question before it can be published');
+      }
       const missingAnswers = questions.some(q => q.type === 'MULTIPLE_CHOICE' && !q.correctAnswer);
       if (missingAnswers) {
         throw new BadRequestException('Cannot publish: All multiple-choice questions must have a correct answer assigned');
@@ -867,7 +1039,15 @@ export class AssignmentsService {
   //  QUIZ QUESTIONS CRUD
   // ══════════════════════════════════════════════════════════════════════════
 
-  async getQuestions(assignmentId: string, studentId?: string) {
+  async getQuestions(assignmentId: string, actor?: User, studentId?: string) {
+    const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+    if (actor && actor.role !== UserRole.STUDENT) {
+      const scope = await this.assertCanManageGroup(assignment.courseName, assignment.groupName, actor);
+      if (!assignment.isPublished && !canManageOwnedWork(scope, actor, assignment.teacherId)) {
+        throw new ForbiddenException();
+      }
+    }
     if (studentId) await this.assertAssignmentUnlocked(assignmentId, studentId);
     return this.questionsRepo.find({
       where: { assignmentId },
@@ -882,7 +1062,12 @@ export class AssignmentsService {
     options?: QuizOption[];
     correctAnswer?: string;
     points?: number;
-  }) {
+  }, actor: User) {
+    const assignment = await this.assertCanManageAssignment(assignmentId, actor);
+    if (assignment.type !== AssignmentType.QUIZ) throw new BadRequestException('Questions can only be added to quizzes');
+    if (assignment.isPublished && actor.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Published quizzes cannot be edited');
+    }
     const count = await this.questionsRepo.count({ where: { assignmentId } });
     const q = this.questionsRepo.create({
       ...dto,
@@ -893,7 +1078,7 @@ export class AssignmentsService {
     return this.questionsRepo.save(q);
   }
 
-  async updateQuestion(id: string, dto: Partial<{
+  async updateQuestion(assignmentId: string, id: string, dto: Partial<{
     questionText: string;
     questionImageUrl: string;
     type: QuizQuestionType;
@@ -901,25 +1086,49 @@ export class AssignmentsService {
     correctAnswer: string;
     points: number;
     orderIndex: number;
-  }>) {
-    const q = await this.questionsRepo.findOne({ where: { id } });
+  }>, actor: User) {
+    const assignment = await this.assertCanManageAssignment(assignmentId, actor);
+    if (assignment.type !== AssignmentType.QUIZ) throw new BadRequestException('Questions can only be edited on quizzes');
+    if (assignment.isPublished && actor.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Published quizzes cannot be edited');
+    }
+    const q = await this.questionsRepo.findOne({ where: { id, assignmentId } });
     if (!q) throw new NotFoundException('Question not found');
     await this.questionsRepo.update(id, dto);
     return this.questionsRepo.findOne({ where: { id } });
   }
 
-  async deleteQuestion(id: string) {
-    await this.questionsRepo.delete(id);
+  async deleteQuestion(assignmentId: string, id: string, actor: User) {
+    const assignment = await this.assertCanManageAssignment(assignmentId, actor);
+    if (assignment.type !== AssignmentType.QUIZ) throw new BadRequestException('Questions can only be deleted from quizzes');
+    if (assignment.isPublished && actor.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Published quizzes cannot be edited');
+    }
+    const question = await this.questionsRepo.findOne({ where: { id, assignmentId } });
+    if (!question) throw new NotFoundException('Question not found');
+    await this.questionsRepo.delete({ id, assignmentId });
     return { message: 'Deleted' };
   }
 
-  async reorderQuestions(assignmentId: string, orderedIds: string[]) {
+  async reorderQuestions(assignmentId: string, orderedIds: string[], actor: User) {
+    const assignment = await this.assertCanManageAssignment(assignmentId, actor);
+    if (assignment.type !== AssignmentType.QUIZ) throw new BadRequestException('Questions can only be reordered on quizzes');
+    if (assignment.isPublished && actor.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Published quizzes cannot be edited');
+    }
+    if (new Set(orderedIds).size !== orderedIds.length) {
+      throw new BadRequestException('Question order contains duplicate IDs');
+    }
+    const questions = await this.questionsRepo.find({ where: { assignmentId } });
+    if (orderedIds.length !== questions.length || orderedIds.some(id => !questions.some(question => question.id === id))) {
+      throw new BadRequestException('Question order must include every question in this quiz');
+    }
     for (let i = 0; i < orderedIds.length; i++) {
       await this.questionsRepo.update(
         { id: orderedIds[i], assignmentId },
         { orderIndex: i },
       );
     }
-    return this.getQuestions(assignmentId);
+    return this.getQuestions(assignmentId, actor);
   }
 }

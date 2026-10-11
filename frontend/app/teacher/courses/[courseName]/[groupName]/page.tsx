@@ -292,24 +292,26 @@ export default function GroupDetailPage() {
   const color = COURSE_COLORS[decoded] || '#6366f1';
   const { user } = useAuthStore();
   const isReadOnly = user?.role !== 'admin';
+  const canCreateWork = user?.role === 'teacher' || user?.role === 'assistant';
 
   const [tab, setTab] = useState<Tab>('WORKFLOW');
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [createType, setCreateType] = useState<'QUIZ' | 'HOMEWORK' | null>(null);
+  const [readOnlyRefresh, setReadOnlyRefresh] = useState(0);
 
   const fetchAssignments = useCallback(() => {
     setLoading(true);
     assignmentsApi.list(decoded, decodedGroup)
       .then(r => setAssignments(Array.isArray(r.data) ? r.data : []))
-      .catch(() => {})
+      .catch(() => toast.error('تعذر تحميل الواجبات والكويزات.'))
       .finally(() => setLoading(false));
-  }, [decoded, decodedGroup, tab]);
+  }, [decoded, decodedGroup]);
   const visibleAssignments = assignments.filter(a => a.type === tab);
 
   useEffect(() => {
-    if (tab !== 'WORKFLOW' && tab !== 'GRADES' && tab !== 'VIDEOS') fetchAssignments();
-  }, [tab, fetchAssignments]);
+    if (isReadOnly || (tab !== 'WORKFLOW' && tab !== 'GRADES' && tab !== 'VIDEOS')) fetchAssignments();
+  }, [isReadOnly, tab, fetchAssignments]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this assignment?')) return;
@@ -367,6 +369,28 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
+        {isReadOnly && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+            <Link
+              href={`/teacher/courses/${encodeURIComponent(decoded)}/${encodeURIComponent(decodedGroup)}/stats`}
+              className="btn btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            >
+              <BarChart2 size={16} /> إحصائيات الطلاب
+            </Link>
+            {canCreateWork && (
+              <>
+                <button type="button" onClick={() => setCreateType('QUIZ')} className="btn btn-primary">
+                  <Plus size={14} /> إنشاء كويز
+                </button>
+                <button type="button" onClick={() => setCreateType('HOMEWORK')} className="btn btn-secondary">
+                  <Plus size={14} /> إنشاء واجب
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {!isReadOnly && tab !== 'WORKFLOW' && tab !== 'GRADES' && tab !== 'VIDEOS' && (
           <button
             onClick={() => setCreateType(tab as 'QUIZ' | 'HOMEWORK')}
@@ -378,7 +402,12 @@ export default function GroupDetailPage() {
       </div>
 
       {isReadOnly ? (
-        <StaffCourseReadOnlyView courseName={decoded} groupName={decodedGroup} />
+        <StaffCourseReadOnlyView
+          courseName={decoded}
+          groupName={decodedGroup}
+          refreshToken={readOnlyRefresh}
+          onAssignmentsChanged={() => setReadOnlyRefresh(value => value + 1)}
+        />
       ) : (
         <>
       {/* Tabs */}
@@ -501,7 +530,8 @@ export default function GroupDetailPage() {
         </div>
       )}
 
-      {/* Create Modal */}
+        </>
+      )}
       {createType && (
         <CreateModal
           type={createType}
@@ -509,10 +539,11 @@ export default function GroupDetailPage() {
           groupName={decodedGroup}
           prerequisiteAssignments={assignments}
           onClose={() => setCreateType(null)}
-          onCreated={fetchAssignments}
+          onCreated={() => {
+            fetchAssignments();
+            setReadOnlyRefresh(value => value + 1);
+          }}
         />
-      )}
-        </>
       )}
     </AppShell>
   );

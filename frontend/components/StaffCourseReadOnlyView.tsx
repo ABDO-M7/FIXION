@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BookOpen, CheckCircle2, ClipboardList, FileText, Play, X } from 'lucide-react';
+import Link from 'next/link';
+import { BookOpen, CheckCircle2, ClipboardList, Edit3, FileText, Play, Send, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import StudentCourseHierarchy from '@/components/StudentCourseHierarchy';
 import InteractiveCourseVideoPlayer, { type InteractiveCourseVideo } from '@/components/InteractiveCourseVideoPlayer';
 import { assignmentsApi, videosApi } from '@/lib/api';
@@ -26,6 +28,8 @@ type CourseAssignment = {
   dueDate?: string | null;
   attachments?: string[];
   createdAt?: string;
+  isPublished?: boolean;
+  canManage?: boolean;
 };
 
 type QuizQuestion = {
@@ -39,15 +43,20 @@ type QuizQuestion = {
 export default function StaffCourseReadOnlyView({
   courseName,
   groupName,
+  refreshToken = 0,
+  onAssignmentsChanged,
 }: {
   courseName: string;
   groupName: string;
+  refreshToken?: number;
+  onAssignmentsChanged?: () => void;
 }) {
   const [videos, setVideos] = useState<CourseVideo[]>([]);
   const [assignments, setAssignments] = useState<CourseAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [activeVideo, setActiveVideo] = useState<CourseVideo | null>(null);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,10 +67,7 @@ export default function StaffCourseReadOnlyView({
     ]).then(([videoResponse, assignmentResponse]) => {
       if (cancelled) return;
       setVideos(Array.isArray(videoResponse.data) ? videoResponse.data : []);
-      setAssignments(
-        (Array.isArray(assignmentResponse.data) ? assignmentResponse.data : [])
-          .filter((assignment: CourseAssignment & { isPublished?: boolean }) => assignment.isPublished),
-      );
+      setAssignments(Array.isArray(assignmentResponse.data) ? assignmentResponse.data : []);
     }).catch(error => {
       if (cancelled) return;
       setLoadError(error?.response?.data?.message || 'تعذر تحميل محتوى الكورس.');
@@ -72,7 +78,26 @@ export default function StaffCourseReadOnlyView({
     return () => {
       cancelled = true;
     };
-  }, [courseName, groupName]);
+  }, [courseName, groupName, refreshToken]);
+
+  const publishedAssignments = assignments.filter(assignment => assignment.isPublished);
+  const manageableDrafts = assignments.filter(assignment => !assignment.isPublished && assignment.canManage);
+
+  const publishHomework = async (assignmentId: string) => {
+    setPublishingId(assignmentId);
+    try {
+      await assignmentsApi.publish(assignmentId);
+      setAssignments(current => current.map(assignment =>
+        assignment.id === assignmentId ? { ...assignment, isPublished: true } : assignment,
+      ));
+      toast.success('تم نشر الواجب بنجاح.');
+      onAssignmentsChanged?.();
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'تعذر نشر الواجب.');
+    } finally {
+      setPublishingId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -90,11 +115,48 @@ export default function StaffCourseReadOnlyView({
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: 'var(--text-secondary)', fontSize: 13 }}>
         <CheckCircle2 size={15} aria-hidden="true" />
-        <span>عرض الكورس للمعاينة — بدون صلاحية تعديل أو إضافة محتوى</span>
+        <span>المحتوى التعليمي للمعاينة فقط؛ يمكنك إنشاء الواجبات والكويزات.</span>
       </div>
+      {manageableDrafts.length > 0 && (
+        <section aria-labelledby="staff-drafts-heading" style={{ marginBottom: 24 }}>
+          <h2 id="staff-drafts-heading" style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>مسوداتك</h2>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {manageableDrafts.map(assignment => (
+              <article key={assignment.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                {assignment.type === 'QUIZ'
+                  ? <ClipboardList size={19} aria-hidden="true" />
+                  : <BookOpen size={19} aria-hidden="true" />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <strong>{assignment.title}</strong>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 4 }}>
+                    {assignment.type === 'QUIZ' ? 'كويز غير منشور' : 'واجب غير منشور'}
+                  </div>
+                </div>
+                {assignment.type === 'QUIZ' ? (
+                  <Link
+                    className="btn btn-secondary btn-sm"
+                    href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/quiz/${assignment.id}`}
+                  >
+                    <Edit3 size={13} /> إكمال الكويز
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => publishHomework(assignment.id)}
+                    disabled={publishingId === assignment.id}
+                  >
+                    <Send size={13} /> {publishingId === assignment.id ? 'جارٍ النشر...' : 'نشر الواجب'}
+                  </button>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <StudentCourseHierarchy
         enrollmentId=""
-        assignments={assignments.map(assignment => ({
+        assignments={publishedAssignments.map(assignment => ({
           ...assignment,
           description: assignment.description || undefined,
           maxGrade: assignment.maxGrade || 100,

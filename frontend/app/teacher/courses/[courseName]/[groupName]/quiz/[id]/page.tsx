@@ -230,16 +230,21 @@ export default function QuizBuilderPage() {
   };
 
   // Save all questions to backend
-  const saveAll = async () => {
+  const saveAll = async (): Promise<boolean> => {
     if (questions.some(q => !q.questionText.trim())) {
       toast.error('Please enter a question prompt (text) for all questions.');
-      return;
+      return false;
     }
     setSaving(true);
     try {
       // Fetch existing saved question IDs
       const existingRes = await assignmentsApi.getQuestions(id);
       const existingIds = new Set((existingRes.data as any[]).map((q: any) => q.id));
+      const retainedIds = new Set(questions.map(question => question.id).filter((questionId): questionId is string => Boolean(questionId)));
+
+      for (const existingId of existingIds) {
+        if (!retainedIds.has(existingId)) await assignmentsApi.deleteQuestion(id, existingId);
+      }
 
       for (const q of questions) {
         const payload = {
@@ -262,8 +267,10 @@ export default function QuizBuilderPage() {
         }
       }
       toast.success('Quiz saved');
+      return true;
     } catch {
       toast.error('Failed to save');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -280,7 +287,7 @@ export default function QuizBuilderPage() {
     setPublishing(true);
     try {
       // Ensure it is saved first
-      await saveAll();
+      if (!await saveAll()) return;
       await assignmentsApi.publish(id);
       setAssignment((prev: any) => ({ ...prev, isPublished: true }));
       toast.success('Quiz published successfully! It is now visible to students.');
@@ -292,10 +299,11 @@ export default function QuizBuilderPage() {
   };
 
   const totalPoints = questions.reduce((s, q) => s + (q.points || 1), 0);
+  const canEditQuiz = user?.role === 'admin' || (assignment?.canManage === true && !assignment?.isPublished);
 
   return (
     <AppShell>
-      {user?.role === 'admin' ? (
+      {canEditQuiz ? (
         <>
       {/* Header */}
       <div className="page-header">

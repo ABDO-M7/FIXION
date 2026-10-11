@@ -228,6 +228,8 @@ export const assignmentsApi = {
     api.patch(`/assignments/submissions/${submissionId}/grade`, { grade, feedback }),
   gradeMatrix: (courseName: string, groupName: string) =>
     api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/grades`),
+  groupAnalytics: (courseName: string, groupName: string) =>
+    api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/analytics`),
   delete: (id: string) => api.delete(`/assignments/${id}`),
   update: (id: string, data: any) => api.patch(`/assignments/${id}`, data),
   publish: (id: string) => api.patch(`/assignments/${id}/publish`),
