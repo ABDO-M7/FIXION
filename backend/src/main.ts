@@ -50,7 +50,9 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // API prefix
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api/v1', {
+    exclude: ['/', 'health'],
+  });
 
   const port = process.env.PORT || 3001;
   await app.listen(port);

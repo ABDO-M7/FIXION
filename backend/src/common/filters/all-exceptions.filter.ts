@@ -27,10 +27,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getResponse()
         : 'Internal server error';
 
-    this.logger.error(
-      `[${request.method}] ${request.url} → ${status}`,
-      exception instanceof Error ? exception.stack : String(exception),
-    );
+    if (status >= 500) {
+      this.logger.error(
+        `[${request.method}] ${request.url} → ${status}`,
+        exception instanceof Error ? exception.stack : String(exception),
+      );
+    } else {
+      this.logger.warn(`[${request.method}] ${request.url} → ${status}`);
+    }
 
     response.status(status).json({
       statusCode: status,
