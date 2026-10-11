@@ -48,6 +48,79 @@ function MathText({ text }: { text: string }) {
   );
 }
 
+function ReadOnlyQuizPreview({
+  courseName,
+  groupName,
+  title,
+  maxGrade,
+  questions,
+}: {
+  courseName: string;
+  groupName: string;
+  title: string;
+  maxGrade: number;
+  questions: Question[];
+}) {
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <Link
+            href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`}
+            className="btn btn-ghost btn-sm"
+            style={{ paddingLeft: 0, marginBottom: 8 }}
+          >
+            <ArrowLeft size={14} /> العودة للكورس
+          </Link>
+          <h1 className="page-title" style={{ marginBottom: 2 }}>{title}</h1>
+          <p className="page-subtitle">معاينة للمدرس والمساعد — عرض فقط · {questions.length} سؤال · الدرجة النهائية {maxGrade}</p>
+        </div>
+      </div>
+      {questions.length === 0 ? (
+        <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)' }}>
+          لا توجد أسئلة في هذا الكويز بعد.
+        </div>
+      ) : (
+        <div style={{ maxWidth: 720, margin: '0 auto', display: 'grid', gap: 14 }}>
+          {questions.map((question, index) => (
+            <article key={question.id || index} className="card" style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <span style={{
+                  width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                  display: 'grid', placeItems: 'center',
+                  background: 'rgba(99,102,241,.12)', color: 'var(--primary-light)', fontWeight: 800,
+                }}>{index + 1}</span>
+                <div style={{ flex: 1, lineHeight: 1.7 }}>
+                  <MathText text={question.questionText} />
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>{question.points} درجة</div>
+                </div>
+              </div>
+              {question.questionImageUrl && (
+                <img src={question.questionImageUrl} alt="" style={{ maxHeight: 240, maxWidth: '100%', objectFit: 'contain', justifySelf: 'start' }} />
+              )}
+              {question.type === 'MULTIPLE_CHOICE' ? (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {question.options.map(option => (
+                    <div key={option.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 9 }}>
+                      <strong style={{ color: 'var(--primary-light)' }}>{option.id}</strong>
+                      <span style={{ flex: 1 }}><MathText text={option.text || '—'} /></span>
+                      {option.imageUrl && <img src={option.imageUrl} alt="" style={{ maxHeight: 48, maxWidth: 120, objectFit: 'contain' }} />}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: 12, border: '1px dashed var(--border)', borderRadius: 9, color: 'var(--text-muted)', fontSize: 13 }}>
+                  سؤال إجابة نصية
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 const OPTION_IDS = ['A', 'B', 'C', 'D'];
 
 type Option = { id: string; text: string; imageUrl: string };
@@ -222,6 +295,8 @@ export default function QuizBuilderPage() {
 
   return (
     <AppShell>
+      {user?.role === 'admin' ? (
+        <>
       {/* Header */}
       <div className="page-header">
         <div>
@@ -544,6 +619,16 @@ export default function QuizBuilderPage() {
             </div>
           </div>
         </div>
+      )}
+        </>
+      ) : (
+        <ReadOnlyQuizPreview
+          courseName={cn}
+          groupName={gn}
+          title={assignment?.title || 'معاينة الكويز'}
+          maxGrade={assignment?.maxGrade ?? 100}
+          questions={questions.filter(question => Boolean(question.id))}
+        />
       )}
     </AppShell>
   );

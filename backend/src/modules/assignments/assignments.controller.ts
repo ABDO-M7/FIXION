@@ -106,7 +106,7 @@ export class AssignmentsController {
 
   // ── Teacher: create assignment ─────────────────────────────────────────────
   @Post()
-  @Roles(...STAFF_AND_ADMIN)
+  @Roles(UserRole.ADMIN)
   createAssignment(@Body() dto: any, @CurrentUser() teacher: any) {
     return this.assignmentsService.createAssignment(dto, teacher);
   }
@@ -196,28 +196,28 @@ export class AssignmentsController {
 
   // Teacher: add a question
   @Post(':id/questions')
-  @Roles(...STAFF_AND_ADMIN)
+  @Roles(UserRole.ADMIN)
   createQuestion(@Param('id') assignmentId: string, @Body() dto: any) {
     return this.assignmentsService.createQuestion(assignmentId, dto);
   }
 
   // Teacher: update a question
   @Patch(':id/questions/:qid')
-  @Roles(...STAFF_AND_ADMIN)
+  @Roles(UserRole.ADMIN)
   updateQuestion(@Param('qid') qid: string, @Body() dto: any) {
     return this.assignmentsService.updateQuestion(qid, dto);
   }
 
   // Teacher: delete a question
   @Delete(':id/questions/:qid')
-  @Roles(...STAFF_AND_ADMIN)
+  @Roles(UserRole.ADMIN)
   deleteQuestion(@Param('qid') qid: string) {
     return this.assignmentsService.deleteQuestion(qid);
   }
 
   // Teacher: reorder questions
   @Patch(':id/questions/reorder')
-  @Roles(...STAFF_AND_ADMIN)
+  @Roles(UserRole.ADMIN)
   reorderQuestions(
     @Param('id') assignmentId: string,
     @Body('orderedIds') orderedIds: string[],
@@ -227,7 +227,7 @@ export class AssignmentsController {
 
   // Teacher/Admin: update assignment
   @Patch(':id')
-  @Roles(...STAFF_AND_ADMIN)
+  @Roles(UserRole.ADMIN)
   updateAssignment(
     @Param('id') id: string,
     @Body() dto: any,
@@ -238,14 +238,14 @@ export class AssignmentsController {
 
   // Teacher: delete assignment
   @Delete(':id')
-  @Roles(...STAFF_AND_ADMIN)
+  @Roles(UserRole.ADMIN)
   deleteAssignment(@Param('id') id: string, @CurrentUser() actor: any) {
     return this.assignmentsService.deleteAssignment(id, actor);
   }
 
   // Teacher: publish assignment
   @Patch(':id/publish')
-  @Roles(...STAFF_AND_ADMIN)
+  @Roles(UserRole.ADMIN)
   publishAssignment(@Param('id') id: string, @CurrentUser() actor: any) {
     return this.assignmentsService.publishAssignment(id, actor);
   }

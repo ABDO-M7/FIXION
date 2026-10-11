@@ -5,6 +5,8 @@ import AppShell from '@/components/AppShell';
 import { assignmentsApi } from '@/lib/api';
 import TeacherVideosTab from '@/components/TeacherVideosTabV2';
 import CourseWorkflowBuilder from '@/components/CourseWorkflowBuilder';
+import StaffCourseReadOnlyView from '@/components/StaffCourseReadOnlyView';
+import { useAuthStore } from '@/store';
 import {
   ArrowLeft, GraduationCap, Users, Plus, Trash2, X,
   ClipboardList, BookOpen, BarChart2, ChevronDown, ChevronRight,
@@ -288,6 +290,8 @@ export default function GroupDetailPage() {
   const decoded = decodeURIComponent(courseName);
   const decodedGroup = decodeURIComponent(groupName);
   const color = COURSE_COLORS[decoded] || '#6366f1';
+  const { user } = useAuthStore();
+  const isReadOnly = user?.role !== 'admin';
 
   const [tab, setTab] = useState<Tab>('WORKFLOW');
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -363,7 +367,7 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
-        {tab !== 'WORKFLOW' && tab !== 'GRADES' && tab !== 'VIDEOS' && (
+        {!isReadOnly && tab !== 'WORKFLOW' && tab !== 'GRADES' && tab !== 'VIDEOS' && (
           <button
             onClick={() => setCreateType(tab as 'QUIZ' | 'HOMEWORK')}
             className="btn btn-primary"
@@ -373,6 +377,10 @@ export default function GroupDetailPage() {
         )}
       </div>
 
+      {isReadOnly ? (
+        <StaffCourseReadOnlyView courseName={decoded} groupName={decodedGroup} />
+      ) : (
+        <>
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
         {tabs.map(t => {
@@ -503,6 +511,8 @@ export default function GroupDetailPage() {
           onClose={() => setCreateType(null)}
           onCreated={fetchAssignments}
         />
+      )}
+        </>
       )}
     </AppShell>
   );

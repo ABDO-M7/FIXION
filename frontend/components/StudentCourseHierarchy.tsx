@@ -57,11 +57,13 @@ export default function StudentCourseHierarchy({
   assignments,
   videos,
   renderAssignment,
+  onVideoClick,
 }: {
   enrollmentId: string;
   assignments: Assignment[];
   videos: VideoItem[];
   renderAssignment: (assignment: Assignment) => React.ReactNode;
+  onVideoClick?: (video: VideoItem) => void;
 }) {
   const chapters = new Map<string, Map<string, Lesson['items']>>();
   const add = (chapterName: string | null | undefined, lessonName: string | null | undefined, item: Lesson['items'][number]) => {
@@ -119,6 +121,7 @@ export default function StudentCourseHierarchy({
               items={items}
               enrollmentId={enrollmentId}
               renderAssignment={renderAssignment}
+              onVideoClick={onVideoClick}
             />
           ))}
         </ChapterSection>
@@ -228,11 +231,13 @@ function LessonSection({
   items,
   enrollmentId,
   renderAssignment,
+  onVideoClick,
 }: {
   name: string;
   items: Lesson['items'];
   enrollmentId: string;
   renderAssignment: (assignment: Assignment) => React.ReactNode;
+  onVideoClick?: (video: VideoItem) => void;
 }) {
   const sorted = [...items].sort((a, b) => {
     const orderA = a.value.contentOrder ?? 0;
@@ -266,7 +271,7 @@ function LessonSection({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {sorted.map(item => item.kind === 'video' ? (
-          <VideoRow key={`video-${item.value.id}`} video={item.value} enrollmentId={enrollmentId} />
+          <VideoRow key={`video-${item.value.id}`} video={item.value} enrollmentId={enrollmentId} onVideoClick={onVideoClick} />
         ) : (
           <div key={`assignment-${item.value.id}`}>
             {renderAssignment(item.value)}
@@ -277,7 +282,7 @@ function LessonSection({
   );
 }
 
-function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: string }) {
+function VideoRow({ video, enrollmentId, onVideoClick }: { video: VideoItem; enrollmentId: string; onVideoClick?: (video: VideoItem) => void }) {
   const isDoc = video.provider === 'document';
   const provider = video.provider || 'youtube';
   const thumbnail = !isDoc && provider === 'youtube' && (video.providerVideoId || video.youtubeVideoId)
@@ -453,6 +458,28 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
       <a href={video.attachments[0]} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
         {content}
       </a>
+    );
+  }
+
+  if (isDoc) return content;
+
+  if (onVideoClick) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onVideoClick(video)}
+        onKeyDown={event => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onVideoClick(video);
+          }
+        }}
+        style={{ cursor: 'pointer', textAlign: 'start' }}
+      >
+        {content}
+      </div>
     );
   }
 
