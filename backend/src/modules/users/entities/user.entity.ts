@@ -40,7 +40,7 @@ export class User {
   @Column({ nullable: true, length: 30 })
   phone: string;
 
-  @Column({ nullable: true, length: 30 })
+  @Column({ type: 'varchar', nullable: true, length: 30 })
   parentPhone: string | null;
 
   @Index()

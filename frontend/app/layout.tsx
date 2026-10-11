@@ -8,9 +8,9 @@ export const metadata: Metadata = {
   keywords: ['education', 'courses', 'video lessons', 'quizzes', 'students', 'teachers'],
   authors: [{ name: 'FIXION' }],
   icons: {
-    icon: '/brand/icon.png',
-    shortcut: '/brand/icon.png',
-    apple: '/brand/icon.png',
+    icon: '/favicon.ico?v=fixion-20261011',
+    shortcut: '/favicon.ico?v=fixion-20261011',
+    apple: '/brand/icon.png?v=fixion-20261011',
   },
   openGraph: {
     title: 'FIXION | Learning has no limits',
