@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { questionsApi } from '@/lib/api';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, HelpCircle, CheckCircle2, Clock, Check, BookOpen, Paperclip, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -41,9 +41,25 @@ export default function MyQuestionsPage() {
   });
 
   const statusBadge = (s: string) => {
-    if (s === 'answered') return <span className="badge badge-answered">✓ {t('status.answered')}</span>;
-    if (s === 'pending') return <span className="badge badge-pending">⏳ {t('status.pending')}</span>;
-    return <span className="badge badge-closed">{t('status.closed')}</span>;
+    if (s === 'answered') {
+      return (
+        <span className="badge badge-answered" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <CheckCircle2 size={12} /> {t('status.answered')}
+        </span>
+      );
+    }
+    if (s === 'pending') {
+      return (
+        <span className="badge badge-pending" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Clock size={12} /> {t('status.pending')}
+        </span>
+      );
+    }
+    return (
+      <span className="badge badge-closed" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <Check size={12} /> {t('status.closed')}
+      </span>
+    );
   };
 
   const statusLabel = (s: string) => {
@@ -95,7 +111,9 @@ export default function MyQuestionsPage() {
         <div className="page-loader"><span className="spinner" /></div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">🔍</div>
+          <div className="empty-state-icon">
+            <HelpCircle size={36} style={{ color: 'var(--text-muted)' }} />
+          </div>
           <div className="empty-state-title">{t('questions.noFound')}</div>
           <div className="empty-state-text">
             {search ? t('questions.noFoundSearch') : t('questions.noFoundEmpty')}
@@ -113,13 +131,14 @@ export default function MyQuestionsPage() {
               <div className="question-meta">
                 {statusBadge(q.status)}
                 {q.category && (
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    📚 {q.category.subject} › {q.category.lesson}
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <BookOpen size={12} style={{ color: 'var(--primary-light)' }} />
+                    {q.category.subject} › {q.category.lesson}
                   </span>
                 )}
                 {q.attachments?.length > 0 && (
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    📎 {q.attachments.length} {q.attachments.length > 1 ? t('common.files') : t('common.file')}
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Paperclip size={12} /> {q.attachments.length} {q.attachments.length > 1 ? t('common.files') : t('common.file')}
                   </span>
                 )}
                 <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>
@@ -130,8 +149,8 @@ export default function MyQuestionsPage() {
                 {q.content.length > 160 ? q.content.slice(0, 160) + '…' : q.content}
               </p>
               {q.answers?.length > 0 && (
-                <div style={{ fontSize: 13, color: 'var(--success)', fontWeight: 500 }}>
-                  💬 {q.answers.length} {q.answers.length > 1 ? t('questions.answers') : t('questions.answer')}
+                <div style={{ fontSize: 13, color: 'var(--success)', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <MessageSquare size={13} /> {q.answers.length} {q.answers.length > 1 ? t('questions.answers') : t('questions.answer')}
                 </div>
               )}
             </Link>
