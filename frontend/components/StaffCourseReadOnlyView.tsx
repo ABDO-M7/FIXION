@@ -94,7 +94,12 @@ export default function StaffCourseReadOnlyView({
       </div>
       <StudentCourseHierarchy
         enrollmentId=""
-        assignments={assignments.map(assignment => ({ ...assignment, maxGrade: assignment.maxGrade || 100, submission: null }))}
+        assignments={assignments.map(assignment => ({
+          ...assignment,
+          description: assignment.description || undefined,
+          maxGrade: assignment.maxGrade || 100,
+          submission: null,
+        }))}
         videos={videos}
         onVideoClick={setActiveVideo}
         renderAssignment={assignment => (
