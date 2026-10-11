@@ -576,7 +576,7 @@ function WorkflowItemRow({
           <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>{item.title}</strong>
           {isDoc && (
             <span className="badge" style={{ fontSize: 10, background: 'rgba(14,165,233,0.12)', color: '#38bdf8' }}>
-              ملف / ملزمة (PDF)
+              ملف (PDF)
             </span>
           )}
           {isVideo && !isDoc && (
@@ -726,7 +726,7 @@ function AttachmentsManager({
     }}>
       <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
         <Paperclip size={14} style={{ color: '#ef4444' }} />
-        ملفات الحصة / ملزمة الدرس (PDF أو رابط Google Drive)
+        الملفات والمرفقات (PDF أو رابط خارجي)
       </label>
 
       {/* Upload button & external link input */}
@@ -749,7 +749,7 @@ function AttachmentsManager({
             {uploading ? <Loader2 size={13} className="animate-spin" /> : <FileUp size={13} style={{ color: '#ef4444' }} />}
             {uploading ? 'جاري رفع الملف...' : 'رفع ملف PDF من الجهاز'}
           </button>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>أو ضع رابط من Google Drive بالأسفل</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>أو ضع رابط الملف بالأسفل</span>
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
@@ -818,7 +818,7 @@ function AttachmentsManager({
                     }}
                     title={url}
                   >
-                    {isDrive ? `رابط Google Drive (${i + 1})` : isPdf ? decodeURIComponent(url.split('/').pop() || 'ملف PDF') : url}
+                    {isDrive ? `رابط خارجي (${i + 1})` : isPdf ? decodeURIComponent(url.split('/').pop() || 'ملف PDF') : url}
                   </a>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1191,7 +1191,7 @@ function AddItemModal({
     try {
       if (kind === 'DOCUMENT') {
         if (attachments.length === 0 && !sourceUrl.trim()) {
-          toast.error('يرجى رفع ملف PDF أو وضع رابط Google Drive للملف');
+          toast.error('يرجى رفع ملف PDF أو وضع رابط للملف');
           setSaving(false);
           return;
         }
@@ -1212,7 +1212,7 @@ function AddItemModal({
           unlockAssignmentId: (effectiveRule === 'PASS_QUIZ' || effectiveRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
           unlockScore: effectiveRule === 'PASS_QUIZ' ? (+unlockScore || 50) : undefined,
         });
-        toast.success('تمت إضافة الملف / الملزمة بنجاح');
+        toast.success('تمت إضافة الملف بنجاح');
         onCreated();
       } else if (kind === 'VIDEO') {
         if (!sourceUrl.trim()) { toast.error('رابط الفيديو أو كود التضمين مطلوب'); setSaving(false); return; }
@@ -1313,7 +1313,7 @@ function AddItemModal({
             onClick={() => setKind('DOCUMENT')}
             style={{ fontSize: 12, justifyContent: 'center', padding: '8px 6px' }}
           >
-            <FileUp size={14} /> ملف / ملزمة
+            <FileUp size={14} /> ملف PDF
           </button>
         </div>
 
@@ -1326,7 +1326,7 @@ function AddItemModal({
               onChange={e => setTitle(e.target.value)}
               placeholder={
                 kind === 'DOCUMENT'
-                  ? 'مثال: ملزمة شرح الدرس الأول (PDF)'
+                  ? 'مثال: ملف شرح الدرس الأول (PDF)'
                   : kind === 'VIDEO'
                   ? 'مثال: حصة 1: شرح الحركة في خط مستقيم'
                   : kind === 'QUIZ'
@@ -1523,7 +1523,7 @@ function EditItemModal({
       <div className="card" style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-            {isDoc ? 'تعديل ملف / ملزمة (PDF): ' : isVideo ? 'تعديل الحصة: ' : 'تعديل العنصر: '}
+            {isDoc ? 'تعديل ملف PDF: ' : isVideo ? 'تعديل الحصة: ' : 'تعديل العنصر: '}
             {item.title}
           </h3>
           <button className="icon-btn" onClick={onClose}><X size={15} /></button>

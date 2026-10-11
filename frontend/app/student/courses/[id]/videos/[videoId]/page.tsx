@@ -10,13 +10,12 @@ import InteractiveCourseVideoPlayer, { InteractiveCourseVideo } from '@/componen
 import { enrollmentsApi, videosApi } from '@/lib/api';
 
 function formatAttachmentLabel(url: string, index: number) {
-  if (url.includes('drive.google.com')) return `ملزمة الدرس (Google Drive ${index > 0 ? index + 1 : ''})`;
   const lower = url.toLowerCase();
   if (lower.endsWith('.pdf')) {
-    const name = decodeURIComponent(url.split('/').pop() || 'ملف PDF');
-    return `ملف PDF: ${name}`;
+    const name = decodeURIComponent(url.split('/').pop() || '');
+    if (name && !name.startsWith('blob:') && name.length < 35) return name;
   }
-  return `ملف مرفق ${index + 1}`;
+  return index > 0 ? `تحميل الملف (${index + 1})` : 'تحميل الملف';
 }
 
 export default function StudentVideoPage() {
@@ -76,9 +75,6 @@ export default function StudentVideoPage() {
                   </div>
                   <div>
                     <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{video.title}</h2>
-                    <span className="badge" style={{ marginTop: 4, fontSize: 11, background: 'rgba(14,165,233,0.12)', color: '#38bdf8' }}>
-                      ملف / ملزمة (PDF)
-                    </span>
                   </div>
                 </div>
 
@@ -101,7 +97,7 @@ export default function StudentVideoPage() {
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}
                         >
                           <Download size={15} />
-                          <span>تحميل {formatAttachmentLabel(url, i)}</span>
+                          <span>{formatAttachmentLabel(url, i)}</span>
                           <ExternalLink size={13} />
                         </a>
                       ))}
@@ -143,14 +139,14 @@ export default function StudentVideoPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <FileText size={18} style={{ color: '#ef4444' }} />
                   <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-                    ملفات وملزمة الحصة (PDF والمرفقات)
+                    الملفات المرفقة مع الحصة
                   </h4>
                   <span className="badge" style={{ fontSize: 11, background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>
                     {video.attachments.length} {video.attachments.length === 1 ? 'ملف متاح' : 'ملفات متاحة'}
                   </span>
                 </div>
                 <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--text-muted)' }}>
-                  يمكنك تحميل مذكرة الحصة أو فتح ملفات الـ PDF وروابط Google Drive المرفقة مع هذا الدرس:
+                  يمكنك فتح أو تحميل الملفات المرفقة مع هذا الدرس:
                 </p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                   {video.attachments.map((url, i) => (

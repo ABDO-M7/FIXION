@@ -215,13 +215,12 @@ function ChapterSection({
 }
 
 function formatAttachmentLabel(url: string, index: number) {
-  if (url.includes('drive.google.com')) return `ملزمة الدرس (Google Drive ${index > 0 ? index + 1 : ''})`;
   const lower = url.toLowerCase();
   if (lower.endsWith('.pdf')) {
-    const name = decodeURIComponent(url.split('/').pop() || 'ملف PDF');
-    return `ملف PDF: ${name}`;
+    const name = decodeURIComponent(url.split('/').pop() || '');
+    if (name && !name.startsWith('blob:') && name.length < 35) return name;
   }
-  return `ملف مرفق ${index + 1}`;
+  return index > 0 ? `تحميل الملف (${index + 1})` : 'تحميل الملف';
 }
 
 function LessonSection({
@@ -362,11 +361,7 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
           }}>
             {video.title}
           </strong>
-          {isDoc ? (
-            <span className="badge" style={{ fontSize: 10, background: 'rgba(14,165,233,0.12)', color: '#38bdf8' }}>
-              ملف / ملزمة (PDF)
-            </span>
-          ) : (
+          {!isDoc && (
             <span className="badge" style={{ fontSize: 10, background: 'rgba(99,102,241,0.12)', color: 'var(--primary-light)' }}>
               حصة دراسية
             </span>
@@ -443,7 +438,7 @@ function VideoRow({ video, enrollmentId }: { video: VideoItem; enrollmentId: str
             color: isDoc ? '#38bdf8' : 'var(--primary-light)',
             border: `1px solid ${isDoc ? 'rgba(14,165,233,0.25)' : 'rgba(99,102,241,0.25)'}`,
           }}>
-            {isDoc ? 'عرض الملزمة' : 'مشاهدة الحصة'}
+            {isDoc ? 'عرض الملف' : 'مشاهدة الحصة'}
             <ChevronRight size={13} />
           </span>
         </div>
