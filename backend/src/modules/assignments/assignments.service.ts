@@ -547,7 +547,15 @@ export class AssignmentsService {
   }
 
   // ─── GET assignments for a group ──────────────────────────────────────────
-  async getAssignments(courseName: string, groupName: string, type?: AssignmentType) {
+  async getAssignments(courseName: string, groupName: string, type?: AssignmentType, actor?: User) {
+    if (actor && actor.role !== UserRole.ADMIN) {
+      const scope = await this.staffScope(actor);
+      if (scope.type === 'subjects' && !scope.subjects.includes(courseName)) return [];
+      if (scope.type === 'teacher') {
+        const groups = await this.getGroupsForCourse(courseName, actor);
+        if (!groups.includes(groupName)) return [];
+      }
+    }
     const qb = this.assignmentsRepo
       .createQueryBuilder('a')
       .where('a.courseName = :courseName', { courseName })

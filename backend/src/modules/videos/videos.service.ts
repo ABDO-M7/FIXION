@@ -9,6 +9,7 @@ import { VideoCheckpoint, VideoCheckpointOption, VideoCheckpointType } from './e
 import { VideoResponse } from './entities/video-response.entity';
 import { canManageOwnedWork, resolveStaffScope, workOwnerId } from '../../common/staff-access';
 import { Assignment } from '../assignments/entities/assignment.entity';
+import { CourseGroup } from '../assignments/entities/course-group.entity';
 import { AssignmentSubmission } from '../assignments/entities/assignment-submission.entity';
 import { UnlockRuleType } from '../learning/unlock-rule';
 import { VideoProgress } from './entities/video-progress.entity';
@@ -62,6 +63,7 @@ export class VideosService {
     @InjectRepository(VideoResponse) private readonly responsesRepo: Repository<VideoResponse>,
     @InjectRepository(User) private readonly usersRepo: Repository<User>,
     @InjectRepository(Assignment) private readonly assignmentsRepo: Repository<Assignment>,
+    @InjectRepository(CourseGroup) private readonly courseGroupsRepo: Repository<CourseGroup>,
     @InjectRepository(AssignmentSubmission) private readonly submissionsRepo: Repository<AssignmentSubmission>,
     @InjectRepository(VideoProgress) private readonly progressRepo: Repository<VideoProgress>,
   ) {}
@@ -110,13 +112,24 @@ export class VideosService {
   async listForTeacher(courseName: string, groupName: string, actor: User) {
     const scope = await resolveStaffScope(this.usersRepo, actor);
     if (scope.type === 'subjects' && !scope.subjects.includes(courseName)) return [];
-    const where: { courseName: string; groupName: string; teacherId?: string } = { courseName, groupName };
     if (scope.type === 'teacher') {
       if (!scope.teacherId) return [];
-      where.teacherId = scope.teacherId;
+      const [assignedGroup, ownedAssignment, ownedVideo, enrollment] = await Promise.all([
+        this.courseGroupsRepo.findOne({ where: { courseName, groupName, teacherId: scope.teacherId } }),
+        this.assignmentsRepo.findOne({ where: { courseName, groupName, teacherId: scope.teacherId } }),
+        this.videosRepo.findOne({ where: { courseName, groupName, teacherId: scope.teacherId } }),
+        this.enrollmentsRepo.createQueryBuilder('e')
+          .where('e.courseName = :courseName AND e.groupName = :groupName', { courseName, groupName })
+          .andWhere('(e.teacherId = :teacherId OR (e.teacherId IS NULL AND e.teacherName = :teacherName))', {
+            teacherId: scope.teacherId,
+            teacherName: scope.teacherName,
+          })
+          .getOne(),
+      ]);
+      if (!assignedGroup && !ownedAssignment && !ownedVideo && !enrollment) return [];
     }
     const videos = await this.videosRepo.find({
-      where,
+      where: { courseName, groupName },
       order: { createdAt: 'DESC' },
     });
     return Promise.all(videos.map(video => this.withCheckpointSummary(video)));

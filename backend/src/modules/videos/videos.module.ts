@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
 import { User } from '../users/entities/user.entity';
 import { Assignment } from '../assignments/entities/assignment.entity';
+import { CourseGroup } from '../assignments/entities/course-group.entity';
 import { AssignmentSubmission } from '../assignments/entities/assignment-submission.entity';
 import { VideoProgress } from './entities/video-progress.entity';
 import { CourseVideo } from './entities/course-video.entity';
@@ -12,7 +13,7 @@ import { VideosController } from './videos.controller';
 import { VideosService } from './videos.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CourseVideo, CourseEnrollment, VideoCheckpoint, VideoResponse, VideoProgress, User, Assignment, AssignmentSubmission])],
+  imports: [TypeOrmModule.forFeature([CourseVideo, CourseEnrollment, VideoCheckpoint, VideoResponse, VideoProgress, User, Assignment, AssignmentSubmission, CourseGroup])],
   controllers: [VideosController],
   providers: [VideosService],
 })

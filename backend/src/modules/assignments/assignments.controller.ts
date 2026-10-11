@@ -99,9 +99,10 @@ export class AssignmentsController {
   getAssignments(
     @Param('courseName') courseName: string,
     @Param('groupName') groupName: string,
+    @CurrentUser() actor: any,
     @Query('type') type?: AssignmentType,
   ) {
-    return this.assignmentsService.getAssignments(courseName, groupName, type);
+    return this.assignmentsService.getAssignments(courseName, groupName, type, actor);
   }
 
   // ── Teacher: create assignment ─────────────────────────────────────────────
