@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { SubscriptionCode } from './subscription-code.entity';
+import { CodeType } from './subscription-code.entity';
 
 @Entity('course_enrollments')
 export class CourseEnrollment {
@@ -48,6 +49,33 @@ export class CourseEnrollment {
 
   @Column({ name: 'code_id', nullable: true })
   codeId: string;
+
+  /** The type of code that created this enrollment */
+  @Column({ type: 'enum', enum: CodeType, default: CodeType.TIMED })
+  codeType: CodeType;
+
+  /**
+   * TIMED: when access expires and the student can no longer watch content.
+   * SNAPSHOT / CHAPTER: null (access never expires).
+   */
+  @Column({ nullable: true, type: 'timestamptz' })
+  expiresAt: Date | null;
+
+  /**
+   * SNAPSHOT: the datetime at which the student redeemed the code.
+   * Only content published ON OR BEFORE this timestamp is accessible.
+   * TIMED / CHAPTER: null.
+   */
+  @Column({ nullable: true, type: 'timestamptz' })
+  snapshotAt: Date | null;
+
+  /**
+   * CHAPTER: restricted chapters/lessons.
+   * Shape: { chapters?: string[]; lessons?: string[] }
+   * TIMED / SNAPSHOT: null (all content is accessible within expiry / snapshot window).
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  accessScope: { chapters?: string[]; lessons?: string[] } | null;
 
   @CreateDateColumn()
   createdAt: Date;

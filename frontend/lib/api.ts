@@ -164,8 +164,33 @@ export const subscriptionsApi = {
 };
 
 export const codesApi = {
-  generate: (plan: string, quantity: number, expiresAt?: string, courseName?: string, teacherId?: string, groupName?: string, minLength = 16, maxLength = 16, includeLetters = true) =>
-    api.post('/codes/generate', { plan, quantity, expiresAt, courseName, teacherId, groupName, minLength, maxLength, includeLetters }),
+  generate: (opts: {
+    plan: string;
+    quantity: number;
+    codeType: 'timed' | 'snapshot' | 'chapter';
+    durationDays?: number;
+    accessScope?: { chapters?: string[]; lessons?: string[] };
+    codeExpiresAt?: string;
+    courseName?: string;
+    teacherId?: string;
+    groupName?: string;
+    minLength?: number;
+    maxLength?: number;
+    includeLetters?: boolean;
+  }) => api.post('/codes/generate', {
+    plan: opts.plan,
+    quantity: opts.quantity,
+    codeType: opts.codeType,
+    durationDays: opts.durationDays,
+    accessScope: opts.accessScope,
+    codeExpiresAt: opts.codeExpiresAt,
+    courseName: opts.courseName,
+    teacherId: opts.teacherId,
+    groupName: opts.groupName,
+    minLength: opts.minLength ?? 16,
+    maxLength: opts.maxLength ?? 16,
+    includeLetters: opts.includeLetters !== false,
+  }),
   list: (params?: any) => api.get('/codes', { params }),
   teacherUsage: (month?: string) => api.get('/codes/teacher-usage', { params: month ? { month } : {} }),
   revoke: (id: string) => api.delete(`/codes/${id}`),

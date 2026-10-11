@@ -7,7 +7,7 @@ import { randomInt } from 'crypto';
 import { addDays } from 'date-fns';
 import { isUUID } from 'class-validator';
 import { Subscription, SubscriptionPlan } from './entities/subscription.entity';
-import { SubscriptionCode } from './entities/subscription-code.entity';
+import { SubscriptionCode, CodeType } from './entities/subscription-code.entity';
 import { CourseEnrollment } from './entities/course-enrollment.entity';
 import { User, UserRole } from '../users/entities/user.entity';
 
@@ -19,6 +19,12 @@ function generateRandomCode(minLength = 16, maxLength = 16, includeLetters = tru
   const alphabet = includeLetters ? CODE_ALPHABET : DIGIT_ALPHABET;
   return Array.from({ length }, () => alphabet[randomInt(0, alphabet.length)]).join('');
 }
+
+/** Default plan duration in days when durationDays is not explicitly set */
+const PLAN_DURATION: Record<SubscriptionPlan, number> = {
+  [SubscriptionPlan.WEEKLY]: 7,
+  [SubscriptionPlan.MONTHLY]: 30,
+};
 
 @Injectable()
 export class SubscriptionsService {
@@ -33,7 +39,8 @@ export class SubscriptionsService {
     private usersRepo: Repository<User>,
   ) {}
 
-  async redeemCode(code: string, student: User): Promise<{ subscription: Subscription; enrollment: CourseEnrollment | null }> {
+  // ─── Redeem ───────────────────────────────────────────────────────────────
+  async redeemCode(code: string, student: User): Promise<{ enrollment: CourseEnrollment | null }> {
     const subCode = await this.codesRepo.findOne({
       where: { code: code.toUpperCase().trim(), isUsed: false },
       relations: ['teacher'],
@@ -41,95 +48,98 @@ export class SubscriptionsService {
 
     if (!subCode) throw new NotFoundException('Invalid or already used code');
 
+    // Code itself expired (redemption window) — separate from access expiry
     if (subCode.expiresAt && subCode.expiresAt < new Date()) {
       throw new BadRequestException('This code has expired');
     }
 
-    const duration = subCode.plan === SubscriptionPlan.WEEKLY ? 7 : 30;
+    // Course code: require courseName
+    if (!subCode.courseName) {
+      throw new BadRequestException('This code is not linked to a course');
+    }
 
-    // Check for existing active subscription (extend it)
-    let existing = await this.subscriptionsRepo.findOne({
-      where: { userId: student.id, isActive: true },
-    });
-
-    const baseDate = existing && existing.expiresAt > new Date()
-      ? existing.expiresAt
-      : new Date();
-
-    const expiresAt = addDays(baseDate, duration);
-
+    // Mark the code as used
     await this.codesRepo.update(subCode.id, {
       isUsed: true,
       usedById: student.id,
       usedAt: new Date(),
     });
 
-    let subscription: Subscription;
-    if (existing) {
-      await this.subscriptionsRepo.update(existing.id, { expiresAt, plan: subCode.plan });
-      subscription = await this.subscriptionsRepo.findOne({ where: { id: existing.id } }) as Subscription;
-    } else {
-      subscription = await this.subscriptionsRepo.save(
-        this.subscriptionsRepo.create({
-          userId: student.id,
-          plan: subCode.plan,
-          startsAt: new Date(),
-          expiresAt,
-          isActive: true,
-          codeUsedId: subCode.id,
-        }),
-      );
-    }
+    // Resolve teacher
+    let teacher = subCode.teacher || null;
+    let teacherName = subCode.teacherName || subCode.teacher?.name || null;
+    let teacherId = subCode.teacherId || subCode.teacher?.id || null;
 
-    // Auto-enroll in course if code has course info
-    let enrollment: CourseEnrollment | null = null;
-    if (subCode.courseName) {
-      let teacher = subCode.teacher || null;
-      let teacherName = subCode.teacherName || subCode.teacher?.name || null;
-      let teacherId = subCode.teacherId || subCode.teacher?.id || null;
-
-      if (!teacherName) {
-        const teachers = await this.usersRepo.find({ where: { role: UserRole.TEACHER, isActive: true } });
-        const matched = teachers.find(t => Array.isArray(t.subjects) && t.subjects.includes(subCode.courseName!));
-        if (matched) {
-          teacher = matched;
-          teacherId = matched.id;
-          teacherName = matched.name;
-        }
+    if (!teacherName) {
+      const teachers = await this.usersRepo.find({ where: { role: UserRole.TEACHER, isActive: true } });
+      const matched = teachers.find(t => Array.isArray(t.subjects) && t.subjects.includes(subCode.courseName!));
+      if (matched) {
+        teacher = matched;
+        teacherId = matched.id;
+        teacherName = matched.name;
       }
-
-      enrollment = await this.enrollmentsRepo.save(
-        this.enrollmentsRepo.create({
-          studentId: student.id,
-          courseName: subCode.courseName,
-          teacherName: teacherName || undefined,
-          teacherId: teacherId || undefined,
-          teacher: teacher || undefined,
-          groupName: subCode.groupName || 'المجموعة الأساسية',
-          codeId: subCode.id,
-        }),
-      );
     }
 
-    return { subscription, enrollment };
+    // Calculate per-enrollment expiry based on code type
+    const now = new Date();
+    let enrollmentExpiresAt: Date | null = null;
+    let snapshotAt: Date | null = null;
+    let accessScope: { chapters?: string[]; lessons?: string[] } | null = null;
+
+    const codeType = subCode.codeType ?? CodeType.TIMED;
+
+    if (codeType === CodeType.TIMED) {
+      const durationDays = subCode.durationDays ?? PLAN_DURATION[subCode.plan] ?? 30;
+      enrollmentExpiresAt = addDays(now, durationDays);
+    } else if (codeType === CodeType.SNAPSHOT) {
+      // Access to content published at or before this moment, forever
+      snapshotAt = now;
+      enrollmentExpiresAt = null;
+    } else if (codeType === CodeType.CHAPTER) {
+      // Access forever but limited to specific chapters/lessons
+      accessScope = subCode.accessScope ?? null;
+      enrollmentExpiresAt = null;
+    }
+
+    const enrollment = await this.enrollmentsRepo.save(
+      this.enrollmentsRepo.create({
+        studentId: student.id,
+        courseName: subCode.courseName,
+        teacherName: teacherName || undefined,
+        teacherId: teacherId || undefined,
+        teacher: teacher || undefined,
+        groupName: subCode.groupName || 'المجموعة الأساسية',
+        codeId: subCode.id,
+        codeType,
+        expiresAt: enrollmentExpiresAt,
+        snapshotAt,
+        accessScope,
+      }),
+    );
+
+    return { enrollment };
   }
 
-  async getMyEnrollments(studentId: string): Promise<CourseEnrollment[]> {
+  // ─── Enrollments ─────────────────────────────────────────────────────────
+  async getMyEnrollments(studentId: string): Promise<any[]> {
     const enrollments = await this.enrollmentsRepo.find({
       where: { studentId },
       relations: ['teacher'],
       order: { createdAt: 'DESC' },
     });
-    return Promise.all(enrollments.map(enrollment => this.withTeacherCapabilities(enrollment)));
+    return Promise.all(enrollments.map(e => this.withEnrollmentMeta(e)));
   }
 
-  async getEnrollmentById(id: string, studentId: string): Promise<CourseEnrollment> {
-    const enrollment = await this.enrollmentsRepo.findOne({ where: { id, studentId }, relations: ['teacher'] });
+  async getEnrollmentById(id: string, studentId: string): Promise<any> {
+    const enrollment = await this.enrollmentsRepo.findOne({
+      where: { id, studentId },
+      relations: ['teacher'],
+    });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
-    return this.withTeacherCapabilities(enrollment);
+    return this.withEnrollmentMeta(enrollment);
   }
 
-  private async withTeacherCapabilities(enrollment: CourseEnrollment): Promise<any> {
+  private async withEnrollmentMeta(enrollment: CourseEnrollment): Promise<any> {
     let teacher = enrollment.teacher || null;
     let teacherName = teacher?.name || enrollment.teacherName || null;
 
@@ -143,6 +153,20 @@ export class SubscriptionsService {
     }
 
     const permissions = teacher?.permissions || {};
+
+    // Compute per-enrollment status
+    const now = new Date();
+    const codeType = enrollment.codeType ?? CodeType.TIMED;
+    let isExpired = false;
+    let daysLeft: number | null = null;
+
+    if (codeType === CodeType.TIMED && enrollment.expiresAt) {
+      isExpired = enrollment.expiresAt < now;
+      if (!isExpired) {
+        daysLeft = Math.ceil((enrollment.expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      }
+    }
+
     return {
       ...enrollment,
       teacher,
@@ -151,9 +175,16 @@ export class SubscriptionsService {
         questions: !!teacher && permissions.student_questions !== false,
         appointments: !!teacher && permissions.student_appointments !== false,
       },
+      codeType,
+      isExpired,
+      daysLeft,
+      expiresAt: enrollment.expiresAt ?? null,
+      snapshotAt: enrollment.snapshotAt ?? null,
+      accessScope: enrollment.accessScope ?? null,
     };
   }
 
+  // ─── Status (kept for backward compat) ───────────────────────────────────
   async getStatus(userId: string) {
     const sub = await this.subscriptionsRepo.findOne({
       where: { userId, isActive: true },
@@ -172,11 +203,15 @@ export class SubscriptionsService {
     return { isActive: true, plan: sub.plan, expiresAt: sub.expiresAt, daysLeft };
   }
 
+  // ─── Generate Codes ───────────────────────────────────────────────────────
   async generateCodes(
     plan: SubscriptionPlan,
     quantity: number,
     admin: User,
-    expiresAt?: Date,
+    codeType: CodeType = CodeType.TIMED,
+    durationDays?: number,
+    accessScope?: { chapters?: string[]; lessons?: string[] },
+    codeExpiresAt?: Date,
     courseName?: string,
     teacherId?: string,
     groupName?: string,
@@ -185,18 +220,36 @@ export class SubscriptionsService {
     includeLetters = true,
   ) {
     const safeQuantity = Number(quantity);
-    if (!Number.isInteger(safeQuantity) || safeQuantity < 1) throw new BadRequestException('Quantity must be at least 1');
-    if (!Number.isInteger(minLength) || !Number.isInteger(maxLength) || minLength < 4 || maxLength > 64 || minLength > maxLength) {
-      throw new BadRequestException('Code length range must be between 4 and 64, with minimum no greater than maximum');
+    if (!Number.isInteger(safeQuantity) || safeQuantity < 1) {
+      throw new BadRequestException('Quantity must be at least 1');
     }
+    if (
+      !Number.isInteger(minLength) || !Number.isInteger(maxLength) ||
+      minLength < 4 || maxLength > 64 || minLength > maxLength
+    ) {
+      throw new BadRequestException('Code length must be between 4 and 64');
+    }
+
+    if (codeType === CodeType.TIMED && !courseName) {
+      throw new BadRequestException('Timed codes must be linked to a course');
+    }
+    if (codeType === CodeType.SNAPSHOT && !courseName) {
+      throw new BadRequestException('Snapshot codes must be linked to a course');
+    }
+    if (codeType === CodeType.CHAPTER) {
+      if (!courseName) throw new BadRequestException('Chapter codes must be linked to a course');
+      if (!accessScope?.chapters?.length && !accessScope?.lessons?.length) {
+        throw new BadRequestException('Chapter codes must specify at least one chapter or lesson');
+      }
+    }
+
     let teacher: User | null = null;
     if (teacherId) {
-      if (!isUUID(teacherId)) {
-        throw new BadRequestException('Selected teacher id is invalid');
-      }
+      if (!isUUID(teacherId)) throw new BadRequestException('Invalid teacher id');
       teacher = await this.usersRepo.findOne({ where: { id: teacherId, role: UserRole.TEACHER } });
-      if (!teacher) throw new BadRequestException('Selected teacher was not found');
+      if (!teacher) throw new BadRequestException('Teacher not found');
     }
+
     const codes: SubscriptionCode[] = [];
     const generated = new Set<string>();
     for (let i = 0; i < Math.min(safeQuantity, 500); i++) {
@@ -208,14 +261,17 @@ export class SubscriptionsService {
           break;
         }
       }
-      if (!code) throw new BadRequestException('Could not generate enough unique codes for this range');
+      if (!code) throw new BadRequestException('Could not generate enough unique codes');
       generated.add(code);
       codes.push(
         this.codesRepo.create({
           code,
           plan,
+          codeType,
+          durationDays: codeType === CodeType.TIMED ? (durationDays ?? null) : null,
+          accessScope: codeType === CodeType.CHAPTER ? (accessScope ?? null) : null,
           createdById: admin.id,
-          expiresAt,
+          expiresAt: codeExpiresAt,
           courseName,
           teacherId: teacher?.id,
           teacherName: teacher?.name,
@@ -226,6 +282,7 @@ export class SubscriptionsService {
     return this.codesRepo.save(codes);
   }
 
+  // ─── List / Stats ─────────────────────────────────────────────────────────
   async listCodes(page = 1, limit = 50, isUsed?: boolean) {
     const qb = this.codesRepo
       .createQueryBuilder('c')

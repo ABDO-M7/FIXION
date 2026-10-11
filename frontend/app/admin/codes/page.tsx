@@ -1,10 +1,38 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import AppShell from '@/components/AppShell';
 import { adminApi, codesApi, assignmentsApi } from '@/lib/api';
-import { Key, Copy, Trash2, CheckCircle, Clock, GraduationCap, FileDown, Printer, BarChart3 } from 'lucide-react';
+import {
+  Key, Copy, Trash2, CheckCircle, Clock, GraduationCap,
+  FileDown, Printer, BarChart3, Timer, Camera, BookOpen, Plus, X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+
+type CodeType = 'timed' | 'snapshot' | 'chapter';
+
+const CODE_TYPE_META: Record<CodeType, { label: string; description: string; color: string; Icon: any }> = {
+  timed: {
+    label: 'Timed',
+    description: 'Access for a fixed number of days, then locks.',
+    color: '#6366f1',
+    Icon: Timer,
+  },
+  snapshot: {
+    label: 'Snapshot',
+    description: 'Content published up to redemption date stays accessible forever.',
+    color: '#10b981',
+    Icon: Camera,
+  },
+  chapter: {
+    label: 'Chapter',
+    description: 'Permanent access to specific chapters / lessons only.',
+    color: '#f59e0b',
+    Icon: BookOpen,
+  },
+};
+
+const ROLE_FILTERS = ['all', 'used', 'unused'] as const;
 
 export default function AdminCodesPage() {
   const [codes, setCodes] = useState<any[]>([]);
@@ -17,21 +45,26 @@ export default function AdminCodesPage() {
   const [usageMonth, setUsageMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [teacherUsage, setTeacherUsage] = useState<{ teacherName: string; usedCodes: number }[]>([]);
   const [usageTotal, setUsageTotal] = useState(0);
-  const [teachers, setTeachers] = useState<{ id: string; name: string; email: string; subjects?: string[] }[]>([]);
+  const [teachers, setTeachers] = useState<{ id: string; name: string; subjects?: string[] }[]>([]);
   const [availableCourses, setAvailableCourses] = useState<string[]>(['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه']);
   const [availableGroups, setAvailableGroups] = useState<string[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [customGroup, setCustomGroup] = useState(false);
+  const [chapterInput, setChapterInput] = useState('');
+
   const [form, setForm] = useState({
+    codeType: 'timed' as CodeType,
     plan: 'monthly',
     quantity: '10',
-    expiresAt: '',
+    durationDays: '',
+    codeExpiresAt: '',
     courseName: '',
     teacherId: '',
     groupName: '',
     minLength: '16',
     maxLength: '16',
     includeLetters: true,
+    accessScope: { chapters: [] as string[], lessons: [] as string[] },
   });
   const LIMIT = 50;
 
@@ -64,8 +97,7 @@ export default function AdminCodesPage() {
       .then(r => {
         const list = Array.isArray(r.data) ? r.data : [];
         const fallback = ['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه'];
-        const set = new Set([...fallback, ...list]);
-        setAvailableCourses(Array.from(set));
+        setAvailableCourses(Array.from(new Set([...fallback, ...list])));
       })
       .catch(() => {});
   }, []);
@@ -98,7 +130,6 @@ export default function AdminCodesPage() {
             const list = Array.isArray(res.data) ? res.data : [];
             const resolvedGroups = list.length > 0 ? list : ['Group 1'];
             setAvailableGroups(resolvedGroups);
-            setCustomGroup(false);
             setForm(p => ({
               ...p,
               groupName: p.groupName && resolvedGroups.includes(p.groupName) ? p.groupName : (resolvedGroups[0] || ''),
@@ -109,62 +140,78 @@ export default function AdminCodesPage() {
       .finally(() => setLoadingGroups(false));
   }, [form.courseName]);
 
+  const addChapter = () => {
+    const val = chapterInput.trim();
+    if (!val) return;
+    setForm(p => ({ ...p, accessScope: { ...p.accessScope, chapters: [...(p.accessScope.chapters || []), val] } }));
+    setChapterInput('');
+  };
+  const removeChapter = (ch: string) => {
+    setForm(p => ({ ...p, accessScope: { ...p.accessScope, chapters: p.accessScope.chapters.filter(c => c !== ch) } }));
+  };
 
   const generate = async () => {
     const quantity = Number(form.quantity);
     const minLength = Number(form.minLength);
     const maxLength = Number(form.maxLength);
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) { toast.error('Quantity must be between 1 and 500'); return; }
-    if (!Number.isInteger(minLength) || !Number.isInteger(maxLength) || minLength < 4 || maxLength > 64 || minLength > maxLength) { toast.error('Length must be between 4 and 64, with minimum no greater than maximum'); return; }
-    if (form.courseName.trim() && !form.teacherId) { toast.error('Select a teacher for this course'); return; }
-    if (form.teacherId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(form.teacherId)) {
-      toast.error('Please select a valid teacher');
-      return;
-    }
+    const durationDays = form.durationDays ? Number(form.durationDays) : undefined;
+
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) { toast.error('Quantity must be 1–500'); return; }
+    if (!Number.isInteger(minLength) || !Number.isInteger(maxLength) || minLength < 4 || maxLength > 64 || minLength > maxLength) { toast.error('Length must be 4–64, min ≤ max'); return; }
+    if (!form.courseName.trim()) { toast.error('Course is required for all code types'); return; }
+    if (form.courseName && !form.teacherId) { toast.error('Select a teacher for this course'); return; }
+    if (form.codeType === 'chapter' && !form.accessScope.chapters.length) { toast.error('Add at least one chapter for chapter-type codes'); return; }
+
     setGenerating(true);
     try {
-      const res = await codesApi.generate(
-        form.plan,
+      const res = await codesApi.generate({
+        plan: form.plan,
         quantity,
-        form.expiresAt || undefined,
-        form.courseName || undefined,
-        form.teacherId || undefined,
-        form.groupName || undefined,
+        codeType: form.codeType,
+        durationDays,
+        accessScope: form.codeType === 'chapter' ? form.accessScope : undefined,
+        codeExpiresAt: form.codeExpiresAt || undefined,
+        courseName: form.courseName || undefined,
+        teacherId: form.teacherId || undefined,
+        groupName: form.groupName || undefined,
         minLength,
         maxLength,
-        form.includeLetters,
-      );
+        includeLetters: form.includeLetters,
+      });
       const generated = Array.isArray(res.data) ? res.data : [];
       setLastGenerated(generated);
       toast.success(`${generated.length} codes generated!`);
       fetchCodes();
-    } catch (error: any) { toast.error(error?.response?.data?.message || 'Failed to generate codes'); } finally { setGenerating(false); }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to generate codes');
+    } finally { setGenerating(false); }
   };
 
   const exportWord = () => {
     if (!lastGenerated.length) return;
-    const rows = lastGenerated.map(code => `<tr><td>${code.code}</td><td>${code.plan}</td><td>${code.expiresAt ? format(new Date(code.expiresAt), 'MMM d, yyyy') : 'No expiry'}</td></tr>`).join('');
-    const html = `<html><head><meta charset="utf-8"><style>body{font-family:Arial;color:#111}h1{font-size:20px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:8px;text-align:left}code{font-family:monospace;font-size:16px;letter-spacing:1px}</style></head><body><h1>FIXION Subscription Codes</h1><p>Generated: ${new Date().toLocaleString()}</p><table><thead><tr><th>Code</th><th>Plan</th><th>Expires</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const rows = lastGenerated.map(code =>
+      `<tr><td>${code.code}</td><td>${CODE_TYPE_META[code.codeType as CodeType]?.label ?? code.codeType}</td><td>${code.courseName || '—'}</td><td>${code.expiresAt ? format(new Date(code.expiresAt), 'MMM d, yyyy') : 'No expiry'}</td></tr>`
+    ).join('');
+    const html = `<html><head><meta charset="utf-8"><style>body{font-family:Arial;color:#111}h1{font-size:20px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:8px;text-align:left}</style></head><body><h1>Subscription Codes</h1><p>Generated: ${new Date().toLocaleString()}</p><table><thead><tr><th>Code</th><th>Type</th><th>Course</th><th>Expires</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
     const blob = new Blob([html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url; link.download = `fixion-codes-${new Date().toISOString().slice(0, 10)}.doc`; link.click();
+    const link = document.createElement('a');
+    link.href = url; link.download = `codes-${new Date().toISOString().slice(0, 10)}.doc`; link.click();
     URL.revokeObjectURL(url);
   };
 
   const printPdf = () => {
     if (!lastGenerated.length) return;
-    const rows = lastGenerated.map(code => `<div class="code"><strong>${code.code}</strong><span>${code.plan}${code.expiresAt ? ` · ${format(new Date(code.expiresAt), 'MMM d, yyyy')}` : ''}</span></div>`).join('');
+    const rows = lastGenerated.map(code =>
+      `<div class="code"><strong>${code.code}</strong><span>${CODE_TYPE_META[code.codeType as CodeType]?.label ?? code.codeType}${code.courseName ? ' · ' + code.courseName : ''}${code.expiresAt ? ' · ' + format(new Date(code.expiresAt), 'MMM d, yyyy') : ''}</span></div>`
+    ).join('');
     const printWindow = window.open('', '_blank', 'width=900,height=700');
     if (!printWindow) return;
-    printWindow.document.write(`<html><head><title>FIXION Subscription Codes</title><style>body{font-family:Arial;padding:28px;color:#111}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.code{border:1px solid #bbb;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px}.code strong{font:700 20px monospace;letter-spacing:1px}.code span{font-size:12px;color:#555}@media print{button{display:none}}</style></head><body><h1>FIXION Subscription Codes</h1><p>Generated: ${new Date().toLocaleString()}</p><div class="grid">${rows}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
+    printWindow.document.write(`<html><head><title>Codes</title><style>body{font-family:Arial;padding:28px;color:#111}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.code{border:1px solid #bbb;border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px}.code strong{font:700 20px monospace;letter-spacing:1px}.code span{font-size:12px;color:#555}@media print{button{display:none}}</style></head><body><h1>Subscription Codes</h1><p>Generated: ${new Date().toLocaleString()}</p><div class="grid">${rows}</div><script>window.onload=()=>window.print()<\/script></body></html>`);
     printWindow.document.close();
   };
 
-  const copyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    toast.success('Code copied!');
-  };
-
+  const copyCode = (code: string) => { navigator.clipboard.writeText(code); toast.success('Code copied!'); };
   const copyAll = () => {
     const unused = codes.filter(c => !c.isUsed).map(c => c.code).join('\n');
     navigator.clipboard.writeText(unused);
@@ -179,6 +226,8 @@ export default function AdminCodesPage() {
       toast.success('Code revoked');
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed to revoke'); }
   };
+
+  const selectedTypeMeta = CODE_TYPE_META[form.codeType];
 
   return (
     <AppShell>
@@ -198,7 +247,84 @@ export default function AdminCodesPage() {
         {/* Generator */}
         <div className="card">
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Generate New Batch</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* Code type selector */}
+            <div className="form-group">
+              <label className="form-label">Code Type</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                {(Object.entries(CODE_TYPE_META) as [CodeType, typeof CODE_TYPE_META[CodeType]][]).map(([type, meta]) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, codeType: type }))}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                      padding: '10px 6px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                      border: `2px solid ${form.codeType === type ? meta.color : 'var(--border)'}`,
+                      background: form.codeType === type ? `${meta.color}18` : 'var(--bg-elevated)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <meta.Icon size={18} style={{ color: meta.color }} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: form.codeType === type ? meta.color : 'var(--text-secondary)' }}>{meta.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{selectedTypeMeta.description}</p>
+            </div>
+
+            {/* Timed: duration */}
+            {form.codeType === 'timed' && (
+              <div className="form-group">
+                <label className="form-label">Duration (days)</label>
+                <input
+                  type="number" min={1} max={365}
+                  placeholder="Leave empty to use plan default (7 or 30)"
+                  value={form.durationDays}
+                  onChange={e => setForm(p => ({ ...p, durationDays: e.target.value }))}
+                  className="form-input"
+                />
+              </div>
+            )}
+
+            {/* Chapter: scope */}
+            {form.codeType === 'chapter' && (
+              <div className="form-group">
+                <label className="form-label">Chapters / Lessons</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    value={chapterInput}
+                    onChange={e => setChapterInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addChapter(); } }}
+                    placeholder="Chapter or lesson name"
+                    className="form-input"
+                    style={{ flex: 1 }}
+                  />
+                  <button type="button" onClick={addChapter} className="btn btn-secondary" style={{ padding: '0 10px' }}>
+                    <Plus size={14} />
+                  </button>
+                </div>
+                {form.accessScope.chapters.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {form.accessScope.chapters.map(ch => (
+                      <span key={ch} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12,
+                        padding: '3px 10px', borderRadius: 20,
+                        background: `${CODE_TYPE_META.chapter.color}22`, color: CODE_TYPE_META.chapter.color,
+                        border: `1px solid ${CODE_TYPE_META.chapter.color}55`,
+                      }}>
+                        {ch}
+                        <button type="button" onClick={() => removeChapter(ch)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: 'inherit' }}>
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div className="form-group">
                 <label className="form-label">Plan</label>
@@ -213,91 +339,58 @@ export default function AdminCodesPage() {
               </div>
             </div>
 
+            {/* Course info */}
             <div style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-light)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <GraduationCap size={13} /> Course Info (optional)
+                <GraduationCap size={13} /> Course Info
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: 12 }}>Course Name</label>
-                  <select
-                    value={form.courseName}
-                    onChange={e => setForm(p => ({ ...p, courseName: e.target.value }))}
-                    className="form-input"
-                    style={{ appearance: 'auto', fontSize: 13 }}
-                  >
-                    <option value="">— No course (subscription only) —</option>
-                    {availableCourses.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
+                  <label className="form-label" style={{ fontSize: 12 }}>Course</label>
+                  <select value={form.courseName} onChange={e => setForm(p => ({ ...p, courseName: e.target.value }))} className="form-input" style={{ appearance: 'auto', fontSize: 13 }}>
+                    <option value="">— Select course —</option>
+                    {availableCourses.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: 12 }}>Teacher Name</label>
-                    <select
-                      value={form.teacherId}
-                      onChange={e => setForm(p => ({ ...p, teacherId: e.target.value }))}
-                      className="form-input"
-                      style={{ fontSize: 13 }}
-                      aria-label="Teacher"
-                    >
-                      <option value="">— No teacher —</option>
+                    <label className="form-label" style={{ fontSize: 12 }}>Teacher</label>
+                    <select value={form.teacherId} onChange={e => setForm(p => ({ ...p, teacherId: e.target.value }))} className="form-input" style={{ fontSize: 13 }}>
+                      <option value="">— Select teacher —</option>
                       {teachers
-                        .filter(teacher => !form.courseName || !teacher.subjects?.length || teacher.subjects.includes(form.courseName) || teacher.id === form.teacherId)
-                        .map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
+                        .filter(t => !form.courseName || !t.subjects?.length || t.subjects.includes(form.courseName) || t.id === form.teacherId)
+                        .map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <label className="form-label" style={{ fontSize: 12, marginBottom: 0 }}>Group Name</label>
+                      <label className="form-label" style={{ fontSize: 12, marginBottom: 0 }}>Group</label>
                       {form.courseName && availableGroups.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setCustomGroup(!customGroup)}
-                          className="btn-link"
-                          style={{ fontSize: 11, color: 'var(--primary-light)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        >
+                        <button type="button" onClick={() => setCustomGroup(!customGroup)} style={{ fontSize: 11, color: 'var(--primary-light)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                           {customGroup ? 'Pick from list' : '+ Custom'}
                         </button>
                       )}
                     </div>
                     {loadingGroups ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
-                        <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Loading groups...
+                        <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Loading...
                       </div>
                     ) : customGroup ? (
-                      <input
-                        value={form.groupName}
-                        onChange={e => setForm(p => ({ ...p, groupName: e.target.value }))}
-                        className="form-input"
-                        placeholder="e.g. Group A"
-                        style={{ fontSize: 13 }}
-                      />
+                      <input value={form.groupName} onChange={e => setForm(p => ({ ...p, groupName: e.target.value }))} className="form-input" placeholder="e.g. Group A" style={{ fontSize: 13 }} />
                     ) : (
                       <select
                         value={form.groupName}
                         onChange={e => {
-                          if (e.target.value === '__custom__') {
-                            setCustomGroup(true);
-                            setForm(p => ({ ...p, groupName: '' }));
-                          } else {
-                            setForm(p => ({ ...p, groupName: e.target.value }));
-                          }
+                          if (e.target.value === '__custom__') { setCustomGroup(true); setForm(p => ({ ...p, groupName: '' })); }
+                          else setForm(p => ({ ...p, groupName: e.target.value }));
                         }}
-                        className="form-input"
-                        style={{ fontSize: 13, appearance: 'auto' }}
-                        disabled={!form.courseName}
+                        className="form-input" style={{ fontSize: 13, appearance: 'auto' }} disabled={!form.courseName}
                       >
-                        {!form.courseName ? (
-                          <option value="">— Select course first —</option>
-                        ) : (
+                        {!form.courseName ? <option value="">— Select course first —</option> : (
                           <>
                             <option value="">— No group —</option>
-                            {availableGroups.map(g => (
-                              <option key={g} value={g}>{g}</option>
-                            ))}
-                            <option value="__custom__">+ Enter custom group...</option>
+                            {availableGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                            <option value="__custom__">+ Custom group...</option>
                           </>
                         )}
                       </select>
@@ -307,19 +400,26 @@ export default function AdminCodesPage() {
               </div>
             </div>
 
+            {/* Code window expiry */}
             <div className="form-group">
-              <label className="form-label">Code Expiry (optional)</label>
-              <input type="date" value={form.expiresAt} onChange={e => setForm(p => ({ ...p, expiresAt: e.target.value }))} className="form-input" />
+              <label className="form-label">Code Redemption Window Expiry <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+              <input type="date" value={form.codeExpiresAt} onChange={e => setForm(p => ({ ...p, codeExpiresAt: e.target.value }))} className="form-input" />
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>After this date the code itself can no longer be redeemed (access expiry is separate).</p>
             </div>
+
+            {/* Code format */}
             <div style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-light)', marginBottom: 10 }}>Code format</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label" style={{ fontSize: 12 }}>Minimum length</label><input type="number" min={4} max={64} value={form.minLength} onChange={e => setForm(p => ({ ...p, minLength: e.target.value }))} className="form-input" /></div>
-                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label" style={{ fontSize: 12 }}>Maximum length</label><input type="number" min={4} max={64} value={form.maxLength} onChange={e => setForm(p => ({ ...p, maxLength: e.target.value }))} className="form-input" /></div>
+                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label" style={{ fontSize: 12 }}>Min length</label><input type="number" min={4} max={64} value={form.minLength} onChange={e => setForm(p => ({ ...p, minLength: e.target.value }))} className="form-input" /></div>
+                <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label" style={{ fontSize: 12 }}>Max length</label><input type="number" min={4} max={64} value={form.maxLength} onChange={e => setForm(p => ({ ...p, maxLength: e.target.value }))} className="form-input" /></div>
               </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}><input type="checkbox" checked={form.includeLetters} onChange={e => setForm(p => ({ ...p, includeLetters: e.target.checked }))} /> Use letters (otherwise digits only)</label>
-              <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 7 }}>Each generated code gets a random length between these values.</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={form.includeLetters} onChange={e => setForm(p => ({ ...p, includeLetters: e.target.checked }))} />
+                Use letters (otherwise digits only)
+              </label>
             </div>
+
             <button onClick={generate} disabled={generating} className="btn btn-primary">
               {generating ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Generating...</> : <><Key size={14} /> Generate Codes</>}
             </button>
@@ -340,34 +440,63 @@ export default function AdminCodesPage() {
               <span style={{ fontWeight: 700, color: s.color }}>{s.value.toLocaleString()}</span>
             </div>
           ))}
+
+          {/* Code type legend */}
+          <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Code Types</div>
+            {(Object.entries(CODE_TYPE_META) as [CodeType, typeof CODE_TYPE_META[CodeType]][]).map(([type, meta]) => (
+              <div key={type} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                <meta.Icon size={15} style={{ color: meta.color, marginTop: 1, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: meta.color }}>{meta.label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{meta.description}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {lastGenerated.length > 0 && (
         <div className="card" style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 220 }}><strong>{lastGenerated.length} new codes ready</strong><div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>Download a printable copy for distribution.</div></div>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <strong>{lastGenerated.length} new codes ready</strong>
+            <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>Download a printable copy for distribution.</div>
+          </div>
           <button onClick={exportWord} className="btn btn-secondary"><FileDown size={14} /> Word file</button>
           <button onClick={printPdf} className="btn btn-primary"><Printer size={14} /> Print / Save PDF</button>
         </div>
       )}
 
+      {/* Teacher usage */}
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           <BarChart3 size={17} style={{ color: 'var(--primary-light)' }} />
-          <div style={{ flex: 1 }}><h3 style={{ fontSize: 14, fontWeight: 700 }}>Teacher code usage</h3><p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>Used subscription codes grouped by teacher for the selected month.</p></div>
-          <input type="month" value={usageMonth} onChange={event => setUsageMonth(event.target.value)} className="form-input" style={{ width: 160 }} />
+          <div style={{ flex: 1 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700 }}>Teacher code usage</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>Used codes grouped by teacher for the selected month.</p>
+          </div>
+          <input type="month" value={usageMonth} onChange={e => setUsageMonth(e.target.value)} className="form-input" style={{ width: 160 }} />
           <span className="badge badge-active">{usageTotal.toLocaleString()} used</span>
         </div>
-        {teacherUsage.length === 0 ? <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '10px 0' }}>No used codes recorded for this month.</div> : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
-            {teacherUsage.map(teacher => <div key={teacher.teacherName} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)' }}><GraduationCap size={16} style={{ color: 'var(--primary-light)' }} /><span style={{ flex: 1, fontSize: 13 }}>{teacher.teacherName}</span><strong>{teacher.usedCodes}</strong></div>)}
-          </div>
-        )}
+        {teacherUsage.length === 0
+          ? <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '10px 0' }}>No used codes recorded for this month.</div>
+          : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
+              {teacherUsage.map(t => (
+                <div key={t.teacherName} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)' }}>
+                  <GraduationCap size={16} style={{ color: 'var(--primary-light)' }} />
+                  <span style={{ flex: 1, fontSize: 13 }}>{t.teacherName}</span>
+                  <strong>{t.usedCodes}</strong>
+                </div>
+              ))}
+            </div>
+          )}
       </div>
 
       {/* Filter */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {(['all', 'unused', 'used'] as const).map(f => (
+        {ROLE_FILTERS.map(f => (
           <button key={f} onClick={() => { setFilter(f); setPage(1); }} className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-secondary'}`} style={{ textTransform: 'capitalize' }}>
             {f}
           </button>
@@ -380,13 +509,13 @@ export default function AdminCodesPage() {
           <thead>
             <tr>
               <th>Code</th>
-              <th>Plan</th>
+              <th>Type</th>
               <th>Course</th>
               <th>Teacher</th>
               <th>Group</th>
               <th>Status</th>
               <th>Used By</th>
-              <th>Expires</th>
+              <th>Redemption Expiry</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -395,36 +524,43 @@ export default function AdminCodesPage() {
               <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40 }}><span className="spinner" /></td></tr>
             ) : codes.length === 0 ? (
               <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No codes found</td></tr>
-            ) : codes.map(c => (
-              <tr key={c.id}>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <code style={{ fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>{c.code}</code>
-                    <button onClick={() => copyCode(c.code)} className="icon-btn" style={{ width: 26, height: 26 }}><Copy size={12} /></button>
-                  </div>
-                </td>
-                <td><span className={`badge ${c.plan === 'monthly' ? 'badge-active' : 'badge-pending'}`} style={{ textTransform: 'capitalize' }}>{c.plan}</span></td>
-                <td style={{ fontSize: 13 }}>
-                  {c.courseName
-                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><GraduationCap size={12} style={{ color: 'var(--primary-light)' }} />{c.courseName}</span>
-                    : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                </td>
-                <td style={{ fontSize: 13 }}>{c.teacherName || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                <td style={{ fontSize: 13 }}>{c.groupName || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                <td>
-                  {c.isUsed
-                    ? <span className="badge badge-answered">Used</span>
-                    : <span className="badge badge-pending">Available</span>}
-                </td>
-                <td style={{ fontSize: 12 }}>{c.usedBy?.name || '—'}</td>
-                <td style={{ fontSize: 12 }}>{c.expiresAt ? format(new Date(c.expiresAt), 'MMM d, yyyy') : '—'}</td>
-                <td>
-                  {!c.isUsed && (
-                    <button onClick={() => revoke(c.id)} className="btn btn-danger btn-sm"><Trash2 size={12} /> Revoke</button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            ) : codes.map(c => {
+              const typeMeta = CODE_TYPE_META[c.codeType as CodeType] ?? CODE_TYPE_META.timed;
+              return (
+                <tr key={c.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <code style={{ fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>{c.code}</code>
+                      <button onClick={() => copyCode(c.code)} className="icon-btn" style={{ width: 26, height: 26 }}><Copy size={12} /></button>
+                    </div>
+                  </td>
+                  <td>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: `${typeMeta.color}22`, color: typeMeta.color, border: `1px solid ${typeMeta.color}44` }}>
+                      <typeMeta.Icon size={11} />{typeMeta.label}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 13 }}>
+                    {c.courseName
+                      ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><GraduationCap size={12} style={{ color: 'var(--primary-light)' }} />{c.courseName}</span>
+                      : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
+                  <td style={{ fontSize: 13 }}>{c.teacherName || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                  <td style={{ fontSize: 13 }}>{c.groupName || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                  <td>
+                    {c.isUsed
+                      ? <span className="badge badge-answered">Used</span>
+                      : <span className="badge badge-pending">Available</span>}
+                  </td>
+                  <td style={{ fontSize: 12 }}>{c.usedBy?.name || '—'}</td>
+                  <td style={{ fontSize: 12 }}>{c.expiresAt ? format(new Date(c.expiresAt), 'MMM d, yyyy') : '—'}</td>
+                  <td>
+                    {!c.isUsed && (
+                      <button onClick={() => revoke(c.id)} className="btn btn-danger btn-sm"><Trash2 size={12} /> Revoke</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

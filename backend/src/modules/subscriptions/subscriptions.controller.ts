@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionPlan } from './entities/subscription.entity';
+import { CodeType } from './entities/subscription-code.entity';
 import { JwtAuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -41,7 +42,10 @@ export class CodesController {
   generate(
     @Body('plan') plan: SubscriptionPlan,
     @Body('quantity') quantity: number,
-    @Body('expiresAt') expiresAt: string,
+    @Body('codeType') codeType: CodeType,
+    @Body('durationDays') durationDays: number,
+    @Body('accessScope') accessScope: { chapters?: string[]; lessons?: string[] },
+    @Body('codeExpiresAt') codeExpiresAt: string,
     @Body('courseName') courseName: string,
     @Body('teacherId') teacherId: string,
     @Body('groupName') groupName: string,
@@ -54,7 +58,10 @@ export class CodesController {
       plan,
       quantity,
       admin,
-      expiresAt ? new Date(expiresAt) : undefined,
+      codeType || CodeType.TIMED,
+      durationDays ? Number(durationDays) : undefined,
+      accessScope || undefined,
+      codeExpiresAt ? new Date(codeExpiresAt) : undefined,
       courseName || undefined,
       teacherId || undefined,
       groupName || undefined,

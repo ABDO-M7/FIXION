@@ -25,7 +25,7 @@ export default function AdminDashboard() {
   const generateCodes = async () => {
     setGeneratingCodes(true);
     try {
-      const res = await codesApi.generate(codeForm.plan, +codeForm.quantity);
+      const res = await codesApi.generate({ plan: codeForm.plan, quantity: +codeForm.quantity, codeType: 'timed' });
       toast.success(`${res.data.length} codes generated!`);
       adminApi.overview().then(r => setOverview(r.data));
     } catch {
