@@ -249,22 +249,29 @@ export class AssignmentsService {
     }
 
     if (scope.type === 'teacher') {
-      const teacherUser = await this.usersRepo.findOne({ where: { id: teacher.id } });
+      // Use the resolved teacherId from scope — this works correctly for both
+      // a TEACHER (scope.teacherId = teacher.id) and an ASSISTANT
+      // (scope.teacherId = assignedTeacher.id).
+      const effectiveTeacherId = scope.teacherId;
+      if (!effectiveTeacherId) return [];
+
+      const teacherUser = await this.usersRepo.findOne({ where: { id: effectiveTeacherId } });
       const teacherSubjects = Array.isArray(teacherUser?.subjects) ? teacherUser.subjects : [];
+
       const assignmentCourses = await this.assignmentsRepo
         .createQueryBuilder('a')
         .select('DISTINCT a.courseName', 'courseName')
-        .where('a.teacherId = :tid', { tid: teacher.id })
+        .where('a.teacherId = :tid', { tid: effectiveTeacherId })
         .getRawMany();
       const videoCourses = await this.videosRepo
         .createQueryBuilder('v')
         .select('DISTINCT v.courseName', 'courseName')
-        .where('v.teacherId = :tid', { tid: teacher.id })
+        .where('v.teacherId = :tid', { tid: effectiveTeacherId })
         .getRawMany();
       const groupCourses = await this.courseGroupsRepo
         .createQueryBuilder('cg')
         .select('DISTINCT cg.courseName', 'courseName')
-        .where('cg.teacherId = :tid', { tid: teacher.id })
+        .where('cg.teacherId = :tid', { tid: effectiveTeacherId })
         .getRawMany();
 
       const set = new Set<string>([
@@ -283,10 +290,56 @@ export class AssignmentsService {
   // ─── STAFF: get distinct groups for a course ──────────────────────────────
   async getGroupsForCourse(courseName: string, actor: User): Promise<string[]> {
     const scope = await this.staffScope(actor);
-    if (scope.type === 'subjects' && scope.subjects.length > 0 && !scope.subjects.includes(courseName)) {
-      return [];
+
+    // team_member: only allowed subjects
+    if (scope.type === 'subjects') {
+      if (scope.subjects.length > 0 && !scope.subjects.includes(courseName)) return [];
     }
 
+    // teacher / assistant: only groups that belong to this teacher
+    if (scope.type === 'teacher') {
+      const effectiveTeacherId = scope.teacherId;
+      if (!effectiveTeacherId) return [];
+
+      const savedGroupsQb = this.courseGroupsRepo
+        .createQueryBuilder('cg')
+        .select('DISTINCT cg.groupName', 'groupName')
+        .where('cg.courseName = :courseName', { courseName })
+        .andWhere('cg.teacherId = :tid', { tid: effectiveTeacherId });
+      const savedGroups = await savedGroupsQb.getRawMany();
+
+      const enrollQb = this.enrollmentsRepo
+        .createQueryBuilder('e')
+        .select('DISTINCT e.groupName', 'groupName')
+        .where('e.courseName = :courseName', { courseName })
+        .andWhere('e.groupName IS NOT NULL');
+      this.applyEnrollmentScope(enrollQb, scope);
+      const enrolledGroups = (await enrollQb.getRawMany()).map((r) => r.groupName).filter(Boolean);
+
+      const assignmentGroups = await this.assignmentsRepo
+        .createQueryBuilder('a')
+        .select('DISTINCT a.groupName', 'groupName')
+        .where('a.courseName = :courseName', { courseName })
+        .andWhere('a.teacherId = :tid', { tid: effectiveTeacherId })
+        .getRawMany();
+
+      const videoGroups = await this.videosRepo
+        .createQueryBuilder('v')
+        .select('DISTINCT v.groupName', 'groupName')
+        .where('v.courseName = :courseName', { courseName })
+        .andWhere('v.teacherId = :tid', { tid: effectiveTeacherId })
+        .getRawMany();
+
+      const set = new Set<string>([
+        ...savedGroups.map((r) => r.groupName).filter(Boolean),
+        ...enrolledGroups,
+        ...assignmentGroups.map((r) => r.groupName).filter(Boolean),
+        ...videoGroups.map((r) => r.groupName).filter(Boolean),
+      ]);
+      return Array.from(set);
+    }
+
+    // admin: all groups for course
     const savedGroups = await this.courseGroupsRepo
       .createQueryBuilder('cg')
       .select('DISTINCT cg.groupName', 'groupName')
@@ -298,7 +351,6 @@ export class AssignmentsService {
       .select('DISTINCT e.groupName', 'groupName')
       .where('e.courseName = :courseName', { courseName })
       .andWhere('e.groupName IS NOT NULL');
-    this.applyEnrollmentScope(qb, scope);
     const rows = await qb.getRawMany();
     const enrolledGroups = rows.map((r) => r.groupName).filter(Boolean);
 
