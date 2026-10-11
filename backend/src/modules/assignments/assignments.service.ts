@@ -203,7 +203,46 @@ export class AssignmentsService {
 
   // ─── ADMIN: delete course group ──────────────────────────────────────────
   async deleteCourseGroup(courseName: string, groupName: string) {
+    // 1. Delete quiz submissions tied to assignments in this group
+    const groupAssignments = await this.assignmentsRepo.find({
+      where: { courseName, groupName },
+      select: ['id'],
+    });
+    if (groupAssignments.length > 0) {
+      const assignmentIds = groupAssignments.map((a) => a.id);
+      await this.submissionsRepo
+        .createQueryBuilder()
+        .delete()
+        .where('assignmentId IN (:...ids)', { ids: assignmentIds })
+        .execute();
+    }
+
+    // 2. Delete assignments for this group
+    await this.assignmentsRepo.delete({ courseName, groupName });
+
+    // 3. Delete video progress records for videos in this group
+    const groupVideos = await this.videosRepo.find({
+      where: { courseName, groupName },
+      select: ['id'],
+    });
+    if (groupVideos.length > 0) {
+      const videoIds = groupVideos.map((v) => v.id);
+      await this.videoProgressRepo
+        .createQueryBuilder()
+        .delete()
+        .where('videoId IN (:...ids)', { ids: videoIds })
+        .execute();
+    }
+
+    // 4. Delete videos for this group
+    await this.videosRepo.delete({ courseName, groupName });
+
+    // 5. Delete enrollments for this group
+    await this.enrollmentsRepo.delete({ courseName, groupName });
+
+    // 6. Delete the group record itself
     await this.courseGroupsRepo.delete({ courseName, groupName });
+
     return { success: true };
   }
 

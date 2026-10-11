@@ -120,7 +120,7 @@ export default function AdminCourseGroupsPage() {
   const handleDeleteGroup = async (e: React.MouseEvent, groupName: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm(`Are you sure you want to delete group "${groupName}"?`)) return;
+    if (!confirm(`Are you sure you want to delete group "${groupName}"?\n\nThis will permanently delete all lessons, videos, assignments, and student enrollments in this group.`)) return;
     try {
       await assignmentsApi.deleteGroup(decoded, groupName);
       setGroups(prev => prev.filter(g => g.groupName !== groupName));
