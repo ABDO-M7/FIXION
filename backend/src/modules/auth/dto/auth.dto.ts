@@ -28,6 +28,10 @@ export class RegisterDto {
   @IsString()
   @Matches(/^\+?[0-9\s\-().]{7,20}$/, { message: 'Invalid phone number' })
   phone: string;
+
+  @IsString()
+  @Matches(/^\+?[0-9\s\-().]{7,20}$/, { message: 'Invalid parent phone number' })
+  parentPhone: string;
 }
 
 export class LoginDto {

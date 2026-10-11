@@ -6,18 +6,21 @@ import { useParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { assignmentsApi } from '@/lib/api';
 import {
-  ArrowLeft, BookOpen, ClipboardList, Clock3, Search,
+  ArrowLeft, BookOpen, ClipboardList, Clock3, FileText, Search,
   TrendingUp, Users, Video, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import Link from 'next/link';
 
 type AssignmentStat = { id: string; title: string; type: 'QUIZ' | 'HOMEWORK'; maxGrade: number };
 type VideoStat = { id: string; title: string };
+type DocumentStat = { id: string; title: string };
 type StudentStat = {
   id: string;
   name: string | null;
   email: string | null;
   studentId: string | null;
+  phone: string | null;
+  parentPhone: string | null;
   level: string | null;
   submittedAssignments: number;
   gradedAssignments: number;
@@ -28,18 +31,21 @@ type StudentStat = {
   lastActivityAt: string | null;
   assignmentGrades: Record<string, number | null>;
   videoProgress: Record<string, number>;
+  documentOpens: Record<string, boolean>;
 };
 type GroupAnalytics = {
   summary: {
     studentCount: number;
     assignmentCount: number;
     videoCount: number;
+    documentCount: number;
     averageGradePercent: number | null;
     assignmentSubmissionRate: number | null;
     videoCompletionRate: number | null;
   };
   assignments: AssignmentStat[];
   videos: VideoStat[];
+  documents: DocumentStat[];
   students: StudentStat[];
 };
 
@@ -88,7 +94,7 @@ export default function GroupStatsPage() {
     const needle = search.trim().toLocaleLowerCase();
     if (!needle) return data?.students || [];
     return (data?.students || []).filter(student =>
-      [student.name, student.email, student.studentId]
+      [student.name, student.email, student.studentId, student.phone, student.parentPhone]
         .some(value => value?.toLocaleLowerCase().includes(needle)),
     );
   }, [data, search]);
@@ -147,7 +153,7 @@ export default function GroupStatsPage() {
                 label="معدل إكمال مشاهدة الحصص"
                 value={percentage(data.summary.videoCompletionRate)}
                 tone="#34d399"
-                hint={`${data.summary.videoCount} فيديو في المجموعة`}
+                hint={`${data.summary.videoCount} حصة، و${data.summary.documentCount} ملف`}
               />
             </section>
 
@@ -185,10 +191,11 @@ export default function GroupStatsPage() {
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', minWidth: 850, borderCollapse: 'collapse' }}>
+                  <table style={{ width: '100%', minWidth: 1050, borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: 'var(--bg-elevated)' }}>
                         <th style={thStyle}>الطالب</th>
+                        <th style={thStyle}>التواصل</th>
                         <th style={thStyle}>التسليمات</th>
                         <th style={thStyle}>متوسط الدرجات</th>
                         <th style={thStyle}>الحصص المكتملة</th>
@@ -206,6 +213,7 @@ export default function GroupStatsPage() {
                             student={student}
                             assignments={data.assignments}
                             videos={data.videos}
+                            documents={data.documents}
                             expanded={expanded}
                             onToggle={() => setExpandedStudent(expanded ? null : student.id)}
                           />
@@ -263,12 +271,14 @@ function StudentRows({
   student,
   assignments,
   videos,
+  documents,
   expanded,
   onToggle,
 }: {
   student: StudentStat;
   assignments: AssignmentStat[];
   videos: VideoStat[];
+  documents: DocumentStat[];
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -279,7 +289,11 @@ function StudentRows({
         <td style={tdStyle}>
           <strong style={{ display: 'block', color: 'var(--text-primary)' }}>{student.name || '—'}</strong>
           <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: 11, marginTop: 3 }}>{student.email || '—'}</span>
-          {student.studentId && <span style={{ color: 'var(--primary-light)', fontSize: 11 }}>رقم الطالب: {student.studentId}</span>}
+          <span style={{ color: 'var(--primary-light)', fontSize: 11 }}>رقم الطالب: {student.studentId || '—'}</span>
+        </td>
+        <td style={{ ...tdStyle, fontSize: 12, lineHeight: 1.7 }}>
+          <span style={{ display: 'block' }}>الطالب: {student.phone || '—'}</span>
+          <span style={{ display: 'block', color: 'var(--text-secondary)' }}>ولي الأمر: {student.parentPhone || '—'}</span>
         </td>
         <td style={tdStyle}>{student.submittedAssignments} / {assignments.length}</td>
         <td style={{ ...tdStyle, color: gradeColor, fontWeight: 700 }}>{percentage(student.averageGradePercent)}</td>
@@ -302,7 +316,7 @@ function StudentRows({
       </tr>
       {expanded && (
         <tr style={{ background: 'rgba(255,255,255,.02)' }}>
-          <td colSpan={7} style={{ padding: 18 }}>
+          <td colSpan={8} style={{ padding: 18 }}>
             <div className="grid-2" style={{ gap: 18 }}>
               <div>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, margin: '0 0 10px' }}>
@@ -344,6 +358,24 @@ function StudentRows({
                     })}
                   </div>
                 ) : <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>لا توجد فيديوهات في هذه المجموعة.</p>}
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, margin: '18px 0 10px' }}>
+                  <FileText size={15} style={{ color: '#38bdf8' }} /> الملفات
+                </h3>
+                {documents.length ? (
+                  <div style={{ display: 'grid', gap: 7 }}>
+                    {documents.map(document => {
+                      const opened = student.documentOpens[document.id] || false;
+                      return (
+                        <div key={document.id} style={detailRowStyle}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{document.title}</span>
+                          <strong style={{ color: opened ? '#34d399' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {opened ? 'تم فتحه' : 'لم يفتح'}
+                          </strong>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>لا توجد ملفات في هذه المجموعة.</p>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-muted)', fontSize: 12 }}>
                 <Clock3 size={14} /> آخر نشاط: {formatDate(student.lastActivityAt)}

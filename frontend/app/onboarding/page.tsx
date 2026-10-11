@@ -15,6 +15,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 
 const schema = z.object({
   phone: z.string().regex(/^\+?[0-9\s\-().]{7,20}$/, 'Invalid phone number'),
+  parentPhone: z.string().regex(/^\+?[0-9\s\-().]{7,20}$/, 'Invalid parent phone number').optional().or(z.literal('')),
   level: z.string().optional(),
 }).superRefine((data, ctx) => {
   // If no level provided, and role is student (which we'll check outside), it's bad.
@@ -29,16 +30,22 @@ export default function OnboardingPage() {
   const { user, setUser } = useAuthStore();
   const { locale } = useTranslation();
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<FormData>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
   useEffect(() => {
-    // If they already have all data, send them to dashboard
-    if (user && user.phone && (user.role !== 'student' || user.level)) {
+    if (user) {
+      reset({
+        phone: user.phone || '',
+        parentPhone: user.parentPhone || '',
+        level: user.level || '',
+      });
+    }
+    if (user && user.phone && (user.role !== 'student' || (user.level && user.parentPhone))) {
       router.push(dashboardPath(user.role));
     }
-  }, [user]);
+  }, [reset, router, user]);
 
   if (!user) {
     return (
@@ -53,11 +60,16 @@ export default function OnboardingPage() {
       toast.error('Please select your school level.');
       return;
     }
+    if (user.role === 'student' && !data.parentPhone) {
+      toast.error('Please enter your parent or guardian phone number.');
+      return;
+    }
 
     setIsLoading(true);
     try {
       const res = await authApi.updateProfile({
         phone: data.phone,
+        parentPhone: user.role === 'student' ? data.parentPhone : undefined,
         level: user.role === 'student' ? data.level : undefined,
       });
       setUser(res.data);
@@ -98,6 +110,23 @@ export default function OnboardingPage() {
             </div>
             {errors.phone && <span className="form-error">{errors.phone.message}</span>}
           </div>
+
+            {user.role === 'student' && (
+              <div className="form-group">
+                <label className="form-label">Parent/Guardian Phone Number</label>
+                <div style={{ position: 'relative' }}>
+                  <Phone size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input
+                    {...register('parentPhone')}
+                    type="tel"
+                    className={`form-input ${errors.parentPhone ? 'error' : ''}`}
+                    placeholder="+20 1XX XXX XXXX"
+                    style={{ paddingLeft: 36 }}
+                  />
+                </div>
+                {errors.parentPhone && <span className="form-error">{errors.parentPhone.message}</span>}
+              </div>
+            )}
 
           {user.role === 'student' && (
             <div className="form-group">

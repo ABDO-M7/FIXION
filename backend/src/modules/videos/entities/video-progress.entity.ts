@@ -33,6 +33,18 @@ export class VideoProgress {
   @Column({ type: 'int', default: 0 })
   watchedPercent: number;
 
+  @Column({ type: 'jsonb', default: [] })
+  watchedRanges: Array<[number, number]>;
+
+  @Column({ type: 'double precision', nullable: true })
+  lastPositionSeconds: number | null;
+
+  @Column({ type: 'boolean', default: false })
+  opened: boolean;
+
+  @Column({ type: 'jsonb', default: [] })
+  openedAttachments: number[];
+
   @UpdateDateColumn()
   updatedAt: Date;
 }

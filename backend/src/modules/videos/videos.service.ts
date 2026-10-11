@@ -147,6 +147,8 @@ export class VideosService {
       return {
         ...this.publicVideo(video),
         watchedPercent: progress?.watchedPercent || 0,
+        opened: progress?.opened || false,
+        openedAttachments: progress?.openedAttachments || [],
         ...unlock,
         checkpointCount: checkpoints.length,
         completedCheckpointCount: responses.filter(response => response.isCorrect).length,
@@ -224,14 +226,65 @@ export class VideosService {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
     await this.assertEnrollment(video.courseName, video.groupName, studentId);
-    const watchedSeconds = Math.max(0, Math.floor(Number(dto.watchedSeconds) || 0));
-    const durationSeconds = Math.max(0, Math.floor(Number(dto.durationSeconds) || 0));
-    const watchedPercent = durationSeconds > 0 ? Math.min(100, Math.floor((watchedSeconds / durationSeconds) * 100)) : 0;
+    const currentPosition = Number(dto.watchedSeconds);
+    const reportedDuration = Number(dto.durationSeconds);
+    if (!Number.isFinite(currentPosition) || !Number.isFinite(reportedDuration) || currentPosition < 0 || reportedDuration < 1) {
+      throw new BadRequestException('Valid playback position and duration are required');
+    }
+    const durationSeconds = Math.floor(reportedDuration);
+    const position = Math.min(currentPosition, durationSeconds);
     const existing = await this.progressRepo.findOne({ where: { videoId, studentId } });
     const progress = existing || this.progressRepo.create({ videoId, studentId, watchedSeconds: 0, durationSeconds: 0, watchedPercent: 0 });
-    progress.watchedSeconds = Math.max(progress.watchedSeconds, watchedSeconds);
+    const ranges = [...(progress.watchedRanges || [])];
+    let watchedStart: number | null = null;
+    const previousPosition = progress.lastPositionSeconds;
+    if (previousPosition !== null && previousPosition !== undefined) {
+      const elapsed = Math.max(0, (Date.now() - new Date(progress.updatedAt).getTime()) / 1000);
+      const advance = position - previousPosition;
+      if (advance > 0 && advance <= elapsed + 2 && advance <= 12) {
+        watchedStart = previousPosition;
+      }
+    }
+    if (watchedStart !== null && position > watchedStart) {
+      ranges.push([watchedStart, position]);
+    }
+    ranges.sort((left, right) => left[0] - right[0]);
+    const mergedRanges: Array<[number, number]> = [];
+    for (const range of ranges) {
+      const start = Math.max(0, Math.min(range[0], durationSeconds));
+      const end = Math.max(start, Math.min(range[1], durationSeconds));
+      const lastRange = mergedRanges[mergedRanges.length - 1];
+      if (lastRange && start <= lastRange[1]) {
+        lastRange[1] = Math.max(lastRange[1], end);
+      } else if (end > start) {
+        mergedRanges.push([start, end]);
+      }
+    }
+    const actuallyWatchedSeconds = mergedRanges.reduce((total, [start, end]) => total + end - start, 0);
+    progress.watchedRanges = mergedRanges;
+    progress.watchedSeconds = Math.floor(actuallyWatchedSeconds);
     progress.durationSeconds = Math.max(progress.durationSeconds, durationSeconds);
-    progress.watchedPercent = Math.max(progress.watchedPercent, watchedPercent);
+    progress.watchedPercent = Math.min(100, Math.floor((actuallyWatchedSeconds / progress.durationSeconds) * 100));
+    progress.lastPositionSeconds = position;
+    return this.progressRepo.save(progress);
+  }
+
+  async markDocumentOpened(videoId: string, studentId: string, attachmentIndex?: number) {
+    const video = await this.videosRepo.findOne({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Course content not found');
+    await this.assertEnrollment(video.courseName, video.groupName, studentId);
+    const progress = await this.progressRepo.findOne({ where: { videoId, studentId } })
+      || this.progressRepo.create({ videoId, studentId, watchedSeconds: 0, durationSeconds: 0, watchedPercent: 0 });
+    if (attachmentIndex !== undefined) {
+      if (!Number.isInteger(attachmentIndex) || attachmentIndex < 0 || attachmentIndex >= (video.attachments || []).length) {
+        throw new BadRequestException('Invalid course file');
+      }
+      progress.openedAttachments = Array.from(new Set([...(progress.openedAttachments || []), attachmentIndex]));
+    } else if (video.provider === 'document' || video.provider === 'pdf') {
+      progress.opened = true;
+    } else {
+      throw new BadRequestException('Select a course file to record it as opened');
+    }
     return this.progressRepo.save(progress);
   }
 

@@ -10,6 +10,7 @@ export interface AuthUser {
   role: UserRole;
   avatarUrl?: string;
   phone?: string;
+  parentPhone?: string;
   level?: string;
   studentId?: string;
 }

@@ -17,6 +17,7 @@ const schema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
   level: z.string().min(1, 'Please select your level'),
   phone: z.string().regex(/^\+?[0-9\s\-().]{7,20}$/, 'Invalid phone number'),
+  parentPhone: z.string().regex(/^\+?[0-9\s\-().]{7,20}$/, 'Invalid parent phone number'),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -29,6 +30,7 @@ const strings = {
     email: 'Email Address',
     password: 'Password', passPh: 'Min. 8 characters',
     phone: 'Phone Number', phonePh: '+20 1XX XXX XXXX',
+    parentPhone: 'Parent/Guardian Phone Number', parentPhonePh: '+20 1XX XXX XXXX',
     level: 'School Level', levelPh: 'Select your level...',
     submit: 'Create Account',
     orWith: 'or continue with',
@@ -43,6 +45,7 @@ const strings = {
     email: 'البريد الإلكتروني',
     password: 'كلمة المرور', passPh: '8 أحرف على الأقل',
     phone: 'رقم الهاتف', phonePh: '+20 1XX XXX XXXX',
+    parentPhone: 'رقم ولي الأمر', parentPhonePh: '+20 1XX XXX XXXX',
     level: 'المستوى الدراسي', levelPh: 'اختر مستواك...',
     submit: 'إنشاء حساب',
     orWith: 'أو تابع بـ',
@@ -154,6 +157,15 @@ export default function RegisterPage() {
             </div>
             {errors.phone && <span className="form-error">{errors.phone.message}</span>}
           </div>
+
+            <div className="form-group">
+              <label className="form-label">{t.parentPhone}</label>
+              <div style={{ position: 'relative' }}>
+                <Phone size={16} style={iconStyle('left')} />
+                <input {...register('parentPhone')} type="tel" className={`form-input ${errors.parentPhone ? 'error' : ''}`} placeholder={t.parentPhonePh} style={{ paddingLeft: isRtl ? 14 : 38, paddingRight: isRtl ? 38 : 14 }} />
+              </div>
+              {errors.parentPhone && <span className="form-error">{errors.parentPhone.message}</span>}
+            </div>
 
           <div className="form-group">
             <label className="form-label">{t.level}</label>

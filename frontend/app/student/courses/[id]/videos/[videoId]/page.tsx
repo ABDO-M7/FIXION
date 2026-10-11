@@ -46,6 +46,12 @@ export default function StudentVideoPage() {
     return () => { active = false; };
   }, [id, videoId]);
 
+  const markAttachmentOpened = (attachmentIndex: number) => {
+    videosApi.markDocumentOpened(videoId, attachmentIndex).catch(() => {
+      toast.error('تعذر تسجيل فتح الملف.');
+    });
+  };
+
   return (
     <AppShell>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 20px 50px' }}>
@@ -58,7 +64,7 @@ export default function StudentVideoPage() {
           </div>
         ) : video ? (
           <div>
-            {video.provider === 'document' ? (
+            {video.provider === 'document' || video.provider === 'pdf' ? (
               <div
                 className="card"
                 style={{
@@ -93,6 +99,7 @@ export default function StudentVideoPage() {
                           href={url}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => markAttachmentOpened(i)}
                           className="btn btn-primary"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13 }}
                         >
@@ -155,6 +162,7 @@ export default function StudentVideoPage() {
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => markAttachmentOpened(i)}
                       className="btn btn-secondary btn-sm"
                       style={{
                         display: 'inline-flex',

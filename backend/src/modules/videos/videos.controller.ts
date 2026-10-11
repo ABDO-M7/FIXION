@@ -40,6 +40,16 @@ export class VideosController {
     return this.videosService.updateProgress(videoId, studentId, dto);
   }
 
+  @Post('student/video/:id/opened')
+  @Roles(UserRole.STUDENT)
+  markDocumentOpened(
+    @Param('id') videoId: string,
+    @Body() dto: { attachmentIndex?: number },
+    @CurrentUser('id') studentId: string,
+  ) {
+    return this.videosService.markDocumentOpened(videoId, studentId, dto?.attachmentIndex);
+  }
+
   @Post(':id/checkpoints/:checkpointId/answer')
   @Roles(UserRole.STUDENT)
   answerCheckpoint(

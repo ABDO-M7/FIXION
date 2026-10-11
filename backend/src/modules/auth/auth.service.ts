@@ -37,6 +37,7 @@ export class AuthService {
       emailVerificationToken,
       level: dto.level,
       phone: dto.phone,
+      parentPhone: dto.parentPhone,
     });
 
     await this.emailService.sendVerificationEmail(dto.email, user.name, emailVerificationToken);
@@ -160,6 +161,7 @@ export class AuthService {
         role: user.role,
         avatarUrl: user.avatarUrl,
         phone: user.phone,
+        parentPhone: user.parentPhone,
         level: user.level,
         studentId: user.studentId,
       },

@@ -40,6 +40,9 @@ export class User {
   @Column({ nullable: true, length: 30 })
   phone: string;
 
+  @Column({ nullable: true, length: 30 })
+  parentPhone: string | null;
+
   @Index()
   @Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })
   role: UserRole;

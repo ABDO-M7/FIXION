@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import { assignmentsApi } from '@/lib/api';
+import { assignmentsApi, videosApi } from '@/lib/api';
 import TeacherVideosTab from '@/components/TeacherVideosTabV2';
 import CourseWorkflowBuilder from '@/components/CourseWorkflowBuilder';
 import StaffCourseReadOnlyView from '@/components/StaffCourseReadOnlyView';
@@ -25,28 +25,44 @@ const COURSE_COLORS: Record<string, string> = {
 };
 
 type Tab = 'WORKFLOW' | 'QUIZ' | 'HOMEWORK' | 'VIDEOS' | 'GRADES';
+type LessonOption = { chapterName: string; lessonName: string; nextContentOrder: number };
 
 // ── Create Assignment Modal ─────────────────────────────────────────────────
 function CreateModal({
-  type, courseName, groupName, prerequisiteAssignments, onClose, onCreated,
+  type, courseName, groupName, prerequisiteAssignments, lessonOptions, onClose, onCreated,
 }: {
   type: 'QUIZ' | 'HOMEWORK';
   courseName: string;
   groupName: string;
   prerequisiteAssignments: Array<{ id: string; title: string; type: 'QUIZ' | 'HOMEWORK' }>;
+  lessonOptions: LessonOption[];
   onClose: () => void;
   onCreated: (newId?: string) => void;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState({ title: '', description: '', dueDate: '', maxGrade: '100', chapterName: '', lessonName: '', contentOrder: '0', unlockRule: 'NONE', unlockAssignmentId: '', unlockScore: '50' });
+  const [form, setForm] = useState({ title: '', description: '', dueDate: '', maxGrade: '100', lessonKey: '', contentOrder: '0', unlockRule: 'NONE', unlockAssignmentId: '', unlockScore: '50' });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     if (!form.title.trim()) { toast.error('Title is required'); return; }
+    const lesson = lessonOptions[Number(form.lessonKey)];
+    if (!lesson) { toast.error('Choose a lesson for this work.'); return; }
     if (!form.maxGrade || +form.maxGrade < 1) { toast.error('Max grade must be at least 1'); return; }
     setSaving(true);
     try {
-      const res = await assignmentsApi.create({ ...form, maxGrade: +form.maxGrade, contentOrder: +form.contentOrder, unlockScore: +form.unlockScore, type, courseName, groupName });
+      const res = await assignmentsApi.create({
+        title: form.title,
+        description: form.description,
+        dueDate: form.dueDate,
+        chapterName: lesson.chapterName,
+        lessonName: lesson.lessonName,
+        maxGrade: +form.maxGrade,
+        contentOrder: +form.contentOrder,
+        unlockScore: +form.unlockScore,
+        type,
+        courseName,
+        groupName,
+      });
       toast.success(`${type === 'QUIZ' ? 'Quiz' : 'Homework'} created!`);
       onCreated((res.data as any).id);
       onClose();
@@ -123,19 +139,39 @@ function CreateModal({
                 onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))}
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 110px', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 12 }}>
               <div className="form-group">
-                <label className="form-label">Chapter</label>
-                <input className="form-input" value={form.chapterName} onChange={e => setForm(p => ({ ...p, chapterName: e.target.value }))} placeholder="e.g. Chapter 1" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Lesson</label>
-                <input className="form-input" value={form.lessonName} onChange={e => setForm(p => ({ ...p, lessonName: e.target.value }))} placeholder="e.g. Lesson 1" />
+                <label className="form-label">الحصة *</label>
+                <select
+                  className="form-input"
+                  value={form.lessonKey}
+                  onChange={e => {
+                    const lesson = lessonOptions[Number(e.target.value)];
+                    setForm(p => ({
+                      ...p,
+                      lessonKey: e.target.value,
+                      contentOrder: String(lesson?.nextContentOrder ?? 0),
+                    }));
+                  }}
+                  required
+                >
+                  <option value="" disabled>اختر الفصل والحصة</option>
+                  {lessonOptions.map((option, index) => (
+                    <option key={`${option.chapterName}-${option.lessonName}`} value={index}>
+                      {option.chapterName} — {option.lessonName}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Order</label>
                 <input type="number" min={0} className="form-input" value={form.contentOrder} onChange={e => setForm(p => ({ ...p, contentOrder: e.target.value }))} />
               </div>
+              {lessonOptions.length === 0 && (
+                <p role="alert" style={{ color: 'var(--warning, #f59e0b)', fontSize: 12, margin: 0 }}>
+                  لا توجد حصص جاهزة للاختيار. اطلب من الأدمن إضافة محتوى للحصة أولاً.
+                </p>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Max Grade *</label>
@@ -155,7 +191,7 @@ function CreateModal({
           )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button onClick={onClose} className="btn btn-secondary">Cancel</button>
-            <button onClick={save} disabled={saving} className="btn btn-primary">
+            <button onClick={save} disabled={saving || lessonOptions.length === 0} className="btn btn-primary">
               {saving ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : (type === 'QUIZ' ? 'Create & Build →' : 'Create')}
             </button>
           </div>
@@ -296,14 +332,45 @@ export default function GroupDetailPage() {
 
   const [tab, setTab] = useState<Tab>('WORKFLOW');
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [lessonOptions, setLessonOptions] = useState<LessonOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [createType, setCreateType] = useState<'QUIZ' | 'HOMEWORK' | null>(null);
   const [readOnlyRefresh, setReadOnlyRefresh] = useState(0);
 
   const fetchAssignments = useCallback(() => {
     setLoading(true);
-    assignmentsApi.list(decoded, decodedGroup)
-      .then(r => setAssignments(Array.isArray(r.data) ? r.data : []))
+    Promise.all([
+      assignmentsApi.list(decoded, decodedGroup),
+      videosApi.teacherList(decoded, decodedGroup),
+    ])
+      .then(([assignmentResponse, videoResponse]) => {
+        const groupAssignments = Array.isArray(assignmentResponse.data) ? assignmentResponse.data : [];
+        const groupVideos = Array.isArray(videoResponse.data) ? videoResponse.data : [];
+        setAssignments(groupAssignments);
+        const lessonOrders = new Map<string, { chapterName: string; lessonName: string; maxOrder: number }>();
+        [...groupAssignments, ...groupVideos].forEach((item: { chapterName?: string | null; lessonName?: string | null; contentOrder?: number }) => {
+          const chapterName = item.chapterName?.trim();
+          const lessonName = item.lessonName?.trim();
+          if (!chapterName || !lessonName) return;
+          const key = `${chapterName}\u0000${lessonName}`;
+          const current = lessonOrders.get(key);
+          const contentOrder = Number.isFinite(item.contentOrder) ? item.contentOrder || 0 : 0;
+          lessonOrders.set(key, {
+            chapterName,
+            lessonName,
+            maxOrder: Math.max(current?.maxOrder ?? -1, contentOrder),
+          });
+        });
+        const availableLessons: LessonOption[] = Array.from(lessonOrders.values(), lesson => ({
+          chapterName: lesson.chapterName,
+          lessonName: lesson.lessonName,
+          nextContentOrder: lesson.maxOrder + 1,
+        }));
+        availableLessons.sort((left, right) =>
+          left.chapterName.localeCompare(right.chapterName) || left.lessonName.localeCompare(right.lessonName),
+        );
+        setLessonOptions(availableLessons);
+      })
       .catch(() => toast.error('تعذر تحميل الواجبات والكويزات.'))
       .finally(() => setLoading(false));
   }, [decoded, decodedGroup]);
@@ -538,6 +605,7 @@ export default function GroupDetailPage() {
           courseName={decoded}
           groupName={decodedGroup}
           prerequisiteAssignments={assignments}
+          lessonOptions={lessonOptions}
           onClose={() => setCreateType(null)}
           onCreated={() => {
             fetchAssignments();

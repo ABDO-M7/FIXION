@@ -525,6 +525,7 @@ export class AssignmentsService {
         email: u?.email ?? null,
         studentId: u?.studentId ?? null,
         phone: u?.phone ?? null,
+        parentPhone: u?.parentPhone ?? null,
         level: u?.level ?? null,
       };
     });
@@ -555,7 +556,10 @@ export class AssignmentsService {
     }
     const courseName = dto.courseName?.trim();
     const groupName = dto.groupName?.trim();
+    const chapterName = dto.chapterName?.trim();
+    const lessonName = dto.lessonName?.trim();
     if (!courseName || !groupName) throw new BadRequestException('Course and group are required');
+    if (!chapterName || !lessonName) throw new BadRequestException('Choose a chapter and lesson for this assignment');
     const scope = await this.assertCanManageGroup(courseName, groupName, teacher);
     const assignment = this.assignmentsRepo.create({
       ...dto,
@@ -568,8 +572,8 @@ export class AssignmentsService {
           : true,
       maxGrade: dto.maxGrade ?? 100,
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-      chapterName: dto.chapterName?.trim() || null,
-      lessonName: dto.lessonName?.trim() || null,
+      chapterName,
+      lessonName,
       contentOrder: Number.isFinite(Number(dto.contentOrder)) ? Number(dto.contentOrder) : 0,
       unlockRule: dto.unlockRule || UnlockRuleType.NONE,
       unlockAssignmentId: dto.unlockAssignmentId || null,
@@ -796,6 +800,21 @@ export class AssignmentsService {
     const assignments = allAssignments.filter(assignment => assignment.isPublished);
     const studentIds = students.map(student => student.id);
     const assignmentIds = assignments.map(assignment => assignment.id);
+    const lessonVideos = videos.filter(video => video.provider !== 'document' && video.provider !== 'pdf');
+    const documents = videos.flatMap<{ id: string; title: string; videoId: string; attachmentIndex: number | null }>(video => {
+      const isDocument = video.provider === 'document' || video.provider === 'pdf';
+      if (Array.isArray(video.attachments) && video.attachments.length > 0) {
+        return video.attachments.map((_attachment, attachmentIndex) => ({
+          id: `${video.id}:attachment:${attachmentIndex}`,
+          title: `${video.title} - ملف ${attachmentIndex + 1}`,
+          videoId: video.id,
+          attachmentIndex,
+        }));
+      }
+      return isDocument
+        ? [{ id: video.id, title: video.title, videoId: video.id, attachmentIndex: null }]
+        : [];
+    });
     const videoIds = videos.map(video => video.id);
 
     const [submissions, progress] = await Promise.all([
@@ -840,10 +859,10 @@ export class AssignmentsService {
       const averageGradePercent = gradePercentages.length
         ? Math.round(gradePercentages.reduce((sum, value) => sum + value, 0) / gradePercentages.length)
         : null;
-      const progressByVideo = new Map(studentProgress.map(row => [row.videoId, row.watchedPercent]));
-      const completedVideos = videos.filter(video => (progressByVideo.get(video.id) || 0) >= 90).length;
-      const videoProgressPercent = videos.length
-        ? Math.round(videos.reduce((sum, video) => sum + (progressByVideo.get(video.id) || 0), 0) / videos.length)
+      const progressByVideo = new Map(studentProgress.map(row => [row.videoId, row]));
+      const completedVideos = lessonVideos.filter(video => (progressByVideo.get(video.id)?.watchedPercent || 0) >= 90).length;
+      const videoProgressPercent = lessonVideos.length
+        ? Math.round(lessonVideos.reduce((sum, video) => sum + (progressByVideo.get(video.id)?.watchedPercent || 0), 0) / lessonVideos.length)
         : null;
       const activityDates = [
         ...studentSubmissions.map(submission => submission.submittedAt),
@@ -856,8 +875,17 @@ export class AssignmentsService {
         gradedAssignments: gradedSubmissions.length,
         averageGradePercent,
         completedVideos,
-        totalVideos: videos.length,
+        totalVideos: lessonVideos.length,
         videoProgressPercent,
+        documentOpens: Object.fromEntries(documents.map(document => {
+          const resourceProgress = progressByVideo.get(document.videoId);
+          return [
+            document.id,
+            document.attachmentIndex === null
+              ? resourceProgress?.opened ?? false
+              : (resourceProgress?.openedAttachments || []).includes(document.attachmentIndex),
+          ];
+        })),
         lastActivityAt: activityDates.length
           ? new Date(Math.max(...activityDates.map(date => new Date(date).getTime()))).toISOString()
           : null,
@@ -865,7 +893,10 @@ export class AssignmentsService {
           submission.assignmentId,
           submission.grade,
         ])),
-        videoProgress: Object.fromEntries(studentProgress.map(row => [row.videoId, row.watchedPercent])),
+        videoProgress: Object.fromEntries(lessonVideos.map(video => [
+          video.id,
+          progressByVideo.get(video.id)?.watchedPercent ?? 0,
+        ])),
       };
     });
 
@@ -876,19 +907,22 @@ export class AssignmentsService {
         : null;
     };
     const possibleSubmissions = students.length * assignments.length;
-    const possibleVideoViews = students.length * videos.length;
+    const possibleVideoViews = students.length * lessonVideos.length;
+    const lessonVideoIds = new Set(lessonVideos.map(video => video.id));
+    const lessonProgressRows = progress.filter(row => lessonVideoIds.has(row.videoId));
 
     return {
       summary: {
         studentCount: students.length,
         assignmentCount: assignments.length,
-        videoCount: videos.length,
+        videoCount: lessonVideos.length,
+        documentCount: documents.length,
         averageGradePercent: average(studentsWithStats.map(student => student.averageGradePercent)),
         assignmentSubmissionRate: possibleSubmissions
           ? Math.round((submissions.length / possibleSubmissions) * 100)
           : null,
         videoCompletionRate: possibleVideoViews
-          ? Math.round((progress.filter(row => row.watchedPercent >= 90).length / possibleVideoViews) * 100)
+          ? Math.round((lessonProgressRows.filter(row => row.watchedPercent >= 90).length / possibleVideoViews) * 100)
           : null,
       },
       assignments: assignments.map(assignment => ({
@@ -897,7 +931,12 @@ export class AssignmentsService {
         type: assignment.type,
         maxGrade: assignment.maxGrade,
       })),
-      videos: videos.map(video => ({ id: video.id, title: video.title })),
+      videos: lessonVideos.map(video => ({
+        id: video.id,
+        title: video.title,
+        provider: video.provider,
+      })),
+      documents,
       students: studentsWithStats,
     };
   }

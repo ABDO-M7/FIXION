@@ -259,6 +259,8 @@ export const videosApi = {
   studentExperience: (videoId: string) => api.get('/videos/student/video/' + videoId + '/experience'),
   updateProgress: (videoId: string, watchedSeconds: number, durationSeconds: number) =>
     api.patch(`/videos/student/video/${encodeURIComponent(videoId)}/progress`, { watchedSeconds, durationSeconds }),
+  markDocumentOpened: (videoId: string, attachmentIndex?: number) =>
+    api.post(`/videos/student/video/${encodeURIComponent(videoId)}/opened`, { attachmentIndex }),
   answerCheckpoint: (videoId: string, checkpointId: string, data: any) => api.post('/videos/' + videoId + '/checkpoints/' + checkpointId + '/answer', data),
   create: (data: { courseName: string; groupName: string; title: string; description?: string; provider?: string; sourceUrl?: string; youtubeUrl?: string; chapterName?: string; lessonName?: string; contentOrder?: number; unlockRule?: string; unlockAssignmentId?: string; unlockScore?: number; unlockVideoId?: string; unlockPercent?: number; attachments?: string[] }) => api.post('/videos', data),
   update: (id: string, data: any) => api.patch(`/videos/${id}`, data),

@@ -1603,6 +1603,11 @@ export default function CourseDetailPage() {
               onRefresh={refresh}
             />
           )}
+          onDocumentOpen={(videoId, attachmentIndex) => {
+            videosApi.markDocumentOpened(videoId, attachmentIndex).catch(() => {
+              toast.error('تعذر تسجيل فتح الملف.');
+            });
+          }}
         />
       ) : (
         <GradesTab assignments={assignments} />

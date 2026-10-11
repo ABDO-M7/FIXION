@@ -58,12 +58,14 @@ export default function StudentCourseHierarchy({
   videos,
   renderAssignment,
   onVideoClick,
+  onDocumentOpen,
 }: {
   enrollmentId: string;
   assignments: Assignment[];
   videos: VideoItem[];
   renderAssignment: (assignment: Assignment) => React.ReactNode;
   onVideoClick?: (video: VideoItem) => void;
+  onDocumentOpen?: (videoId: string, attachmentIndex?: number) => void;
 }) {
   const chapters = new Map<string, Map<string, Lesson['items']>>();
   const add = (chapterName: string | null | undefined, lessonName: string | null | undefined, item: Lesson['items'][number]) => {
@@ -122,6 +124,7 @@ export default function StudentCourseHierarchy({
               enrollmentId={enrollmentId}
               renderAssignment={renderAssignment}
               onVideoClick={onVideoClick}
+              onDocumentOpen={onDocumentOpen}
             />
           ))}
         </ChapterSection>
@@ -232,12 +235,14 @@ function LessonSection({
   enrollmentId,
   renderAssignment,
   onVideoClick,
+  onDocumentOpen,
 }: {
   name: string;
   items: Lesson['items'];
   enrollmentId: string;
   renderAssignment: (assignment: Assignment) => React.ReactNode;
   onVideoClick?: (video: VideoItem) => void;
+  onDocumentOpen?: (videoId: string, attachmentIndex?: number) => void;
 }) {
   const sorted = [...items].sort((a, b) => {
     const orderA = a.value.contentOrder ?? 0;
@@ -271,7 +276,13 @@ function LessonSection({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {sorted.map(item => item.kind === 'video' ? (
-          <VideoRow key={`video-${item.value.id}`} video={item.value} enrollmentId={enrollmentId} onVideoClick={onVideoClick} />
+          <VideoRow
+            key={`video-${item.value.id}`}
+            video={item.value}
+            enrollmentId={enrollmentId}
+            onVideoClick={onVideoClick}
+            onDocumentOpen={onDocumentOpen}
+          />
         ) : (
           <div key={`assignment-${item.value.id}`}>
             {renderAssignment(item.value)}
@@ -282,8 +293,18 @@ function LessonSection({
   );
 }
 
-function VideoRow({ video, enrollmentId, onVideoClick }: { video: VideoItem; enrollmentId: string; onVideoClick?: (video: VideoItem) => void }) {
-  const isDoc = video.provider === 'document';
+function VideoRow({
+  video,
+  enrollmentId,
+  onVideoClick,
+  onDocumentOpen,
+}: {
+  video: VideoItem;
+  enrollmentId: string;
+  onVideoClick?: (video: VideoItem) => void;
+  onDocumentOpen?: (videoId: string, attachmentIndex?: number) => void;
+}) {
+  const isDoc = video.provider === 'document' || video.provider === 'pdf';
   const provider = video.provider || 'youtube';
   const thumbnail = !isDoc && provider === 'youtube' && (video.providerVideoId || video.youtubeVideoId)
     ? `https://i.ytimg.com/vi/${video.providerVideoId || video.youtubeVideoId}/mqdefault.jpg`
@@ -401,6 +422,8 @@ function VideoRow({ video, enrollmentId, onVideoClick }: { video: VideoItem; enr
                   if (video.isLocked) {
                     e.preventDefault();
                     alert(video.lockReason || 'هذا المحتوى مغلق حتى إكمال المتطلبات السابقة');
+                  } else {
+                    onDocumentOpen?.(video.id, i);
                   }
                 }}
                 style={{
@@ -455,7 +478,27 @@ function VideoRow({ video, enrollmentId, onVideoClick }: { video: VideoItem; enr
 
   if (isDoc && video.attachments && video.attachments.length === 1) {
     return (
-      <a href={video.attachments[0]} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
+      <a
+        href={video.attachments[0]}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => onDocumentOpen?.(video.id, 0)}
+        style={{ textDecoration: 'none', color: 'inherit' }}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  if (isDoc && video.providerVideoId && video.providerVideoId !== 'document') {
+    return (
+      <a
+        href={video.providerVideoId}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => onDocumentOpen?.(video.id)}
+        style={{ textDecoration: 'none', color: 'inherit' }}
+      >
         {content}
       </a>
     );
