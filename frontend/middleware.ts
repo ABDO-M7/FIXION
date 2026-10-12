@@ -31,6 +31,7 @@ export function middleware(request: NextRequest) {
     PUBLIC_ROUTES.some(r => pathname === r || pathname.startsWith(r + '?')) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
+    pathname === '/sentry-tunnel' ||
     pathname.includes('.')
   ) {
     return NextResponse.next();

@@ -41,5 +41,6 @@ Sentry captures frontend errors and performance data when configured. Add
 `NEXT_PUBLIC_SENTRY_DSN` for browser events and `SENTRY_DSN` for server and
 edge events to `.env.local` and the frontend deployment environment. The SDK
 is disabled when its DSN is empty. Set `SENTRY_ENVIRONMENT` to label deployed
-events. Optional source-map uploads require `SENTRY_AUTH_TOKEN`,
+events. Browser events use the same-origin `/sentry-tunnel` route to reduce
+blocking by browser content blockers. Optional source-map uploads require `SENTRY_AUTH_TOKEN`,
 `SENTRY_ORG`, and `SENTRY_PROJECT` as build environment variables.
