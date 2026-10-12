@@ -70,6 +70,13 @@ $ mau deploy
 
 With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
 
+## Sentry
+
+Set `SENTRY_DSN` and `SENTRY_ENVIRONMENT` in the backend environment to report
+server errors and performance data. The SDK is disabled when `SENTRY_DSN` is
+empty. Expected client errors (HTTP 4xx) are not sent; server errors (HTTP 5xx)
+are reported by the global exception filter.
+
 ## Resources
 
 Check out a few resources that may come in handy when working with NestJS:

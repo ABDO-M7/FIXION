@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { SentryModule } from '@sentry/nestjs/setup';
 
 import {
   databaseConfig,
@@ -50,7 +51,14 @@ import { VideoProgress } from './modules/videos/entities/video-progress.entity';
     // Config
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, jwtConfig, r2Config, googleConfig, resendConfig, appConfig],
+      load: [
+        databaseConfig,
+        jwtConfig,
+        r2Config,
+        googleConfig,
+        resendConfig,
+        appConfig,
+      ],
       envFilePath: '.env',
     }),
 
@@ -97,6 +105,7 @@ import { VideoProgress } from './modules/videos/entities/video-progress.entity';
       { name: 'default', ttl: 60000, limit: 100 },
       { name: 'auth', ttl: 60000, limit: 10 },
     ]),
+    SentryModule.forRoot(),
 
     // Feature modules
     AuthModule,

@@ -34,3 +34,12 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Sentry
+
+Sentry captures frontend errors and performance data when configured. Add
+`NEXT_PUBLIC_SENTRY_DSN` for browser events and `SENTRY_DSN` for server and
+edge events to `.env.local` and the frontend deployment environment. The SDK
+is disabled when its DSN is empty. Set `SENTRY_ENVIRONMENT` to label deployed
+events. Optional source-map uploads require `SENTRY_AUTH_TOKEN`,
+`SENTRY_ORG`, and `SENTRY_PROJECT` as build environment variables.
