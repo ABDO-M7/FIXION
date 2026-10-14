@@ -50,7 +50,7 @@ type CheckpointDto = {
 type AnswerDto = { answerText?: string; answer?: string; attachments?: string[] };
 
 type ParsedSource = {
-  provider: 'youtube' | 'vimeo' | 'wistia' | 'bunny';
+  provider: 'youtube' | 'vimeo' | 'wistia' | 'bunny' | 'hls';
   providerVideoId: string;
 };
 
@@ -527,6 +527,21 @@ export class VideosService {
     const raw = value.trim();
     const providerHint = requestedProvider?.toLowerCase();
 
+    if (providerHint === 'hls') {
+      let hlsUrl: URL;
+      try { hlsUrl = new URL(raw); } catch { throw new BadRequestException('Enter a valid HTTPS HLS playlist URL'); }
+      if (
+        hlsUrl.protocol !== 'https:'
+        || hlsUrl.username
+        || hlsUrl.password
+        || hlsUrl.href.length > 2048
+        || !/\.m3u8$/i.test(hlsUrl.pathname)
+      ) {
+        throw new BadRequestException('HLS videos must use a direct HTTPS .m3u8 playlist URL');
+      }
+      return { provider: 'hls', providerVideoId: hlsUrl.href };
+    }
+
     // Wistia supplies several embed formats (iframe, script, and
     // wistia_async_* divs). Store only the media id; never persist raw HTML.
     const wistiaEmbedId = raw.match(/(?:wistia_async_|data-wistia-id=["']|\/(?:medias|iframe)\/|\/embed\/(?:medias\/|iframe\/)?)([A-Za-z0-9_-]+)/i)?.[1];
@@ -568,7 +583,7 @@ export class VideosService {
     }
 
     if (!provider || !providerVideoId || (providerHint && providerHint !== provider)) {
-      throw new BadRequestException('Use a valid YouTube, Vimeo, Wistia, or Bunny Stream link');
+      throw new BadRequestException('Use a valid YouTube, Vimeo, Wistia, Bunny Stream, or HLS link');
     }
     if (provider === 'youtube' && !/^[A-Za-z0-9_-]{11}$/.test(providerVideoId)) {
       throw new BadRequestException('Enter a valid YouTube video link');

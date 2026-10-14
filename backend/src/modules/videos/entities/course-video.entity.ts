@@ -69,7 +69,7 @@ export class CourseVideo {
   @Column({ type: 'varchar', length: 30, default: 'youtube' })
   provider: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'text', nullable: true })
   providerVideoId: string | null;
 
   @Column({ type: 'varchar', length: 20, nullable: true })

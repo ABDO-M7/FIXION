@@ -1165,7 +1165,7 @@ function AddItemModal({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
-  const [provider, setProvider] = useState<'bunny' | 'youtube' | 'vimeo' | 'wistia'>('bunny');
+  const [provider, setProvider] = useState<'bunny' | 'youtube' | 'vimeo' | 'wistia' | 'hls'>('bunny');
   const [maxGrade, setMaxGrade] = useState('100');
   const [dueDate, setDueDate] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
@@ -1345,6 +1345,7 @@ function AddItemModal({
                   <option value="youtube">YouTube</option>
                   <option value="vimeo">Vimeo</option>
                   <option value="wistia">Wistia</option>
+                  <option value="hls">Direct HLS (.m3u8)</option>
                 </select>
               </div>
               <div className="form-group">
@@ -1354,7 +1355,9 @@ function AddItemModal({
                   value={sourceUrl}
                   onChange={e => setSourceUrl(e.target.value)}
                   placeholder={
-                    provider === 'bunny'
+                    provider === 'hls'
+                      ? 'https://example.com/video/playlist.m3u8'
+                      : provider === 'bunny'
                       ? 'https://iframe.mediadelivery.net/embed/...'
                       : 'https://www.youtube.com/watch?v=...'
                   }
@@ -1544,13 +1547,14 @@ function EditItemModal({
                   <option value="youtube">YouTube</option>
                   <option value="vimeo">Vimeo</option>
                   <option value="wistia">Wistia</option>
+                  <option value="hls">Direct HLS (.m3u8)</option>
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">تحديث رابط الفيديو</label>
                 <input
                   className="form-input"
-                  placeholder="ضع الرابط الجديد أو اتركه فارغاً للإبقاء عليه"
+                  placeholder={provider === 'hls' ? 'https://example.com/video/playlist.m3u8' : 'ضع الرابط الجديد أو اتركه فارغاً للإبقاء عليه'}
                   value={sourceUrl}
                   onChange={e => setSourceUrl(e.target.value)}
                 />

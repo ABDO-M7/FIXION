@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionPlan } from './entities/subscription.entity';
 import { CodeType } from './entities/subscription-code.entity';
@@ -108,7 +108,7 @@ export class EnrollmentsController {
 
   @Get('my/:id')
   @Roles(UserRole.STUDENT)
-  getEnrollmentById(@Param('id') id: string, @CurrentUser('id') studentId: string) {
+  getEnrollmentById(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser('id') studentId: string) {
     return this.subscriptionsService.getEnrollmentById(id, studentId);
   }
 }

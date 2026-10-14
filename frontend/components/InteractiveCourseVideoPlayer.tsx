@@ -58,11 +58,13 @@ function playerOrigin(provider: string) {
 
 export default function InteractiveCourseVideoPlayer({ video, preview = false }: { video: InteractiveCourseVideo; preview?: boolean }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const hlsVideoRef = useRef<HTMLVideoElement>(null);
   const wistiaElementRef = useRef<HTMLElement>(null);
   const providerPlayerRef = useRef<any>(null);
   const checkpointPauseLockRef = useRef(false);
   const provider = video.provider || 'youtube';
   const isBunny = provider === 'bunny';
+  const isHls = provider === 'hls';
   const [started, setStarted] = useState(isBunny);
   const [playing, setPlaying] = useState(false);
   const [experience, setExperience] = useState<Experience | null>(null);
@@ -81,6 +83,12 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const solvedIds = useMemo(() => new Set(checkpoints.filter(item => item.response?.isCorrect).map(item => item.id)), [checkpoints]);
 
   const sendPlayerCommand = useCallback((command: string) => {
+    if (provider === 'hls') {
+      const player = hlsVideoRef.current;
+      if (command === 'playVideo') void player?.play().catch(() => {});
+      if (command === 'pauseVideo') player?.pause();
+      return;
+    }
     if (provider === 'youtube' && providerPlayerRef.current) {
       if (command === 'playVideo') providerPlayerRef.current.playVideo?.();
       if (command === 'pauseVideo') providerPlayerRef.current.pauseVideo?.();
@@ -173,6 +181,70 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   useEffect(() => {
     checkpointHandlerRef.current = checkForCheckpoint;
   }, [checkForCheckpoint]);
+
+  useEffect(() => {
+    if (!started || provider !== 'hls') return;
+    const player = hlsVideoRef.current;
+    const sourceUrl = video.providerVideoId;
+    if (!player || !sourceUrl) return;
+
+    let hls: { destroy: () => void } | null = null;
+    let cancelled = false;
+    const onTimeUpdate = () => {
+      const time = player.currentTime;
+      setCurrentTime(time);
+      checkpointHandlerRef.current(time);
+      reportProgress(time);
+    };
+    const onPlay = () => {
+      if (checkpointPauseLockRef.current) {
+        player.pause();
+        setPlaying(false);
+        return;
+      }
+      setPlaying(true);
+    };
+    const onPause = () => setPlaying(false);
+    const onError = () => setPlayerError('hls-player-error');
+    player.addEventListener('timeupdate', onTimeUpdate);
+    player.addEventListener('play', onPlay);
+    player.addEventListener('pause', onPause);
+    player.addEventListener('error', onError);
+    providerPlayerRef.current = player;
+
+    if (player.canPlayType('application/vnd.apple.mpegurl')) {
+      player.src = sourceUrl;
+      setPlayerError(null);
+    } else {
+      void import('hls.js').then(({ default: Hls }) => {
+        if (cancelled) return;
+        if (!Hls.isSupported()) {
+          setPlayerError('hls-unsupported');
+          return;
+        }
+        const instance = new Hls();
+        hls = instance;
+        instance.loadSource(sourceUrl);
+        instance.attachMedia(player);
+        instance.on(Hls.Events.MANIFEST_PARSED, () => setPlayerError(null));
+        instance.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal) setPlayerError('hls-player-error');
+        });
+      }).catch(() => setPlayerError('hls-unsupported'));
+    }
+
+    return () => {
+      cancelled = true;
+      player.removeEventListener('timeupdate', onTimeUpdate);
+      player.removeEventListener('play', onPlay);
+      player.removeEventListener('pause', onPause);
+      player.removeEventListener('error', onError);
+      if (hls) hls.destroy();
+      player.removeAttribute('src');
+      player.load();
+      if (providerPlayerRef.current === player) providerPlayerRef.current = null;
+    };
+  }, [provider, reportProgress, started, video.providerVideoId]);
 
   // The YouTube postMessage protocol does not reliably emit current-time
   // events in every browser until its listener handshake has completed.
@@ -442,7 +514,16 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   return (
     <article className="card" style={{ overflow: 'hidden', padding: 0 }} onContextMenu={e => e.preventDefault()}>
       <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#09090b', overflow: 'hidden', isolation: 'isolate' }}>
-        {started || isBunny ? provider === 'wistia' ? (
+        {started || isBunny ? isHls ? (
+          <video
+            ref={hlsVideoRef}
+            title={video.title}
+            controls
+            playsInline
+            preload="metadata"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: '#000' }}
+          />
+        ) : provider === 'wistia' ? (
           <div style={{ position: 'absolute', inset: 0, background: '#000' }}>
             {createElement('wistia-player', { ref: wistiaElementRef, 'media-id': video.providerVideoId, style: { display: 'block', width: '100%', height: '100%' } })}
           </div>
@@ -464,7 +545,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
             <span style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--primary)', display: 'grid', placeItems: 'center', boxShadow: '0 8px 32px rgba(0,0,0,.45)' }}><Play fill="currentColor" size={26} /></span>
           </button>
         )}
-        {started && !isBunny && (
+        {started && !isBunny && !isHls && (
           <div style={{ position: 'absolute', inset: 0, pointerEvents: pending ? 'auto' : 'none', zIndex: 2 }}>
             <div style={{ position: 'absolute', inset: '0 0 auto', height: 40, background: 'linear-gradient(#080d15 0%, rgba(8,13,21,.72) 68%, transparent 100%)' }} />
             <div style={{ position: 'absolute', left: 18, top: 16, color: 'rgba(255,255,255,.88)', fontSize: 12, fontWeight: 700 }}>FIXION · {video.title}</div>
@@ -509,9 +590,18 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         {playerError && !pending && (
           <div role="alert" style={{ position: 'absolute', inset: 12, zIndex: 4, display: 'grid', placeItems: 'center', padding: 20, textAlign: 'center', background: 'rgba(7,12,20,.96)', border: '1px solid rgba(248,113,113,.3)', borderRadius: 14, color: '#fff' }}>
             <div>
-              <strong style={{ display: 'block', color: '#fca5a5', marginBottom: 8 }}>YouTube blocked this embedded playback</strong>
-              <span style={{ display: 'block', color: 'rgba(255,255,255,.7)', fontSize: 13, lineHeight: 1.5 }}>This video requires YouTube verification or does not allow embedded playback. The sign-in button inside the YouTube frame cannot authenticate your FIXION account.</span>
-              <a href={'https://www.youtube.com/watch?v=' + (video.providerVideoId || video.youtubeVideoId || '')} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', marginTop: 14 }}>Open on YouTube</a>
+              {isHls ? (
+                <>
+                  <strong style={{ display: 'block', color: '#fca5a5', marginBottom: 8 }}>HLS playback is unavailable</strong>
+                  <span style={{ display: 'block', color: 'rgba(255,255,255,.7)', fontSize: 13, lineHeight: 1.5 }}>This browser could not play the HLS playlist. Check the HTTPS playlist URL and that its host allows cross-origin media requests.</span>
+                </>
+              ) : (
+                <>
+                  <strong style={{ display: 'block', color: '#fca5a5', marginBottom: 8 }}>YouTube blocked this embedded playback</strong>
+                  <span style={{ display: 'block', color: 'rgba(255,255,255,.7)', fontSize: 13, lineHeight: 1.5 }}>This video requires YouTube verification or does not allow embedded playback. The sign-in button inside the YouTube frame cannot authenticate your FIXION account.</span>
+                  <a href={'https://www.youtube.com/watch?v=' + (video.providerVideoId || video.youtubeVideoId || '')} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', marginTop: 14 }}>Open on YouTube</a>
+                </>
+              )}
             </div>
           </div>
         )}
