@@ -526,8 +526,14 @@ export class VideosService {
     if (!value?.trim()) throw new BadRequestException('A video link is required');
     const raw = value.trim();
     const providerHint = requestedProvider?.toLowerCase();
+    let isHlsPlaylist = false;
+    try {
+      isHlsPlaylist = /\.m3u8$/i.test(new URL(raw).pathname);
+    } catch {
+      // Non-URL provider embed codes are parsed by their provider-specific handlers below.
+    }
 
-    if (providerHint === 'hls') {
+    if (providerHint === 'hls' || isHlsPlaylist) {
       let hlsUrl: URL;
       try { hlsUrl = new URL(raw); } catch { throw new BadRequestException('Enter a valid HTTPS HLS playlist URL'); }
       if (

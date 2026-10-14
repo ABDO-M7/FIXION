@@ -1353,7 +1353,10 @@ function AddItemModal({
                 <input
                   className="form-input"
                   value={sourceUrl}
-                  onChange={e => setSourceUrl(e.target.value)}
+                  onChange={e => {
+                    setSourceUrl(e.target.value);
+                    if (/\.m3u8(?:[?#]|$)/i.test(e.target.value.trim())) setProvider('hls');
+                  }}
                   placeholder={
                     provider === 'hls'
                       ? 'https://example.com/video/playlist.m3u8'

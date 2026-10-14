@@ -30,8 +30,10 @@ describe('VideosService HLS source validation', () => {
     expect(() => parseVideoSource(url)).toThrow(BadRequestException);
   });
 
-  it('does not allow an HLS playlist to be mislabeled as another provider', () => {
-    expect(() => parseVideoSource('https://cdn.example.com/video/playlist.m3u8', 'bunny'))
-      .toThrow(BadRequestException);
+  it('recognizes a direct HLS playlist even when the form still says Bunny Stream', () => {
+    expect(parseVideoSource('https://cdn.example.com/video/playlist.m3u8', 'bunny')).toEqual({
+      provider: 'hls',
+      providerVideoId: 'https://cdn.example.com/video/playlist.m3u8',
+    });
   });
 });
