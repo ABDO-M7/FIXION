@@ -77,6 +77,17 @@ server errors and performance data. The SDK is disabled when `SENTRY_DSN` is
 empty. Expected client errors (HTTP 4xx) are not sent; server errors (HTTP 5xx)
 are reported by the global exception filter.
 
+## Shared Redis cache
+
+Set `REDIS_URL` in the Render backend environment to the TLS connection URL
+provided by Upstash Redis (or another Redis-compatible managed service). Do not
+commit the URL or expose it to the frontend. The backend uses short-lived,
+student-scoped cache entries for course video and assignment lists, with
+version-based invalidation after content or student progress/submission changes.
+Redis is an optimization rather than a source of truth: requests continue
+against PostgreSQL when Redis is not configured or temporarily unavailable.
+The admin health endpoint reports the cache connection state.
+
 ## Resources
 
 Check out a few resources that may come in handy when working with NestJS:

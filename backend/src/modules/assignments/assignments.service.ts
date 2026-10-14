@@ -15,6 +15,8 @@ import { CourseGroup } from './entities/course-group.entity';
 import { CourseVideo } from '../videos/entities/course-video.entity';
 import { SubscriptionCode } from '../subscriptions/entities/subscription-code.entity';
 import { Question } from '../questions/entities/question.entity';
+import { RedisCacheService } from '../../common/cache/redis-cache.service';
+import { courseContentVersionKey, studentCourseCacheKey, studentCourseVersionKey } from '../../common/cache/course-cache-keys';
 
 @Injectable()
 export class AssignmentsService {
@@ -37,7 +39,16 @@ export class AssignmentsService {
     private courseGroupsRepo: Repository<CourseGroup>,
     @InjectRepository(CourseVideo)
     private videosRepo: Repository<CourseVideo>,
+    private readonly cache: RedisCacheService,
   ) {}
+
+  private async invalidateCourseContent(courseName: string, groupName: string): Promise<void> {
+    await this.cache.bumpVersion(courseContentVersionKey(courseName, groupName));
+  }
+
+  private async invalidateStudentCourse(courseName: string, groupName: string, studentId: string): Promise<void> {
+    await this.cache.bumpVersion(studentCourseVersionKey(courseName, groupName, studentId));
+  }
 
   private async staffScope(user: User) {
     return resolveStaffScope(this.usersRepo, user);
@@ -221,7 +232,9 @@ export class AssignmentsService {
         group.schedule = dto.schedule || null;
       }
     }
-    return this.courseGroupsRepo.save(group);
+    const saved = await this.courseGroupsRepo.save(group);
+    await this.invalidateCourseContent(courseName, groupName);
+    return saved;
   }
 
   // ─── ADMIN: delete course group ──────────────────────────────────────────
@@ -265,6 +278,7 @@ export class AssignmentsService {
 
     // 6. Delete the group record itself
     await this.courseGroupsRepo.delete({ courseName, groupName });
+    await this.invalidateCourseContent(courseName, groupName);
 
     return { success: true };
   }
@@ -582,7 +596,9 @@ export class AssignmentsService {
       unlockPercent: dto.unlockPercent ?? null,
       teacherId: workOwnerId(scope, teacher),
     });
-    return this.assignmentsRepo.save(assignment);
+    const saved = await this.assignmentsRepo.save(assignment);
+    await this.invalidateCourseContent(courseName, groupName);
+    return saved;
   }
 
   // ─── GET assignments for a group ──────────────────────────────────────────
@@ -670,12 +686,16 @@ export class AssignmentsService {
     });
     if (existing) {
       await this.submissionsRepo.update(existing.id, dto);
-      return this.submissionsRepo.findOne({ where: { id: existing.id } });
+      const updated = await this.submissionsRepo.findOne({ where: { id: existing.id } });
+      await this.invalidateStudentCourse(assignment.courseName, assignment.groupName, student.id);
+      return updated;
     }
 
-    return this.submissionsRepo.save(
+    const saved = await this.submissionsRepo.save(
       this.submissionsRepo.create({ assignmentId, studentId: student.id, ...dto }),
     );
+    await this.invalidateStudentCourse(assignment.courseName, assignment.groupName, student.id);
+    return saved;
   }
 
   // ─── STUDENT: submit quiz (with auto-grading) ────────────────────────────
@@ -735,6 +755,7 @@ export class AssignmentsService {
     const saved = await this.submissionsRepo.save(
       this.submissionsRepo.create({ assignmentId, studentId: student.id, content, grade }),
     );
+    await this.invalidateStudentCourse(assignment.courseName, assignment.groupName, student.id);
 
     return {
       ...saved,
@@ -746,7 +767,11 @@ export class AssignmentsService {
   async gradeSubmission(submissionId: string, grade: number, feedback?: string) {
     const submission = await this.submissionsRepo.findOne({ where: { id: submissionId } });
     if (!submission) throw new NotFoundException('Submission not found');
+    const assignment = await this.assignmentsRepo.findOne({ where: { id: submission.assignmentId } });
     await this.submissionsRepo.update(submissionId, { grade, feedback });
+    if (assignment) {
+      await this.invalidateStudentCourse(assignment.courseName, assignment.groupName, submission.studentId);
+    }
     return this.submissionsRepo.findOne({ where: { id: submissionId } });
   }
 
@@ -943,18 +968,34 @@ export class AssignmentsService {
 
   // ─── STUDENT: get their assignments for a course/group ────────────────────
   async getStudentAssignments(studentId: string, courseName: string, groupName: string) {
-    const allAssignments = await this.getAssignments(courseName, groupName);
-    const assignments = allAssignments.filter(a => a.isPublished); // Only show published to students
+    return this.cache.remember(
+      studentCourseCacheKey('assignments', courseName, groupName, studentId),
+      15,
+      [
+        courseContentVersionKey(courseName, groupName),
+        studentCourseVersionKey(courseName, groupName, studentId),
+      ],
+      async () => {
+        const allAssignments = await this.getAssignments(courseName, groupName);
+        const assignments = allAssignments.filter(a => a.isPublished);
 
-    const submissions = await this.submissionsRepo.find({
-      where: { studentId },
-    });
-    const subMap = new Map(submissions.map((s) => [s.assignmentId, s]));
-    return Promise.all(assignments.map(async (a) => {
-      const submission = subMap.get(a.id) || null;
-      const unlock = await this.getUnlockState(a.unlockRule, a.unlockAssignmentId, a.unlockScore, a.unlockVideoId, a.unlockPercent, studentId, subMap);
-      return { ...a, submission, ...unlock };
-    }));
+        const submissions = await this.submissionsRepo.find({ where: { studentId } });
+        const subMap = new Map(submissions.map((submission) => [submission.assignmentId, submission]));
+        return Promise.all(assignments.map(async assignment => {
+          const submission = subMap.get(assignment.id) || null;
+          const unlock = await this.getUnlockState(
+            assignment.unlockRule,
+            assignment.unlockAssignmentId,
+            assignment.unlockScore,
+            assignment.unlockVideoId,
+            assignment.unlockPercent,
+            studentId,
+            subMap,
+          );
+          return { ...assignment, submission, ...unlock };
+        }));
+      },
+    );
   }
 
   async assertAssignmentUnlocked(assignmentId: string, studentId: string) {
@@ -1036,6 +1077,7 @@ export class AssignmentsService {
     }
 
     await this.assignmentsRepo.update(id, { isPublished: true });
+    await this.invalidateCourseContent(a.courseName, a.groupName);
     return { message: 'Published successfully' };
   }
 
@@ -1046,6 +1088,7 @@ export class AssignmentsService {
     const scope = await this.staffScope(actor);
     if (!canManageOwnedWork(scope, actor, a.teacherId)) throw new ForbiddenException();
     await this.assignmentsRepo.delete(id);
+    await this.invalidateCourseContent(a.courseName, a.groupName);
     return { message: 'Deleted' };
   }
 
@@ -1071,7 +1114,9 @@ export class AssignmentsService {
     if (dto.attachments !== undefined) a.attachments = dto.attachments;
     if (dto.isPublished !== undefined) a.isPublished = Boolean(dto.isPublished);
 
-    return this.assignmentsRepo.save(a);
+    const saved = await this.assignmentsRepo.save(a);
+    await this.invalidateCourseContent(a.courseName, a.groupName);
+    return saved;
   }
 
   // ══════════════════════════════════════════════════════════════════════════

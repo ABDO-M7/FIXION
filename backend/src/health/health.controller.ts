@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../modules/auth/guards/auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../modules/users/entities/user.entity';
+import { RedisCacheService } from '../common/cache/redis-cache.service';
 
 @Controller('health')
 export class HealthController {
@@ -17,6 +18,7 @@ export class HealthController {
     private dataSource: DataSource,
     private configService: ConfigService,
     private notificationsGateway: NotificationsGateway,
+    private cacheService: RedisCacheService,
   ) {
     const accountId = configService.get<string>('r2.accountId') ?? '';
     const accessKeyId = configService.get<string>('r2.accessKeyId') ?? '';
@@ -188,6 +190,17 @@ export class HealthController {
       configured: !!(googleId && googleSecret),
       callbackUrl: this.configService.get<string>('google.callbackUrl') || 'Not set',
     };
+
+    const cacheStatus = this.cacheService.getStatus();
+    checks.cache = {
+      status: cacheStatus,
+      provider: 'Redis',
+      configured: cacheStatus !== 'disabled',
+      requiredForReadiness: false,
+    };
+    if (cacheStatus === 'unavailable') {
+      overallStatus = overallStatus === 'unhealthy' ? 'unhealthy' : 'degraded';
+    }
 
     // ── 5. WebSocket ────────────────────────────
     try {

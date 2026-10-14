@@ -13,6 +13,8 @@ import { CourseGroup } from '../assignments/entities/course-group.entity';
 import { AssignmentSubmission } from '../assignments/entities/assignment-submission.entity';
 import { UnlockRuleType } from '../learning/unlock-rule';
 import { VideoProgress } from './entities/video-progress.entity';
+import { RedisCacheService } from '../../common/cache/redis-cache.service';
+import { courseContentVersionKey, studentCourseCacheKey, studentCourseVersionKey } from '../../common/cache/course-cache-keys';
 
 type CreateVideoDto = {
   courseName: string;
@@ -66,6 +68,7 @@ export class VideosService {
     @InjectRepository(CourseGroup) private readonly courseGroupsRepo: Repository<CourseGroup>,
     @InjectRepository(AssignmentSubmission) private readonly submissionsRepo: Repository<AssignmentSubmission>,
     @InjectRepository(VideoProgress) private readonly progressRepo: Repository<VideoProgress>,
+    private readonly cache: RedisCacheService,
   ) {}
 
   async create(dto: CreateVideoDto, teacher: User) {
@@ -88,7 +91,7 @@ export class VideosService {
     } else {
       source = this.parseVideoSource(dto.sourceUrl || dto.videoUrl || dto.youtubeUrl, dto.provider);
     }
-    return this.videosRepo.save(this.videosRepo.create({
+    const video = await this.videosRepo.save(this.videosRepo.create({
       courseName,
       groupName: dto.groupName.trim(),
       title,
@@ -107,6 +110,8 @@ export class VideosService {
       attachments: Array.isArray(dto.attachments) ? dto.attachments : [],
       teacherId: workOwnerId(scope, teacher),
     }));
+    await this.cache.bumpVersion(courseContentVersionKey(courseName, dto.groupName.trim()));
+    return video;
   }
 
   async listForTeacher(courseName: string, groupName: string, actor: User) {
@@ -138,22 +143,44 @@ export class VideosService {
   async listForStudent(courseName: string, groupName: string, studentId: string) {
     const enrollment = await this.enrollmentsRepo.findOne({ where: { courseName, groupName, studentId } });
     if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
-    const videos = await this.videosRepo.find({ where: { courseName, groupName }, order: { createdAt: 'DESC' } });
-    return Promise.all(videos.map(async video => {
-      const checkpoints = await this.checkpointsRepo.find({ where: { videoId: video.id }, order: { orderIndex: 'ASC', timestampSeconds: 'ASC' } });
-      const responses = checkpoints.length ? await this.responsesRepo.find({ where: { videoId: video.id, studentId } }) : [];
-      const progress = await this.progressRepo.findOne({ where: { videoId: video.id, studentId } });
-      const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, video.unlockVideoId, video.unlockPercent, studentId);
-      return {
-        ...this.publicVideo(video),
-        watchedPercent: progress?.watchedPercent || 0,
-        opened: progress?.opened || false,
-        openedAttachments: progress?.openedAttachments || [],
-        ...unlock,
-        checkpointCount: checkpoints.length,
-        completedCheckpointCount: responses.filter(response => response.isCorrect).length,
-      };
-    }));
+    return this.cache.remember(
+      studentCourseCacheKey('videos', courseName, groupName, studentId),
+      20,
+      [
+        courseContentVersionKey(courseName, groupName),
+        studentCourseVersionKey(courseName, groupName, studentId),
+      ],
+      async () => {
+        const videos = await this.videosRepo.find({ where: { courseName, groupName }, order: { createdAt: 'DESC' } });
+        return Promise.all(videos.map(async video => {
+          const checkpoints = await this.checkpointsRepo.find({
+            where: { videoId: video.id },
+            order: { orderIndex: 'ASC', timestampSeconds: 'ASC' },
+          });
+          const responses = checkpoints.length
+            ? await this.responsesRepo.find({ where: { videoId: video.id, studentId } })
+            : [];
+          const progress = await this.progressRepo.findOne({ where: { videoId: video.id, studentId } });
+          const unlock = await this.getUnlockState(
+            video.unlockRule,
+            video.unlockAssignmentId,
+            video.unlockScore,
+            video.unlockVideoId,
+            video.unlockPercent,
+            studentId,
+          );
+          return {
+            ...this.publicVideo(video),
+            watchedPercent: progress?.watchedPercent || 0,
+            opened: progress?.opened || false,
+            openedAttachments: progress?.openedAttachments || [],
+            ...unlock,
+            checkpointCount: checkpoints.length,
+            completedCheckpointCount: responses.filter(response => response.isCorrect).length,
+          };
+        }));
+      },
+    );
   }
 
   async getTeacherCheckpoints(videoId: string, actor: User) {
@@ -168,23 +195,28 @@ export class VideosService {
     const video = await this.getOwnedVideo(videoId, actor);
     const input = this.validateCheckpoint(dto);
     const orderIndex = dto.orderIndex ?? await this.checkpointsRepo.count({ where: { videoId } });
-    return this.checkpointsRepo.save(this.checkpointsRepo.create({ videoId: video.id, ...input, orderIndex }));
+    const checkpoint = await this.checkpointsRepo.save(this.checkpointsRepo.create({ videoId: video.id, ...input, orderIndex }));
+    await this.cache.bumpVersion(courseContentVersionKey(video.courseName, video.groupName));
+    return checkpoint;
   }
 
   async updateCheckpoint(videoId: string, checkpointId: string, dto: CheckpointDto, actor: User) {
-    await this.getOwnedVideo(videoId, actor);
+    const video = await this.getOwnedVideo(videoId, actor);
     const checkpoint = await this.checkpointsRepo.findOne({ where: { id: checkpointId, videoId } });
     if (!checkpoint) throw new NotFoundException('Checkpoint not found');
     Object.assign(checkpoint, this.validateCheckpoint(dto, checkpoint));
     if (dto.orderIndex !== undefined) checkpoint.orderIndex = dto.orderIndex;
-    return this.checkpointsRepo.save(checkpoint);
+    const saved = await this.checkpointsRepo.save(checkpoint);
+    await this.cache.bumpVersion(courseContentVersionKey(video.courseName, video.groupName));
+    return saved;
   }
 
   async removeCheckpoint(videoId: string, checkpointId: string, actor: User) {
-    await this.getOwnedVideo(videoId, actor);
+    const video = await this.getOwnedVideo(videoId, actor);
     const checkpoint = await this.checkpointsRepo.findOne({ where: { id: checkpointId, videoId } });
     if (!checkpoint) throw new NotFoundException('Checkpoint not found');
     await this.checkpointsRepo.delete(checkpoint.id);
+    await this.cache.bumpVersion(courseContentVersionKey(video.courseName, video.groupName));
     return { message: 'Checkpoint deleted' };
   }
 
@@ -266,7 +298,9 @@ export class VideosService {
     progress.durationSeconds = Math.max(progress.durationSeconds, durationSeconds);
     progress.watchedPercent = Math.min(100, Math.floor((actuallyWatchedSeconds / progress.durationSeconds) * 100));
     progress.lastPositionSeconds = position;
-    return this.progressRepo.save(progress);
+    const saved = await this.progressRepo.save(progress);
+    await this.cache.bumpVersion(studentCourseVersionKey(video.courseName, video.groupName, studentId));
+    return saved;
   }
 
   async markDocumentOpened(videoId: string, studentId: string, attachmentIndex?: number) {
@@ -285,7 +319,9 @@ export class VideosService {
     } else {
       throw new BadRequestException('Select a course file to record it as opened');
     }
-    return this.progressRepo.save(progress);
+    const saved = await this.progressRepo.save(progress);
+    await this.cache.bumpVersion(studentCourseVersionKey(video.courseName, video.groupName, studentId));
+    return saved;
   }
 
   async answerCheckpoint(videoId: string, checkpointId: string, student: User, dto: AnswerDto) {
@@ -321,6 +357,7 @@ export class VideosService {
     response.attempts = attempts;
     response.isCorrect = isCorrect;
     await this.responsesRepo.save(response);
+    await this.cache.bumpVersion(studentCourseVersionKey(video.courseName, video.groupName, student.id));
 
     if (!isCorrect) {
       return {
@@ -375,7 +412,9 @@ export class VideosService {
         video.youtubeVideoId = source.provider === 'youtube' ? source.providerVideoId : null;
       }
     }
-    return this.videosRepo.save(video);
+    const saved = await this.videosRepo.save(video);
+    await this.cache.bumpVersion(courseContentVersionKey(video.courseName, video.groupName));
+    return saved;
   }
 
   async remove(id: string, actor: User) {
@@ -386,6 +425,7 @@ export class VideosService {
       throw new ForbiddenException('You can only delete your own videos');
     }
     await this.videosRepo.delete(id);
+    await this.cache.bumpVersion(courseContentVersionKey(video.courseName, video.groupName));
     return { message: 'Video deleted' };
   }
 

@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
+import { CacheModule } from './common/cache/cache.module';
 
 import {
   databaseConfig,
@@ -106,6 +107,7 @@ import { VideoProgress } from './modules/videos/entities/video-progress.entity';
       { name: 'auth', ttl: 60000, limit: 10 },
     ]),
     SentryModule.forRoot(),
+    CacheModule,
 
     // Feature modules
     AuthModule,
