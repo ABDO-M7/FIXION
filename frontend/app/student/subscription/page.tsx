@@ -211,7 +211,7 @@ export default function SubscriptionPage() {
                       {/* Go to course */}
                       {!isExpired && (
                         <Link
-                          href={`/student/courses/${encodeURIComponent(enrollment.courseName)}`}
+                          href={`/student/courses/${encodeURIComponent(enrollment.id)}`}
                           className="btn btn-secondary btn-sm"
                           style={{ flexShrink: 0, alignSelf: 'center' }}
                         >
