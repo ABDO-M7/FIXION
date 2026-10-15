@@ -117,31 +117,49 @@ describe('AssignmentsService staff access', () => {
       find: jest.fn().mockResolvedValue([{ groupName: 'Group C' }]),
     };
     const videos = {
-      find: jest.fn().mockResolvedValue([{ groupName: 'Group D' }]),
+      find: jest.fn().mockResolvedValue([{ groupName: 'Group D', teacher: { name: 'Teacher One' } }]),
     };
     const users = { findOne: jest.fn().mockResolvedValue({ id: 'teacher-1', name: 'Teacher One', role: UserRole.TEACHER }) };
     const service = createService({ assignments, submissions: {}, groups, enrollments, users, videos });
 
     await expect(service.getAdminTeacherGroups('Physics', 'teacher-1'))
       .resolves.toEqual(['Group A', 'Group B', 'Group C', 'Group D']);
-    expect(videos.find).toHaveBeenCalledWith({ where: { courseName: 'Physics', teacherId: 'teacher-1' } });
+    expect(videos.find).toHaveBeenCalledWith({
+      where: [
+        { courseName: 'Physics', teacherId: 'teacher-1' },
+        { courseName: 'Physics', teacher: { name: 'Teacher One' } },
+      ],
+      relations: ['teacher'],
+    });
   });
 
-  it('builds the selected teacher and group outline from both videos and assignments', async () => {
+  it('includes legacy content linked to the selected teacher by name when its teacher ID differs', async () => {
     const assignments = {
       find: jest.fn().mockResolvedValue([
-        { chapterName: 'Chapter 1', lessonName: 'Lesson B' },
-        { chapterName: 'Chapter 1', lessonName: 'Lesson A' },
+        {
+          teacherId: 'legacy-teacher-id',
+          teacher: { name: 'Teacher One' },
+          chapterName: 'Chapter 1',
+          lessonName: 'Lesson B',
+        },
+        {
+          teacherId: 'teacher-1',
+          teacher: { name: 'Teacher One' },
+          chapterName: 'Chapter 1',
+          lessonName: 'Lesson A',
+        },
       ]),
     };
     const videos = {
       find: jest.fn().mockResolvedValue([
-        { chapterName: 'Chapter 1', lessonName: 'Lesson A' },
-        { chapterName: 'Chapter 2', lessonName: null },
-        { chapterName: null, lessonName: 'Unassigned lesson' },
+        { teacher: { name: 'Teacher One' }, chapterName: 'Chapter 1', lessonName: 'Lesson A' },
+        { teacher: { name: 'Teacher One' }, chapterName: 'Chapter 2', lessonName: null },
+        { teacher: { name: 'Teacher One' }, chapterName: null, lessonName: 'Unassigned lesson' },
       ]),
     };
-    const users = { findOne: jest.fn().mockResolvedValue({ id: 'teacher-1', role: UserRole.TEACHER }) };
+    const users = {
+      findOne: jest.fn().mockResolvedValue({ id: 'teacher-1', name: 'Teacher One', role: UserRole.TEACHER }),
+    };
     const service = createService({ assignments, submissions: {}, users, videos });
 
     await expect(service.getAdminTeacherCourseOutline('Physics', 'Group A', 'teacher-1'))
@@ -150,7 +168,11 @@ describe('AssignmentsService staff access', () => {
         { name: 'Chapter 2', lessons: [] },
       ]);
     expect(assignments.find).toHaveBeenCalledWith({
-      where: { courseName: 'Physics', groupName: 'Group A', teacherId: 'teacher-1' },
+      where: [
+        { courseName: 'Physics', groupName: 'Group A', teacherId: 'teacher-1' },
+        { courseName: 'Physics', groupName: 'Group A', teacher: { name: 'Teacher One' } },
+      ],
+      relations: ['teacher'],
     });
   });
 });

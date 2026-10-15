@@ -537,8 +537,20 @@ export class AssignmentsService {
     const [savedGroups, courseEnrollments, assignments, videos] = await Promise.all([
       this.courseGroupsRepo.find({ where: { courseName }, relations: ['teacher'] }),
       this.enrollmentsRepo.find({ where: { courseName }, relations: ['teacher'] }),
-      this.assignmentsRepo.find({ where: { courseName, teacherId } }),
-      this.videosRepo.find({ where: { courseName, teacherId } }),
+      this.assignmentsRepo.find({
+        where: [
+          { courseName, teacherId },
+          { courseName, teacher: { name: teacher.name } },
+        ],
+        relations: ['teacher'],
+      }),
+      this.videosRepo.find({
+        where: [
+          { courseName, teacherId },
+          { courseName, teacher: { name: teacher.name } },
+        ],
+        relations: ['teacher'],
+      }),
     ]);
     const teacherGroups = savedGroups
       .filter(group => group.teacherId === teacher.id || group.teacherName?.trim() === teacher.name.trim() || group.teacher?.name?.trim() === teacher.name.trim())
@@ -562,8 +574,20 @@ export class AssignmentsService {
     if (!teacher) throw new NotFoundException('Teacher not found');
 
     const [assignments, videos] = await Promise.all([
-      this.assignmentsRepo.find({ where: { courseName, groupName, teacherId } }),
-      this.videosRepo.find({ where: { courseName, groupName, teacherId } }),
+      this.assignmentsRepo.find({
+        where: [
+          { courseName, groupName, teacherId },
+          { courseName, groupName, teacher: { name: teacher.name } },
+        ],
+        relations: ['teacher'],
+      }),
+      this.videosRepo.find({
+        where: [
+          { courseName, groupName, teacherId },
+          { courseName, groupName, teacher: { name: teacher.name } },
+        ],
+        relations: ['teacher'],
+      }),
     ]);
 
     const chapters = new Map<string, Set<string>>();
