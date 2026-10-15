@@ -1,333 +1,393 @@
 'use client';
-import { useEffect, useState } from 'react';
-import AppShell from '@/components/AppShell';
-import { HelpCircle, CheckCircle, Clock, X, Send, BookOpen, Paperclip, Search } from 'lucide-react';
-import { questionsApi, answersApi, categoriesApi, uploadsApi } from '@/lib/api';
-import { formatDistanceToNow } from 'date-fns';
-import toast from 'react-hot-toast';
-import { useAuthStore } from '@/store';
 
-const STATUS_FILTERS = ['all', 'pending', 'answered', 'closed'] as const;
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import AppShell from '@/components/AppShell';
+import { appointmentsApi, assignmentsApi, questionsApi } from '@/lib/api';
+import { useAuthStore } from '@/store';
+import {
+  ArrowUpRight,
+  BookOpen,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  GraduationCap,
+  HelpCircle,
+  Layers3,
+  MessageSquareText,
+  Users,
+} from 'lucide-react';
+
+type CourseGroup = {
+  courseName: string;
+  groupName: string;
+  teacherName?: string | null;
+  studentCount: number;
+  schedule?: string | null;
+};
+
+type CourseOverview = {
+  name: string;
+  groups: CourseGroup[];
+};
+
+const COURSE_COLORS: Record<string, string> = {
+  فيزيا: '#45c7e8',
+  رياضه: '#35c99a',
+  احصاء: '#f4b942',
+  عربي: '#fb7185',
+  برمجه: '#a78bfa',
+};
 
 export default function TeacherDashboard() {
   const { user } = useAuthStore();
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState('pending');
-  const [search, setSearch] = useState('');
-  const [selectedQ, setSelectedQ] = useState<any>(null);
-  const [answerText, setAnswerText] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [assigningCategory, setAssigningCategory] = useState(false);
-  const [categoryForm, setCategoryForm] = useState({ subject: '', bookName: '', chapter: '', lesson: '', questionNumber: '' });
+  const isTeamMember = user?.role === 'team_member';
+  const [courses, setCourses] = useState<CourseOverview[]>([]);
+  const [pendingQuestions, setPendingQuestions] = useState<number | null>(null);
+  const [pendingAppointments, setPendingAppointments] = useState<number | null>(null);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+  const [courseError, setCourseError] = useState('');
+  const [activityErrors, setActivityErrors] = useState<string[]>([]);
 
-  const fetchQuestions = async () => {
-    setLoading(true);
-    try {
-      const params: any = { page, limit: 15 };
-      if (status !== 'all') params.status = status;
-      if (search) params.search = search;
-      const res = await questionsApi.all(params);
-      setQuestions(res.data.data || []);
-      setTotal(res.data.total || 0);
-    } catch {} finally { setLoading(false); }
-  };
+  useEffect(() => {
+    let active = true;
 
-  useEffect(() => { fetchQuestions(); }, [status, page]);
-  useEffect(() => { const t = setTimeout(fetchQuestions, 500); return () => clearTimeout(t); }, [search]);
-  useEffect(() => { categoriesApi.list().then(r => setCategories(r.data || [])).catch(() => {}); }, []);
+    const loadCourses = async () => {
+      try {
+        const courseResult = await assignmentsApi.myCourses();
+        if (!active) return;
+        const courseNames: string[] = Array.isArray(courseResult.data) ? courseResult.data : [];
+        const groupResults = await Promise.allSettled(
+          courseNames.map(name => assignmentsApi.groupsDetailed(name)),
+        );
+        if (!active) return;
 
-  const submitAnswer = async () => {
-    if (!answerText.trim() || !selectedQ) return;
-    setSubmitting(true);
-    try {
-      await answersApi.create(selectedQ.id, { content: answerText, attachments: uploadedImages });
-      toast.success('Answer submitted!');
-      setAnswerText('');
-      setUploadedImages([]);
-      setSelectedQ(null);
-      fetchQuestions();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to submit answer');
-    } finally { setSubmitting(false); }
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const res = await uploadsApi.upload(file);
-      setUploadedImages(prev => [...prev, res.data.url]);
-      toast.success('Image attached!');
-    } catch {
-      toast.error('Failed to upload image');
-    } finally {
-      setUploading(false);
-      e.target.value = '';
-    }
-  };
-
-  const createAndAssignCategory = async () => {
-    if (!selectedQ) return;
-    setAssigningCategory(true);
-    try {
-      // Check if category already exists
-      const existing = categories.find(c =>
-        c.subject === categoryForm.subject && c.bookName === categoryForm.bookName &&
-        c.chapter === categoryForm.chapter && c.lesson === categoryForm.lesson
-      );
-      let cat = existing;
-      if (!cat) {
-        const res = await categoriesApi.create({ ...categoryForm, questionNumber: categoryForm.questionNumber ? +categoryForm.questionNumber : undefined });
-        cat = res.data;
-        setCategories(prev => [...prev, cat]);
+        const loadedCourses = courseNames.map((name, index) => ({
+          name,
+          groups: groupResults[index].status === 'fulfilled'
+            ? (Array.isArray(groupResults[index].value.data) ? groupResults[index].value.data : [])
+            : [],
+        }));
+        setCourses(loadedCourses);
+        if (groupResults.some(result => result.status === 'rejected')) {
+          setCourseError('Some group details could not be loaded. Open the course to try again.');
+        } else {
+          setCourseError('');
+        }
+      } catch {
+        if (!active) return;
+        setCourseError('Could not load your courses. Please refresh to try again.');
+        setCourses([]);
+      } finally {
+        if (active) setLoadingCourses(false);
       }
-      await questionsApi.assignCategory(selectedQ.id, cat.id);
-      toast.success('Category assigned!');
-      setSelectedQ((prev: any) => prev ? { ...prev, category: cat } : null);
-    } catch (err: any) {
-      toast.error('Failed to assign category');
-    } finally { setAssigningCategory(false); }
-  };
+    };
 
-  const stats = { total, pending: questions.filter(q => q.status === 'pending').length, answered: questions.filter(q => q.status === 'answered').length };
+    const loadQuestions = async () => {
+      try {
+        const result = await questionsApi.all({ page: 1, limit: 1, status: 'pending' });
+        if (active) setPendingQuestions(Number(result.data?.total ?? 0));
+      } catch {
+        if (!active) return;
+        setPendingQuestions(null);
+        setActivityErrors(current => [...current, 'Question activity is temporarily unavailable.']);
+      }
+    };
+
+    const loadAppointments = async () => {
+      if (isTeamMember) {
+        setPendingAppointments(null);
+        return;
+      }
+      try {
+        const result = await appointmentsApi.teacherList();
+        if (!active) return;
+        const appointments = Array.isArray(result.data) ? result.data : [];
+        setPendingAppointments(appointments.filter((item: { status?: string }) => item.status === 'PENDING').length);
+      } catch {
+        if (!active) return;
+        setPendingAppointments(null);
+        setActivityErrors(current => [...current, 'Appointment activity is temporarily unavailable.']);
+      }
+    };
+
+    setActivityErrors([]);
+    void loadCourses();
+    void loadQuestions();
+    void loadAppointments();
+
+    return () => {
+      active = false;
+    };
+  }, [isTeamMember]);
+
+  const groups = useMemo(() => courses.flatMap(course => course.groups), [courses]);
+  const studentCount = useMemo(
+    () => groups.reduce((total, group) => total + (Number(group.studentCount) || 0), 0),
+    [groups],
+  );
 
   return (
     <AppShell>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Team Member Panel</h1>
-          <p className="page-subtitle">Welcome, {user?.name} — answer student questions</p>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid-3" style={{ marginBottom: 24 }}>
-        <div className="stat-card blue">
-          <div className="stat-icon" style={{ background: 'rgba(99,102,241,0.15)' }}><HelpCircle size={20} style={{ color: 'var(--primary-light)' }} /></div>
-          <div className="stat-value">{total}</div>
-          <div className="stat-label">Total Questions</div>
-        </div>
-        <div className="stat-card purple">
-          <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.15)' }}><Clock size={20} style={{ color: 'var(--warning)' }} /></div>
-          <div className="stat-value">{stats.pending}</div>
-          <div className="stat-label">Pending (this page)</div>
-        </div>
-        <div className="stat-card green">
-          <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.15)' }}><CheckCircle size={20} style={{ color: 'var(--success)' }} /></div>
-          <div className="stat-value">{stats.answered}</div>
-          <div className="stat-label">Answered (this page)</div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: selectedQ ? '1fr 1fr' : '1fr', gap: 20 }}>
-        {/* Questions list */}
-        <div>
-          <div className="filter-bar" style={{ marginBottom: 16 }}>
-            <div className="search-input-wrapper" style={{ flex: 1 }}>
-              <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search questions..." />
+      <main style={{ maxWidth: 1360, margin: '0 auto', paddingBottom: 48 }}>
+        <section
+          aria-labelledby="teacher-dashboard-title"
+          style={{
+            position: 'relative',
+            overflow: 'hidden',
+            padding: 'clamp(24px, 4vw, 42px)',
+            marginBottom: 24,
+            borderRadius: 22,
+            border: '1px solid rgba(91, 194, 226, .18)',
+            background: 'radial-gradient(ellipse at 90% 0%, rgba(42, 173, 207, .16), transparent 42%), linear-gradient(135deg, rgba(13, 37, 54, .98), rgba(7, 20, 33, .98))',
+          }}
+        >
+          <div style={{ position: 'relative', zIndex: 1, maxWidth: 760 }}>
+            <div style={{ color: '#68d4e9', fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 12 }}>
+              FIXION · TEACHING WORKSPACE
             </div>
-            <div className="tabs" style={{ flex: 'none' }}>
-              {STATUS_FILTERS.map(s => (
-                <button key={s} className={`tab-btn ${status === s ? 'active' : ''}`}
-                  onClick={() => { setStatus(s); setPage(1); }} style={{ textTransform: 'capitalize', flex: 'none', padding: '6px 12px', fontSize: 12 }}>
-                  {s}
-                </button>
-              ))}
+            <h1 id="teacher-dashboard-title" style={{ margin: 0, color: '#f2f8fb', fontSize: 'clamp(28px, 4vw, 42px)', lineHeight: 1.12, letterSpacing: '-.04em' }}>
+              Welcome back, {user?.name || 'Teacher'}
+            </h1>
+            <p style={{ maxWidth: 620, color: '#9ab1bf', lineHeight: 1.7, margin: '14px 0 22px', fontSize: 14 }}>
+              Manage your courses, support your students, review their progress, and keep teaching moving from one place.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              <Link href="/teacher/courses" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <BookOpen size={16} aria-hidden="true" /> Explore my courses <ArrowUpRight size={15} aria-hidden="true" />
+              </Link>
+              {!isTeamMember && (
+                <Link href="/teacher/appointments" className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <CalendarDays size={16} aria-hidden="true" /> Manage appointments
+                </Link>
+              )}
             </div>
           </div>
+          <div aria-hidden="true" style={{ position: 'absolute', insetInlineEnd: 38, top: '50%', transform: 'translateY(-50%)', width: 180, height: 180, borderRadius: '50%', border: '1px solid rgba(104, 212, 233, .13)', display: 'grid', placeItems: 'center', color: 'rgba(104, 212, 233, .5)' }}>
+            <div style={{ width: 128, height: 128, borderRadius: '50%', border: '1px solid rgba(104, 212, 233, .17)', display: 'grid', placeItems: 'center' }}>
+              <GraduationCap size={58} strokeWidth={1.2} />
+            </div>
+          </div>
+        </section>
 
-          {loading ? (
-            <div className="page-loader"><span className="spinner" /></div>
-          ) : questions.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">✅</div>
-              <div className="empty-state-title">No questions here</div>
-              <div className="empty-state-text">All caught up! Try a different filter.</div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {questions.map(q => (
-                <div
-                  key={q.id}
-                  onClick={() => { 
-                    setSelectedQ(q); 
-                    setAnswerText(''); 
-                    setCategoryForm({ 
-                      subject: q.category?.subject || q.courseName || '', 
-                      bookName: q.category?.bookName || q.bookName || '', 
-                      chapter: q.category?.chapter || q.chapter || '', 
-                      lesson: q.category?.lesson || q.lesson || '', 
-                      questionNumber: q.category?.questionNumber || q.questionNumber || '' 
-                    }); 
-                  }}
-                  className={`question-card ${q.status}`}
-                  style={{ borderColor: selectedQ?.id === q.id ? 'var(--primary)' : undefined, boxShadow: selectedQ?.id === q.id ? 'var(--shadow-glow)' : undefined }}
-                >
-                  <div className="question-meta" style={{ flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                    {q.status === 'pending' ? <span className="badge badge-pending">⏳ Pending</span> : <span className="badge badge-answered">✓ Answered</span>}
-                    
-                    {/* If assigned to a category, show that. Otherwise show the raw student submission */}
-                    {q.category ? (
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>📚 {q.category.subject} {q.category.questionNumber ? `(Q.${q.category.questionNumber})` : ''}</span>
-                    ) : (
-                      <>
-                        {q.courseName && <span style={{ fontSize: 11, color: 'var(--primary-light)', fontWeight: 600 }}>📘 {q.courseName}</span>}
-                        {q.questionNumber && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Q.{q.questionNumber}</span>}
-                      </>
-                    )}
-                    
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                      {formatDistanceToNow(new Date(q.createdAt), { addSuffix: true })}
-                    </span>
-                  </div>
-                  <p className="question-excerpt" style={{ fontSize: 13 }}>
-                    {q.content.length > 100 ? q.content.slice(0, 100) + '…' : q.content}
-                  </p>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    👤 {q.student?.name || 'Student'}
-                  </div>
-                </div>
-              ))}
-            </div>
+        <section
+          aria-label="Teaching overview"
+          className="grid-4"
+          style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${isTeamMember ? 220 : 200}px, 1fr))`, marginBottom: 30 }}
+        >
+          <OverviewCard
+            icon={<BookOpen size={19} />}
+            label="My courses"
+            value={loadingCourses ? '—' : courses.length}
+            detail="Subjects in your workspace"
+            accent="#47c8e7"
+          />
+          <OverviewCard
+            icon={<Layers3 size={19} />}
+            label="Teaching groups"
+            value={loadingCourses ? '—' : groups.length}
+            detail="Groups you can access"
+            accent="#a78bfa"
+          />
+          <OverviewCard
+            icon={<Users size={19} />}
+            label="Enrolled students"
+            value={loadingCourses ? '—' : studentCount}
+            detail="Across your assigned groups"
+            accent="#36c99a"
+          />
+          {!isTeamMember && (
+            <OverviewCard
+              icon={<CalendarDays size={19} />}
+              label="Appointment requests"
+              value={pendingAppointments === null ? '—' : pendingAppointments}
+              detail="Waiting for your response"
+              accent="#f4b942"
+            />
           )}
+        </section>
 
-          {total > 15 && (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="btn btn-secondary btn-sm">← Prev</button>
-              <span style={{ padding: '6px 12px', fontSize: 12, color: 'var(--text-muted)' }}>{page} / {Math.ceil(total / 15)}</span>
-              <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 15)} className="btn btn-secondary btn-sm">Next →</button>
-            </div>
-          )}
-        </div>
-
-        {/* Answer Panel */}
-        {selectedQ && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="card" style={{ flex: 'none' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-                <h3 style={{ fontWeight: 700, fontSize: 14 }}>Question</h3>
-                <button onClick={() => setSelectedQ(null)} className="icon-btn" style={{ width: 28, height: 28 }}><X size={14} /></button>
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 460px), 1fr))', gap: 18, marginBottom: 32 }}>
+          <div className="card" style={{ padding: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 17, color: 'var(--text-primary)' }}>Your teaching groups</h2>
+                <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: 12 }}>Open a group to manage lessons, videos, homework, quizzes, and student progress.</p>
               </div>
-
-              {/* Student-submitted course details */}
-              {(selectedQ.courseName || selectedQ.bookName || selectedQ.chapter || selectedQ.lesson || selectedQ.questionNumber) && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                  {selectedQ.courseName && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary-light)' }}>📘 {selectedQ.courseName}</span>}
-                  {selectedQ.bookName && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>📖 {selectedQ.bookName}</span>}
-                  {selectedQ.chapter && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Ch. {selectedQ.chapter}</span>}
-                  {selectedQ.lesson && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Lesson {selectedQ.lesson}</span>}
-                  {selectedQ.questionNumber && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Q. {selectedQ.questionNumber}</span>}
-                </div>
-              )}
-
-              <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', marginBottom: 12 }}>{selectedQ.content}</p>
-              
-              {/* Student Attachments */}
-              {selectedQ.attachments && selectedQ.attachments.length > 0 && (
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-                  {selectedQ.attachments.map((url: string, i: number) => (
-                    <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: 'block', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                      <img src={url} alt={`attachment-${i}`} style={{ height: 120, objectFit: 'cover' }} />
-                    </a>
-                  ))}
-                </div>
-              )}
-
-              {/* Category Assignment */}
-              <div style={{ padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', marginTop: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                  <BookOpen size={13} style={{ color: 'var(--primary-light)' }} />
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>Assign Category</span>
-                  {selectedQ.category && <span className="badge badge-answered" style={{ fontSize: 10, padding: '1px 6px' }}>Set</span>}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {['subject', 'bookName', 'chapter', 'lesson'].map(field => (
-                    <input
-                      key={field}
-                      value={(categoryForm as any)[field]}
-                      onChange={e => setCategoryForm(prev => ({ ...prev, [field]: e.target.value }))}
-                      className="form-input"
-                      placeholder={field.charAt(0).toUpperCase() + field.slice(1).replace('N', ' N')}
-                      style={{ fontSize: 12, padding: '7px 10px' }}
-                    />
-                  ))}
-                  <input
-                    value={categoryForm.questionNumber}
-                    onChange={e => setCategoryForm(prev => ({ ...prev, questionNumber: e.target.value }))}
-                    className="form-input"
-                    placeholder="Q. Number"
-                    type="number"
-                    style={{ fontSize: 12, padding: '7px 10px' }}
-                  />
-                  <button
-                    onClick={createAndAssignCategory}
-                    disabled={assigningCategory || !categoryForm.subject}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    {assigningCategory ? <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> : 'Save'}
-                  </button>
-                </div>
-              </div>
+              <BookOpen size={18} style={{ color: '#68d4e9', flexShrink: 0 }} aria-hidden="true" />
             </div>
+            {loadingCourses ? (
+              <div role="status" style={{ display: 'grid', placeItems: 'center', minHeight: 120 }}><span className="spinner" /></div>
+            ) : courseError && courses.length === 0 ? (
+              <div role="alert" style={{ color: 'var(--danger, #ef6a6a)', fontSize: 13 }}>{courseError}</div>
+            ) : groups.length === 0 ? (
+              <div style={{ padding: '22px 16px', borderRadius: 14, textAlign: 'center', background: 'rgba(255,255,255,.025)', border: '1px dashed var(--border)' }}>
+                <GraduationCap size={26} style={{ color: 'var(--text-muted)', marginBottom: 8 }} aria-hidden="true" />
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {isTeamMember ? 'No teaching groups are available for your assigned subjects yet.' : 'No teaching groups are assigned to your account yet.'}
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {courses.flatMap(course => course.groups.map(group => {
+                  const accent = COURSE_COLORS[course.name] || '#47c8e7';
+                  const href = `/teacher/courses/${encodeURIComponent(course.name)}/${encodeURIComponent(group.groupName)}`;
+                  return (
+                    <Link
+                      key={`${course.name}-${group.groupName}`}
+                      href={href}
+                      style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '14px 15px', borderRadius: 13, border: '1px solid var(--border)', background: 'rgba(255,255,255,.025)', textDecoration: 'none', color: 'inherit', transition: 'border-color .16s ease, background .16s ease' }}
+                    >
+                      <span style={{ width: 40, height: 40, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 12, color: accent, background: `${accent}18` }}>
+                        <GraduationCap size={19} aria-hidden="true" />
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <strong style={{ display: 'block', color: 'var(--text-primary)', fontSize: 13 }}>{course.name} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>·</span> {group.groupName}</strong>
+                        <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: 11, marginTop: 4 }}>
+                          {group.studentCount} students{group.schedule ? ` · ${group.schedule}` : ''}
+                        </span>
+                      </span>
+                      <ArrowUpRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} aria-hidden="true" />
+                    </Link>
+                  );
+                }))}
+              </div>
+            )}
+            {courseError && courses.length > 0 && <p role="status" style={{ margin: '12px 0 0', color: 'var(--warning, #f4b942)', fontSize: 12 }}>{courseError}</p>}
+            <Link href="/teacher/courses" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 14, paddingInlineStart: 0 }}>
+              Browse all courses <ArrowUpRight size={14} aria-hidden="true" />
+            </Link>
+          </div>
 
-            {/* Write Answer */}
-            <div className="card" style={{ flex: 1 }}>
-              <h3 style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>Your Answer</h3>
-              <textarea
-                value={answerText}
-                onChange={e => setAnswerText(e.target.value)}
-                className="form-input form-textarea"
-                placeholder="Write a clear, detailed answer. Use examples where helpful..."
-                style={{ minHeight: 180, marginBottom: 12 }}
+          <div className="card" style={{ padding: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 17, color: 'var(--text-primary)' }}>Student support & follow-up</h2>
+                <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: 12 }}>Keep up with questions and requests from your students.</p>
+              </div>
+              <MessageSquareText size={18} style={{ color: '#a78bfa', flexShrink: 0 }} aria-hidden="true" />
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {!isTeamMember && (
+                <ActivityLink
+                  href="/teacher/appointments"
+                  icon={<CalendarDays size={18} />}
+                  title="Appointment requests"
+                  description="Review meeting requests and respond to students."
+                  count={pendingAppointments}
+                  accent="#f4b942"
+                />
+              )}
+              <ActivityLink
+                href="/teacher/questions"
+                icon={<HelpCircle size={18} />}
+                title="Student questions"
+                description="Answer questions related to your assigned subjects."
+                count={pendingQuestions}
+                accent="#a78bfa"
               />
+              <ActivityLink
+                href="/teacher/courses"
+                icon={<ClipboardList size={18} />}
+                title="Assignments & quizzes"
+                description="Open a group to review submissions, grade work, or check progress."
+                count={null}
+                accent="#36c99a"
+              />
+            </div>
+            {activityErrors.map(error => (
+              <p key={error} role="status" style={{ margin: '12px 0 0', color: 'var(--warning, #f4b942)', fontSize: 12 }}>{error}</p>
+            ))}
+          </div>
+        </section>
 
-              {/* Uploaded image previews */}
-              {uploadedImages.length > 0 && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                  {uploadedImages.map((url, i) => (
-                    <div key={i} style={{ position: 'relative' }}>
-                      <img src={url} alt={`attachment-${i}`} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
-                      <button
-                        onClick={() => setUploadedImages(prev => prev.filter((_, idx) => idx !== i))}
-                        style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: 'var(--danger)', border: 'none', color: '#fff', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      ><X size={10} /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                {/* Image upload button */}
-                <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-elevated)', fontSize: 13, color: 'var(--text-secondary)', height: 40, flexShrink: 0 }}>
-                  {uploading
-                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
-                    : <><Paperclip size={14} /> Attach</>}
-                  <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} disabled={uploading} />
-                </label>
-
-                <button
-                  onClick={submitAnswer}
-                  disabled={submitting || !answerText.trim()}
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
-                >
-                  {submitting
-                    ? <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Submitting...</>
-                    : <><Send size={15} /> Submit Answer</>}
-                </button>
-              </div>
+        <section aria-labelledby="focus-heading">
+          <div className="page-header" style={{ marginBottom: 14 }}>
+            <div>
+              <h2 id="focus-heading" style={{ margin: 0, fontSize: 17, color: 'var(--text-primary)' }}>Your day at a glance</h2>
+              <p className="page-subtitle" style={{ marginTop: 5 }}>Questions are one part of the workspace—your courses and student follow-up are here too.</p>
+            </div>
+            <Link href="/teacher/questions" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+              <HelpCircle size={14} aria-hidden="true" /> Open question center
+            </Link>
+          </div>
+          <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 13, padding: 17 }}>
+            <span style={{ width: 38, height: 38, display: 'grid', placeItems: 'center', borderRadius: 11, background: 'rgba(54,201,154,.12)', color: '#36c99a', flexShrink: 0 }}>
+              <CheckCircle2 size={18} aria-hidden="true" />
+            </span>
+            <div style={{ flex: 1 }}>
+              <strong style={{ display: 'block', fontSize: 13, color: 'var(--text-primary)' }}>
+                {pendingQuestions === 0 && (pendingAppointments === 0 || isTeamMember)
+                  ? 'You’re all caught up'
+                  : pendingQuestions === null && pendingAppointments === null
+                    ? 'Your teaching workspace is ready'
+                    : 'Your next steps are ready'}
+              </strong>
+              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                {pendingQuestions !== null || pendingAppointments !== null
+                  ? `${pendingQuestions ?? 0} pending questions${!isTeamMember ? ` · ${pendingAppointments ?? 0} appointment requests` : ''}. Open a group to check assignments and student progress.`
+                  : 'Open a group to check assignments, quizzes, and student progress.'}
+              </span>
             </div>
           </div>
-        )}
-      </div>
+        </section>
+      </main>
     </AppShell>
+  );
+}
+
+function OverviewCard({
+  icon,
+  label,
+  value,
+  detail,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  detail: string;
+  accent: string;
+}) {
+  return (
+    <article className="stat-card" style={{ borderBottom: `2px solid ${accent}70` }}>
+      <span className="stat-icon" style={{ color: accent, background: `${accent}18` }}>{icon}</span>
+      <span className="stat-value">{value}</span>
+      <span className="stat-label">{label} · {detail}</span>
+    </article>
+  );
+}
+
+function ActivityLink({
+  href,
+  icon,
+  title,
+  description,
+  count,
+  accent,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  count: number | null;
+  accent: string;
+}) {
+  return (
+    <Link href={href} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, textDecoration: 'none', color: 'inherit', background: 'rgba(255,255,255,.025)' }}>
+      <span style={{ width: 38, height: 38, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 11, color: accent, background: `${accent}18` }}>
+        {icon}
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <strong style={{ display: 'block', fontSize: 13, color: 'var(--text-primary)' }}>{title}</strong>
+        <span style={{ display: 'block', fontSize: 11, lineHeight: 1.5, color: 'var(--text-muted)', marginTop: 3 }}>{description}</span>
+      </span>
+      {count !== null && (
+        <span aria-label={`${count} pending`} style={{ minWidth: 28, height: 28, padding: '0 8px', display: 'grid', placeItems: 'center', borderRadius: 999, background: `${accent}18`, color: accent, fontSize: 12, fontWeight: 700 }}>
+          {count}
+        </span>
+      )}
+      <ArrowUpRight size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} aria-hidden="true" />
+    </Link>
   );
 }

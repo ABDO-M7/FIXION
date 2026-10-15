@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type UserRole = 'student' | 'teacher' | 'assistant' | 'admin';
+export type UserRole = 'student' | 'teacher' | 'assistant' | 'team_member' | 'admin';
 
 export interface AuthUser {
   id: string;
