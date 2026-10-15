@@ -128,11 +128,19 @@ export default function AdminCodesPage() {
     }
     setLoadingGroups(true);
     setGroupError('');
-    assignmentsApi.groupsDetailed(form.courseName)
+    const chapterMode = form.codeType === 'chapter';
+    const teacherScopedGroups = chapterMode && form.teacherId;
+    const groupsRequest = teacherScopedGroups
+      ? assignmentsApi.adminTeacherGroups(form.courseName, form.teacherId)
+      : assignmentsApi.groupsDetailed(form.courseName);
+
+    groupsRequest
       .then(res => {
         if (!active) return;
         const list = Array.isArray(res.data) ? res.data : [];
-        const details = list.map((g: any) => typeof g === 'string' ? { groupName: g } : g)
+        const details = list.map((g: any) => typeof g === 'string'
+          ? { groupName: g, ...(teacherScopedGroups ? { teacherId: form.teacherId, teacherIds: [form.teacherId] } : {}) }
+          : g)
           .filter((g: any) => g.groupName);
         const groupNames = details.map((g: GroupOption) => g.groupName);
         const resolvedGroups = groupNames;
@@ -140,13 +148,24 @@ export default function AdminCodesPage() {
         setAvailableGroupDetails(details);
         setCustomGroup(false);
         setForm(p => {
-          const nextGroup = p.groupName && resolvedGroups.includes(p.groupName) ? p.groupName : (resolvedGroups[0] || '');
+          const nextGroup = chapterMode && !p.teacherId
+            ? ''
+            : p.groupName && resolvedGroups.includes(p.groupName) ? p.groupName : (resolvedGroups[0] || '');
           const matchedGroup = details.find((g: GroupOption) => g.groupName === nextGroup);
-          const nextTeacherId = (!p.teacherId && matchedGroup?.teacherId) ? matchedGroup.teacherId : p.teacherId;
+          const nextTeacherId = !chapterMode && !p.teacherId ? matchedGroup?.teacherId : p.teacherId;
           return { ...p, groupName: nextGroup, teacherId: nextTeacherId || p.teacherId };
         });
       })
       .catch(() => {
+        if (teacherScopedGroups) {
+          if (active) {
+            setAvailableGroups([]);
+            setAvailableGroupDetails([]);
+            setForm(p => ({ ...p, groupName: '' }));
+            setGroupError('Could not load groups for this teacher. Please try again.');
+          }
+          return;
+        }
         assignmentsApi.groups(form.courseName)
           .then(res => {
             if (!active) return;
@@ -169,7 +188,7 @@ export default function AdminCodesPage() {
       })
       .finally(() => { if (active) setLoadingGroups(false); });
     return () => { active = false; };
-  }, [form.courseName]);
+  }, [form.courseName, form.codeType, form.teacherId]);
 
   useEffect(() => {
     let active = true;
@@ -182,38 +201,17 @@ export default function AdminCodesPage() {
     }
 
     setLoadingOutline(true);
-    Promise.allSettled([
-      videosApi.teacherList(form.courseName, form.groupName, form.teacherId),
-      assignmentsApi.list(form.courseName, form.groupName),
-    ]).then(([videosResult, assignmentsResult]) => {
-      if (!active) return;
-      const videos = videosResult.status === 'fulfilled' && Array.isArray(videosResult.value.data)
-        ? videosResult.value.data
-        : [];
-      const assignments = assignmentsResult.status === 'fulfilled' && Array.isArray(assignmentsResult.value.data)
-        ? assignmentsResult.value.data.filter((item: any) => item.teacherId === form.teacherId)
-        : [];
-
-      const byChapter = new Map<string, Set<string>>();
-      for (const item of [...videos, ...assignments]) {
-        const chapterName = String(item.chapterName || '').trim();
-        const lessonName = String(item.lessonName || '').trim();
-        if (!chapterName) continue;
-        if (!byChapter.has(chapterName)) byChapter.set(chapterName, new Set());
-        if (lessonName) byChapter.get(chapterName)!.add(lessonName);
-      }
-      setChapterOptions(Array.from(byChapter, ([name, lessons]) => ({
-        name,
-        lessons: Array.from(lessons).sort((a, b) => a.localeCompare(b)),
-      })).sort((a, b) => a.name.localeCompare(b.name)));
-      if (videosResult.status === 'rejected' && assignmentsResult.status === 'rejected') {
-        setOutlineError('Could not load this teacher’s course content. Please try again.');
-      } else if (videosResult.status === 'rejected' || assignmentsResult.status === 'rejected') {
-        setOutlineError('Some content could not be loaded; the available chapters and lessons may be incomplete.');
-      }
-    }).finally(() => {
-      if (active) setLoadingOutline(false);
-    });
+    assignmentsApi.adminTeacherOutline(form.courseName, form.groupName, form.teacherId)
+      .then(res => {
+        if (!active) return;
+        setChapterOptions(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch(() => {
+        if (active) setOutlineError('Could not load this teacher’s course content. Please try again.');
+      })
+      .finally(() => {
+        if (active) setLoadingOutline(false);
+      });
     return () => { active = false; };
   }, [form.codeType, form.courseName, form.groupName, form.teacherId, customGroup]);
 
@@ -448,16 +446,10 @@ export default function AdminCodesPage() {
                       value={form.teacherId}
                       onChange={e => {
                         const teacherId = e.target.value;
-                        const teacherGroups = availableGroupDetails
-                          .filter(group => groupBelongsToTeacher(group, teacherId))
-                          .map(group => group.groupName);
-                        const shouldFilterGroups = form.codeType === 'chapter' && hasTeacherLinkedGroups;
                         setForm(p => ({
                           ...p,
                           teacherId,
-                          groupName: shouldFilterGroups
-                            ? (teacherGroups.includes(p.groupName) ? p.groupName : (teacherGroups[0] || ''))
-                            : p.groupName,
+                          groupName: form.codeType === 'chapter' ? '' : p.groupName,
                           accessScope: { chapters: [], lessons: [] },
                         }));
                       }}
@@ -498,7 +490,7 @@ export default function AdminCodesPage() {
                               ...p,
                               groupName: e.target.value,
                               teacherId: form.codeType === 'chapter'
-                                ? p.teacherId || selectedGroup?.teacherId || ''
+                                ? p.teacherId
                                 : selectedGroup?.teacherId || p.teacherId,
                             }));
                           }

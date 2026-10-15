@@ -83,6 +83,25 @@ export class AssignmentsController {
     return this.assignmentsService.getGroupsDetailedForCourse(courseName, actor);
   }
 
+  @Get('admin/courses/:courseName/teachers/:teacherId/groups')
+  @Roles(UserRole.ADMIN)
+  getAdminTeacherGroups(
+    @Param('courseName') courseName: string,
+    @Param('teacherId') teacherId: string,
+  ) {
+    return this.assignmentsService.getAdminTeacherGroups(courseName, teacherId);
+  }
+
+  @Get('admin/courses/:courseName/groups/:groupName/outline')
+  @Roles(UserRole.ADMIN)
+  getAdminTeacherCourseOutline(
+    @Param('courseName') courseName: string,
+    @Param('groupName') groupName: string,
+    @Query('teacherId') teacherId: string,
+  ) {
+    return this.assignmentsService.getAdminTeacherCourseOutline(courseName, groupName, teacherId);
+  }
+
   // ── Teacher: students in a group ──────────────────────────────────────────
   @Get('courses/:courseName/groups/:groupName/students')
   @Roles(...STAFF_AND_ADMIN)

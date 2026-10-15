@@ -529,6 +529,52 @@ export class AssignmentsService {
     return details;
   }
 
+  async getAdminTeacherGroups(courseName: string, teacherId: string) {
+    if (!teacherId) throw new BadRequestException('Teacher is required');
+    const teacher = await this.usersRepo.findOne({ where: { id: teacherId, role: UserRole.TEACHER } });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    const [savedGroups, enrollments, assignments, videos] = await Promise.all([
+      this.courseGroupsRepo.find({ where: { courseName, teacherId } }),
+      this.enrollmentsRepo.find({ where: { courseName, teacherId } }),
+      this.assignmentsRepo.find({ where: { courseName, teacherId } }),
+      this.videosRepo.find({ where: { courseName, teacherId } }),
+    ]);
+
+    return Array.from(new Set([
+      ...savedGroups.map(group => group.groupName),
+      ...enrollments.map(enrollment => enrollment.groupName),
+      ...assignments.map(assignment => assignment.groupName),
+      ...videos.map(video => video.groupName),
+    ].filter((groupName): groupName is string => typeof groupName === 'string' && Boolean(groupName.trim()))))
+      .sort((left, right) => left.localeCompare(right));
+  }
+
+  async getAdminTeacherCourseOutline(courseName: string, groupName: string, teacherId: string) {
+    if (!teacherId) throw new BadRequestException('Teacher is required');
+    const teacher = await this.usersRepo.findOne({ where: { id: teacherId, role: UserRole.TEACHER } });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    const [assignments, videos] = await Promise.all([
+      this.assignmentsRepo.find({ where: { courseName, groupName, teacherId } }),
+      this.videosRepo.find({ where: { courseName, groupName, teacherId } }),
+    ]);
+
+    const chapters = new Map<string, Set<string>>();
+    for (const item of [...videos, ...assignments]) {
+      const chapterName = item.chapterName?.trim();
+      if (!chapterName) continue;
+      if (!chapters.has(chapterName)) chapters.set(chapterName, new Set());
+      const lessonName = item.lessonName?.trim();
+      if (lessonName) chapters.get(chapterName)!.add(lessonName);
+    }
+
+    return Array.from(chapters, ([name, lessons]) => ({
+      name,
+      lessons: Array.from(lessons).sort((left, right) => left.localeCompare(right)),
+    })).sort((left, right) => left.name.localeCompare(right.name));
+  }
+
 
   // ─── TEACHER: get students enrolled in a specific group ───────────────────
   async getStudentsInGroup(courseName: string, groupName: string, actor: User) {

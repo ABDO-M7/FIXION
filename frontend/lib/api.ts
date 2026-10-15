@@ -215,6 +215,12 @@ export const assignmentsApi = {
     api.delete(`/assignments/courses/${encodeURIComponent(courseName)}`),
   groups: (courseName: string) => api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups`),
   groupsDetailed: (courseName: string) => api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups-detailed`),
+  adminTeacherGroups: (courseName: string, teacherId: string) =>
+    api.get(`/assignments/admin/courses/${encodeURIComponent(courseName)}/teachers/${encodeURIComponent(teacherId)}/groups`),
+  adminTeacherOutline: (courseName: string, groupName: string, teacherId: string) =>
+    api.get(`/assignments/admin/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/outline`, {
+      params: { teacherId },
+    }),
   createGroup: (courseName: string, data: { groupName: string; teacherId?: string; schedule?: string }) =>
     api.post(`/assignments/courses/${encodeURIComponent(courseName)}/groups`, data),
   deleteGroup: (courseName: string, groupName: string) =>
