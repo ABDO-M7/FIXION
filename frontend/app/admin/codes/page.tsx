@@ -1,15 +1,18 @@
 'use client';
 import { useEffect, useState, type FormEvent } from 'react';
 import AppShell from '@/components/AppShell';
-import { adminApi, codesApi, assignmentsApi } from '@/lib/api';
+import { adminApi, codesApi, assignmentsApi, videosApi } from '@/lib/api';
 import {
   Key, Copy, Trash2, CheckCircle, Clock, GraduationCap,
-  FileDown, Printer, BarChart3, Timer, Camera, BookOpen, Plus, X,
+  FileDown, Printer, BarChart3, Timer, Camera, BookOpen,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
 type CodeType = 'timed' | 'snapshot' | 'chapter';
+type LessonScope = { chapterName: string; lessonName: string };
+type ChapterOption = { name: string; lessons: string[] };
+type GroupOption = { groupName: string; teacherId?: string | null };
 
 const CODE_TYPE_META: Record<CodeType, { label: string; description: string; color: string; Icon: any }> = {
   timed: {
@@ -26,7 +29,7 @@ const CODE_TYPE_META: Record<CodeType, { label: string; description: string; col
   },
   chapter: {
     label: 'Chapter',
-    description: 'Permanent access to specific chapters / lessons only.',
+    description: 'Access selected chapters or lessons forever, or set a time limit.',
     color: '#f59e0b',
     Icon: BookOpen,
   },
@@ -48,15 +51,19 @@ export default function AdminCodesPage() {
   const [teachers, setTeachers] = useState<{ id: string; name: string; subjects?: string[] }[]>([]);
   const [availableCourses, setAvailableCourses] = useState<string[]>(['فيزيا', 'رياضه', 'احصاء', 'عربي', 'برمجه']);
   const [availableGroups, setAvailableGroups] = useState<string[]>([]);
+  const [availableGroupDetails, setAvailableGroupDetails] = useState<GroupOption[]>([]);
+  const [chapterOptions, setChapterOptions] = useState<ChapterOption[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
+  const [loadingOutline, setLoadingOutline] = useState(false);
+  const [outlineError, setOutlineError] = useState('');
   const [customGroup, setCustomGroup] = useState(false);
-  const [chapterInput, setChapterInput] = useState('');
 
   const [form, setForm] = useState({
     codeType: 'timed' as CodeType,
     plan: 'monthly',
     quantity: '10',
     durationDays: '',
+    chapterDuration: 'permanent' as 'permanent' | 'limited',
     codeExpiresAt: '',
     courseName: '',
     teacherId: '',
@@ -64,7 +71,7 @@ export default function AdminCodesPage() {
     minLength: '16',
     maxLength: '16',
     includeLetters: true,
-    accessScope: { chapters: [] as string[], lessons: [] as string[] },
+    accessScope: { chapters: [] as string[], lessons: [] as LessonScope[] },
   });
   const LIMIT = 50;
 
@@ -103,23 +110,29 @@ export default function AdminCodesPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     if (!form.courseName) {
       setAvailableGroups([]);
-      setForm(p => ({ ...p, groupName: '' }));
+      setAvailableGroupDetails([]);
       setCustomGroup(false);
-      return;
+      setLoadingGroups(false);
+      return () => { active = false; };
     }
     setLoadingGroups(true);
     assignmentsApi.groupsDetailed(form.courseName)
       .then(res => {
+        if (!active) return;
         const list = Array.isArray(res.data) ? res.data : [];
-        const groupNames = list.map((g: any) => typeof g === 'string' ? g : g.groupName).filter(Boolean);
+        const details = list.map((g: any) => typeof g === 'string' ? { groupName: g } : g)
+          .filter((g: any) => g.groupName);
+        const groupNames = details.map((g: GroupOption) => g.groupName);
         const resolvedGroups = groupNames.length > 0 ? groupNames : ['Group 1'];
         setAvailableGroups(resolvedGroups);
+        setAvailableGroupDetails(details);
         setCustomGroup(false);
         setForm(p => {
           const nextGroup = p.groupName && resolvedGroups.includes(p.groupName) ? p.groupName : (resolvedGroups[0] || '');
-          const matchedGroup = list.find((g: any) => g.groupName === nextGroup);
+          const matchedGroup = details.find((g: GroupOption) => g.groupName === nextGroup);
           const nextTeacherId = (!p.teacherId && matchedGroup?.teacherId) ? matchedGroup.teacherId : p.teacherId;
           return { ...p, groupName: nextGroup, teacherId: nextTeacherId || p.teacherId };
         });
@@ -127,40 +140,123 @@ export default function AdminCodesPage() {
       .catch(() => {
         assignmentsApi.groups(form.courseName)
           .then(res => {
+            if (!active) return;
             const list = Array.isArray(res.data) ? res.data : [];
             const resolvedGroups = list.length > 0 ? list : ['Group 1'];
             setAvailableGroups(resolvedGroups);
+            setAvailableGroupDetails(list.map((groupName: string) => ({ groupName })));
             setForm(p => ({
               ...p,
               groupName: p.groupName && resolvedGroups.includes(p.groupName) ? p.groupName : (resolvedGroups[0] || ''),
             }));
           })
-          .catch(() => setAvailableGroups([]));
+          .catch(() => {
+            if (active) {
+              setAvailableGroups([]);
+              setAvailableGroupDetails([]);
+            }
+          });
       })
-      .finally(() => setLoadingGroups(false));
+      .finally(() => { if (active) setLoadingGroups(false); });
+    return () => { active = false; };
   }, [form.courseName]);
 
-  const addChapter = () => {
-    const val = chapterInput.trim();
-    if (!val) return;
-    setForm(p => ({ ...p, accessScope: { ...p.accessScope, chapters: [...(p.accessScope.chapters || []), val] } }));
-    setChapterInput('');
+  useEffect(() => {
+    let active = true;
+    setChapterOptions([]);
+    setOutlineError('');
+    setForm(p => ({ ...p, accessScope: { chapters: [], lessons: [] } }));
+    if (form.codeType !== 'chapter' || !form.courseName || !form.groupName || !form.teacherId || customGroup) {
+      setLoadingOutline(false);
+      return () => { active = false; };
+    }
+
+    setLoadingOutline(true);
+    Promise.allSettled([
+      videosApi.teacherList(form.courseName, form.groupName, form.teacherId),
+      assignmentsApi.list(form.courseName, form.groupName),
+    ]).then(([videosResult, assignmentsResult]) => {
+      if (!active) return;
+      const videos = videosResult.status === 'fulfilled' && Array.isArray(videosResult.value.data)
+        ? videosResult.value.data
+        : [];
+      const assignments = assignmentsResult.status === 'fulfilled' && Array.isArray(assignmentsResult.value.data)
+        ? assignmentsResult.value.data.filter((item: any) => item.teacherId === form.teacherId)
+        : [];
+
+      const byChapter = new Map<string, Set<string>>();
+      for (const item of [...videos, ...assignments]) {
+        const chapterName = String(item.chapterName || '').trim();
+        const lessonName = String(item.lessonName || '').trim();
+        if (!chapterName) continue;
+        if (!byChapter.has(chapterName)) byChapter.set(chapterName, new Set());
+        if (lessonName) byChapter.get(chapterName)!.add(lessonName);
+      }
+      setChapterOptions(Array.from(byChapter, ([name, lessons]) => ({
+        name,
+        lessons: Array.from(lessons).sort((a, b) => a.localeCompare(b)),
+      })).sort((a, b) => a.name.localeCompare(b.name)));
+      if (videosResult.status === 'rejected' && assignmentsResult.status === 'rejected') {
+        setOutlineError('Could not load this teacher’s course content. Please try again.');
+      } else if (videosResult.status === 'rejected' || assignmentsResult.status === 'rejected') {
+        setOutlineError('Some content could not be loaded; the available chapters and lessons may be incomplete.');
+      }
+    }).finally(() => {
+      if (active) setLoadingOutline(false);
+    });
+    return () => { active = false; };
+  }, [form.codeType, form.courseName, form.groupName, form.teacherId, customGroup]);
+
+  const toggleChapter = (chapterName: string) => {
+    setForm(p => {
+      const selected = p.accessScope.chapters.includes(chapterName);
+      return {
+        ...p,
+        accessScope: {
+          chapters: selected
+            ? p.accessScope.chapters.filter(chapter => chapter !== chapterName)
+            : [...p.accessScope.chapters, chapterName],
+          lessons: p.accessScope.lessons.filter(lesson => lesson.chapterName !== chapterName),
+        },
+      };
+    });
   };
-  const removeChapter = (ch: string) => {
-    setForm(p => ({ ...p, accessScope: { ...p.accessScope, chapters: p.accessScope.chapters.filter(c => c !== ch) } }));
+
+  const toggleLesson = (lesson: LessonScope) => {
+    setForm(p => {
+      if (p.accessScope.chapters.includes(lesson.chapterName)) return p;
+      const selected = p.accessScope.lessons.some(item =>
+        item.chapterName === lesson.chapterName && item.lessonName === lesson.lessonName,
+      );
+      return {
+        ...p,
+        accessScope: {
+          ...p.accessScope,
+          lessons: selected
+            ? p.accessScope.lessons.filter(item =>
+                item.chapterName !== lesson.chapterName || item.lessonName !== lesson.lessonName,
+              )
+            : [...p.accessScope.lessons, lesson],
+        },
+      };
+    });
   };
 
   const generate = async () => {
     const quantity = Number(form.quantity);
     const minLength = Number(form.minLength);
     const maxLength = Number(form.maxLength);
-    const durationDays = form.durationDays ? Number(form.durationDays) : undefined;
+    const durationDays = form.codeType === 'chapter'
+      ? form.chapterDuration === 'limited' ? Number(form.durationDays) : undefined
+      : form.durationDays ? Number(form.durationDays) : undefined;
 
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) { toast.error('Quantity must be 1–500'); return; }
     if (!Number.isInteger(minLength) || !Number.isInteger(maxLength) || minLength < 4 || maxLength > 64 || minLength > maxLength) { toast.error('Length must be 4–64, min ≤ max'); return; }
     if (!form.courseName.trim()) { toast.error('Course is required for all code types'); return; }
     if (form.courseName && !form.teacherId) { toast.error('Select a teacher for this course'); return; }
-    if (form.codeType === 'chapter' && !form.accessScope.chapters.length) { toast.error('Add at least one chapter for chapter-type codes'); return; }
+    if (form.codeType === 'chapter' && !form.groupName.trim()) { toast.error('Select a group for chapter codes'); return; }
+    if (form.codeType === 'chapter' && !form.accessScope.chapters.length && !form.accessScope.lessons.length) { toast.error('Select at least one chapter or lesson'); return; }
+    if (form.codeType === 'chapter' && form.chapterDuration === 'limited' && (!Number.isInteger(durationDays) || !durationDays || durationDays < 1 || durationDays > 3650)) { toast.error('Access duration must be between 1 and 3650 days'); return; }
 
     setGenerating(true);
     try {
@@ -290,39 +386,9 @@ export default function AdminCodesPage() {
 
             {/* Chapter: scope */}
             {form.codeType === 'chapter' && (
-              <div className="form-group">
-                <label className="form-label">Chapters / Lessons</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input
-                    value={chapterInput}
-                    onChange={e => setChapterInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addChapter(); } }}
-                    placeholder="Chapter or lesson name"
-                    className="form-input"
-                    style={{ flex: 1 }}
-                  />
-                  <button type="button" onClick={addChapter} className="btn btn-secondary" style={{ padding: '0 10px' }}>
-                    <Plus size={14} />
-                  </button>
-                </div>
-                {form.accessScope.chapters.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                    {form.accessScope.chapters.map(ch => (
-                      <span key={ch} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12,
-                        padding: '3px 10px', borderRadius: 20,
-                        background: `${CODE_TYPE_META.chapter.color}22`, color: CODE_TYPE_META.chapter.color,
-                        border: `1px solid ${CODE_TYPE_META.chapter.color}55`,
-                      }}>
-                        {ch}
-                        <button type="button" onClick={() => removeChapter(ch)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: 'inherit' }}>
-                          <X size={11} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                Choose the course, teacher, and group below to load that teacher’s chapters and lessons.
+              </p>
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -347,7 +413,18 @@ export default function AdminCodesPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontSize: 12 }}>Course</label>
-                  <select value={form.courseName} onChange={e => setForm(p => ({ ...p, courseName: e.target.value }))} className="form-input" style={{ appearance: 'auto', fontSize: 13 }}>
+                  <select
+                    value={form.courseName}
+                    onChange={e => setForm(p => ({
+                      ...p,
+                      courseName: e.target.value,
+                      teacherId: '',
+                      groupName: '',
+                      accessScope: { chapters: [], lessons: [] },
+                    }))}
+                    className="form-input"
+                    style={{ appearance: 'auto', fontSize: 13 }}
+                  >
                     <option value="">— Select course —</option>
                     {availableCourses.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -365,7 +442,7 @@ export default function AdminCodesPage() {
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                       <label className="form-label" style={{ fontSize: 12, marginBottom: 0 }}>Group</label>
-                      {form.courseName && availableGroups.length > 0 && (
+                      {form.courseName && availableGroups.length > 0 && form.codeType !== 'chapter' && (
                         <button type="button" onClick={() => setCustomGroup(!customGroup)} style={{ fontSize: 11, color: 'var(--primary-light)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                           {customGroup ? 'Pick from list' : '+ Custom'}
                         </button>
@@ -381,8 +458,17 @@ export default function AdminCodesPage() {
                       <select
                         value={form.groupName}
                         onChange={e => {
-                          if (e.target.value === '__custom__') { setCustomGroup(true); setForm(p => ({ ...p, groupName: '' })); }
-                          else setForm(p => ({ ...p, groupName: e.target.value }));
+                          if (e.target.value === '__custom__') {
+                            setCustomGroup(true);
+                            setForm(p => ({ ...p, groupName: '' }));
+                          } else {
+                            const selectedGroup = availableGroupDetails.find(group => group.groupName === e.target.value);
+                            setForm(p => ({
+                              ...p,
+                              groupName: e.target.value,
+                              teacherId: selectedGroup?.teacherId || p.teacherId,
+                            }));
+                          }
                         }}
                         className="form-input" style={{ fontSize: 13, appearance: 'auto' }} disabled={!form.courseName}
                       >
@@ -390,7 +476,7 @@ export default function AdminCodesPage() {
                           <>
                             <option value="">— No group —</option>
                             {availableGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                            <option value="__custom__">+ Custom group...</option>
+                            {form.codeType !== 'chapter' && <option value="__custom__">+ Custom group...</option>}
                           </>
                         )}
                       </select>
@@ -399,6 +485,91 @@ export default function AdminCodesPage() {
                 </div>
               </div>
             </div>
+
+            {form.codeType === 'chapter' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Chapters and lessons</label>
+                  {!form.courseName || !form.groupName || !form.teacherId ? (
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Select a course, teacher, and group first.</p>
+                  ) : loadingOutline ? (
+                    <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 12 }}>
+                      <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Loading this teacher’s content...
+                    </div>
+                  ) : outlineError ? (
+                    <p role="alert" style={{ margin: 0, color: 'var(--danger)', fontSize: 12 }}>{outlineError}</p>
+                  ) : chapterOptions.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>No chapters or lessons found for this teacher in the selected group.</p>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 8, maxHeight: 280, overflowY: 'auto', padding: 10, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)' }}>
+                      {chapterOptions.map(chapter => {
+                        const wholeChapterSelected = form.accessScope.chapters.includes(chapter.name);
+                        return (
+                          <fieldset key={chapter.name} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', margin: 0 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 30, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={wholeChapterSelected} onChange={() => toggleChapter(chapter.name)} />
+                              {chapter.name} <span style={{ color: 'var(--text-muted)', fontSize: 11, fontWeight: 400 }}>· full chapter</span>
+                            </label>
+                            {chapter.lessons.length > 0 && (
+                              <div style={{ display: 'grid', gap: 4, paddingInlineStart: 24, marginTop: 4 }}>
+                                {chapter.lessons.map(lessonName => {
+                                  const selected = form.accessScope.lessons.some(item =>
+                                    item.chapterName === chapter.name && item.lessonName === lessonName,
+                                  );
+                                  return (
+                                    <label key={lessonName} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 28, fontSize: 12, color: 'var(--text-secondary)', cursor: wholeChapterSelected ? 'not-allowed' : 'pointer' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={wholeChapterSelected || selected}
+                                        disabled={wholeChapterSelected}
+                                        onChange={() => toggleLesson({ chapterName: chapter.name, lessonName })}
+                                      />
+                                      {lessonName}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </fieldset>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '6px 0 0' }}>
+                    Selecting a chapter includes all its lessons. Otherwise choose individual lessons.
+                  </p>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">How long should access stay open?</label>
+                  <select
+                    value={form.chapterDuration}
+                    onChange={e => setForm(p => ({ ...p, chapterDuration: e.target.value as 'permanent' | 'limited', durationDays: '' }))}
+                    className="form-input"
+                    style={{ appearance: 'auto' }}
+                  >
+                    <option value="permanent">Forever</option>
+                    <option value="limited">For a specific duration</option>
+                  </select>
+                  {form.chapterDuration === 'limited' && (
+                    <div style={{ marginTop: 8 }}>
+                      <label className="form-label" htmlFor="chapter-access-days">Access duration (days)</label>
+                      <input
+                        id="chapter-access-days"
+                        type="number"
+                        min={1}
+                        max={3650}
+                        required
+                        value={form.durationDays}
+                        onChange={e => setForm(p => ({ ...p, durationDays: e.target.value }))}
+                        className="form-input"
+                        placeholder="Enter number of days (1–3650)"
+                      />
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Code window expiry */}
             <div className="form-group">

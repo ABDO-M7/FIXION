@@ -35,8 +35,8 @@ export default function AdminHealthDashboard() {
   if (!data) return <AppShell><div className="empty-state">No health data available</div></AppShell>;
 
   const getStatusColor = (status: string) => {
-    if (status === 'up' || status === 'healthy') return 'var(--success)';
-    if (status === 'degraded' || status === 'not_configured') return 'var(--warning)';
+    if (status === 'up' || status === 'healthy' || status === 'ready') return 'var(--success)';
+    if (status === 'degraded' || status === 'not_configured' || status === 'connecting' || status === 'disabled') return 'var(--warning)';
     return 'var(--danger)';
   };
 
@@ -77,7 +77,7 @@ export default function AdminHealthDashboard() {
         Last checked: {new Date(data.timestamp).toLocaleTimeString()}
       </div>
 
-      <div className="grid-3" style={{ marginBottom: 32 }}>
+      <div className="grid-4" style={{ marginBottom: 32 }}>
         {/* Database */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: getStatusColor(data.checks.database?.status) }} />
@@ -114,6 +114,39 @@ export default function AdminHealthDashboard() {
             </div>
             <div style={{ width: '100%', height: 6, background: 'var(--bg-elevated)', borderRadius: 3, overflow: 'hidden' }}>
               <div style={{ width: `${Math.min(data.checks.database?.usagePercent || 0, 100)}%`, height: '100%', background: '#3b82f6', borderRadius: 3 }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Shared response cache */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: getStatusColor(data.checks.cache?.status) }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
+                <Database size={20} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>Response Cache</h3>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{data.checks.cache?.provider || 'Redis'}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: getStatusColor(data.checks.cache?.status), textTransform: 'uppercase' }}>
+              {data.checks.cache?.status || 'unknown'}
+            </div>
+          </div>
+          <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+              {data.checks.cache?.status === 'ready'
+                ? 'Redis connection is ready'
+                : data.checks.cache?.status === 'connecting'
+                  ? 'Redis is connecting'
+                  : data.checks.cache?.status === 'disabled'
+                    ? 'REDIS_URL is not configured'
+                    : 'Redis is unavailable; requests use PostgreSQL'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 7 }}>
+              Shared cache currently covers student course videos and assignments.
             </div>
           </div>
         </div>

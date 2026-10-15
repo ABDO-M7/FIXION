@@ -84,7 +84,10 @@ export class SubscriptionsService {
     const now = new Date();
     let enrollmentExpiresAt: Date | null = null;
     let snapshotAt: Date | null = null;
-    let accessScope: { chapters?: string[]; lessons?: string[] } | null = null;
+    let accessScope: {
+      chapters?: string[];
+      lessons?: Array<string | { chapterName: string; lessonName: string }>;
+    } | null = null;
 
     const codeType = subCode.codeType ?? CodeType.TIMED;
 
@@ -96,9 +99,9 @@ export class SubscriptionsService {
       snapshotAt = now;
       enrollmentExpiresAt = null;
     } else if (codeType === CodeType.CHAPTER) {
-      // Access forever but limited to specific chapters/lessons
+      // Chapter access is permanent unless the generated code sets a duration.
       accessScope = subCode.accessScope ?? null;
-      enrollmentExpiresAt = null;
+      enrollmentExpiresAt = subCode.durationDays ? addDays(now, subCode.durationDays) : null;
     }
 
     const enrollment = await this.enrollmentsRepo.save(
@@ -160,7 +163,7 @@ export class SubscriptionsService {
     let isExpired = false;
     let daysLeft: number | null = null;
 
-    if (codeType === CodeType.TIMED && enrollment.expiresAt) {
+    if ((codeType === CodeType.TIMED || codeType === CodeType.CHAPTER) && enrollment.expiresAt) {
       isExpired = enrollment.expiresAt < now;
       if (!isExpired) {
         daysLeft = Math.ceil((enrollment.expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -210,7 +213,10 @@ export class SubscriptionsService {
     admin: User,
     codeType: CodeType = CodeType.TIMED,
     durationDays?: number,
-    accessScope?: { chapters?: string[]; lessons?: string[] },
+    accessScope?: {
+      chapters?: string[];
+      lessons?: Array<string | { chapterName: string; lessonName: string }>;
+    },
     codeExpiresAt?: Date,
     courseName?: string,
     teacherId?: string,
@@ -238,9 +244,13 @@ export class SubscriptionsService {
     }
     if (codeType === CodeType.CHAPTER) {
       if (!courseName) throw new BadRequestException('Chapter codes must be linked to a course');
+      if (!teacherId || !groupName) throw new BadRequestException('Chapter codes must be linked to a teacher and group');
       if (!accessScope?.chapters?.length && !accessScope?.lessons?.length) {
         throw new BadRequestException('Chapter codes must specify at least one chapter or lesson');
       }
+    }
+    if (durationDays !== undefined && (!Number.isInteger(Number(durationDays)) || Number(durationDays) < 1 || Number(durationDays) > 3650)) {
+      throw new BadRequestException('Access duration must be between 1 and 3650 days');
     }
 
     let teacher: User | null = null;
@@ -268,7 +278,7 @@ export class SubscriptionsService {
           code,
           plan,
           codeType,
-          durationDays: codeType === CodeType.TIMED ? (durationDays ?? null) : null,
+          durationDays: codeType === CodeType.TIMED || codeType === CodeType.CHAPTER ? (durationDays ?? null) : null,
           accessScope: codeType === CodeType.CHAPTER ? (accessScope ?? null) : null,
           createdById: admin.id,
           expiresAt: codeExpiresAt,

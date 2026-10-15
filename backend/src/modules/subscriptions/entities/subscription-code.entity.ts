@@ -22,9 +22,9 @@ import { SubscriptionPlan } from './subscription.entity';
  *            after that date will not be visible even though the enrollment
  *            never expires.
  *
- * CHAPTER  – the student gets permanent access to only the specific
- *            chapter(s) / lesson(s) listed in `accessScope.chapters` or
- *            `accessScope.lessons`.  The enrollment never expires.
+ * CHAPTER  – the student gets access to only the specific chapter(s) /
+ *            lesson(s) listed in `accessScope`; `durationDays` can optionally
+ *            limit that access from redemption, otherwise it is permanent.
  */
 export enum CodeType {
   TIMED    = 'timed',
@@ -49,18 +49,18 @@ export class SubscriptionCode {
   codeType: CodeType;
 
   /**
-   * How many days of access to grant (TIMED only).
-   * When null the old plan-based duration (7 / 30 days) is used as fallback.
+   * How many days of access to grant (TIMED or time-limited CHAPTER).
+   * TIMED codes fall back to the plan duration when null; CHAPTER codes are permanent.
    */
   @Column({ type: 'integer', nullable: true })
   durationDays: number | null;
 
   /**
    * Extra scope data (CHAPTER type).
-   * Shape: { chapters?: string[]; lessons?: string[] }
+   * Shape: { chapters?: string[]; lessons?: Array<string | { chapterName: string; lessonName: string }> }
    */
   @Column({ type: 'jsonb', nullable: true })
-  accessScope: { chapters?: string[]; lessons?: string[] } | null;
+  accessScope: { chapters?: string[]; lessons?: Array<string | { chapterName: string; lessonName: string }> } | null;
 
   @Index()
   @Column({ default: false })

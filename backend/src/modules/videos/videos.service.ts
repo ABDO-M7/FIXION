@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { CourseVideo } from './entities/course-video.entity';
 import { VideoCheckpoint, VideoCheckpointOption, VideoCheckpointType } from './entities/video-checkpoint.entity';
 import { VideoResponse } from './entities/video-response.entity';
@@ -15,6 +15,7 @@ import { UnlockRuleType } from '../learning/unlock-rule';
 import { VideoProgress } from './entities/video-progress.entity';
 import { RedisCacheService } from '../../common/cache/redis-cache.service';
 import { courseContentVersionKey, studentCourseCacheKey, studentCourseVersionKey } from '../../common/cache/course-cache-keys';
+import { assertCourseContentAccess, assertEnrollmentActive, canAccessCourseContent } from '../subscriptions/access-scope';
 
 type CreateVideoDto = {
   courseName: string;
@@ -114,7 +115,7 @@ export class VideosService {
     return video;
   }
 
-  async listForTeacher(courseName: string, groupName: string, actor: User) {
+  async listForTeacher(courseName: string, groupName: string, actor: User, requestedTeacherId?: string) {
     const scope = await resolveStaffScope(this.usersRepo, actor);
     if (scope.type === 'subjects' && !scope.subjects.includes(courseName)) return [];
     if (scope.type === 'teacher') {
@@ -134,16 +135,19 @@ export class VideosService {
       if (!assignedGroup && !ownedAssignment && !ownedVideo && !enrollment) return [];
     }
     const videos = await this.videosRepo.find({
-      where: { courseName, groupName },
+      where: {
+        courseName,
+        groupName,
+        ...(actor.role === UserRole.ADMIN && requestedTeacherId ? { teacherId: requestedTeacherId } : {}),
+      },
       order: { createdAt: 'DESC' },
     });
     return Promise.all(videos.map(video => this.withCheckpointSummary(video)));
   }
 
   async listForStudent(courseName: string, groupName: string, studentId: string) {
-    const enrollment = await this.enrollmentsRepo.findOne({ where: { courseName, groupName, studentId } });
-    if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
-    return this.cache.remember(
+    const enrollment = await this.assertEnrollment(courseName, groupName, studentId);
+    const videos = await this.cache.remember(
       studentCourseCacheKey('videos', courseName, groupName, studentId),
       20,
       [
@@ -171,6 +175,7 @@ export class VideosService {
           );
           return {
             ...this.publicVideo(video),
+            teacherId: video.teacherId,
             watchedPercent: progress?.watchedPercent || 0,
             opened: progress?.opened || false,
             openedAttachments: progress?.openedAttachments || [],
@@ -181,6 +186,12 @@ export class VideosService {
         }));
       },
     );
+    return videos
+      .filter(video => canAccessCourseContent(enrollment, video.chapterName, video.lessonName, video.teacherId))
+      .map(({ teacherId, ...video }) => {
+        void teacherId;
+        return video;
+      });
   }
 
   async getTeacherCheckpoints(videoId: string, actor: User) {
@@ -223,7 +234,7 @@ export class VideosService {
   async getStudentExperience(videoId: string, student: User) {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
-    await this.assertEnrollment(video.courseName, video.groupName, student.id);
+    await this.assertEnrollment(video.courseName, video.groupName, student.id, video.chapterName, video.lessonName, video.teacherId);
     const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, video.unlockVideoId, video.unlockPercent, student.id);
     if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
     const checkpoints = await this.checkpointsRepo.find({
@@ -257,7 +268,7 @@ export class VideosService {
   async updateProgress(videoId: string, studentId: string, dto: { watchedSeconds: number; durationSeconds: number }) {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
-    await this.assertEnrollment(video.courseName, video.groupName, studentId);
+    await this.assertEnrollment(video.courseName, video.groupName, studentId, video.chapterName, video.lessonName, video.teacherId);
     const currentPosition = Number(dto.watchedSeconds);
     const reportedDuration = Number(dto.durationSeconds);
     if (!Number.isFinite(currentPosition) || !Number.isFinite(reportedDuration) || currentPosition < 0 || reportedDuration < 1) {
@@ -306,7 +317,7 @@ export class VideosService {
   async markDocumentOpened(videoId: string, studentId: string, attachmentIndex?: number) {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Course content not found');
-    await this.assertEnrollment(video.courseName, video.groupName, studentId);
+    await this.assertEnrollment(video.courseName, video.groupName, studentId, video.chapterName, video.lessonName, video.teacherId);
     const progress = await this.progressRepo.findOne({ where: { videoId, studentId } })
       || this.progressRepo.create({ videoId, studentId, watchedSeconds: 0, durationSeconds: 0, watchedPercent: 0 });
     if (attachmentIndex !== undefined) {
@@ -327,7 +338,7 @@ export class VideosService {
   async answerCheckpoint(videoId: string, checkpointId: string, student: User, dto: AnswerDto) {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
-    await this.assertEnrollment(video.courseName, video.groupName, student.id);
+    await this.assertEnrollment(video.courseName, video.groupName, student.id, video.chapterName, video.lessonName, video.teacherId);
     const checkpoint = await this.checkpointsRepo.findOne({ where: { id: checkpointId, videoId } });
     if (!checkpoint) throw new NotFoundException('Checkpoint not found');
 
@@ -520,9 +531,22 @@ export class VideosService {
     return { isLocked: false, lockReason: null };
   }
 
-  private async assertEnrollment(courseName: string, groupName: string, studentId: string) {
+  private async assertEnrollment(
+    courseName: string,
+    groupName: string,
+    studentId: string,
+    chapterName?: string | null,
+    lessonName?: string | null,
+    contentTeacherId?: string | null,
+  ): Promise<CourseEnrollment> {
     const enrollment = await this.enrollmentsRepo.findOne({ where: { courseName, groupName, studentId } });
     if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
+    if (chapterName !== undefined || lessonName !== undefined) {
+      assertCourseContentAccess(enrollment, chapterName, lessonName, contentTeacherId);
+    } else {
+      assertEnrollmentActive(enrollment);
+    }
+    return enrollment;
   }
 
   private validateCheckpoint(dto: CheckpointDto, current?: VideoCheckpoint) {

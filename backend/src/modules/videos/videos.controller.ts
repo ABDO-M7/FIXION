@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/auth.guard';
@@ -18,8 +18,13 @@ export class VideosController {
 
   @Get('teacher/:courseName/:groupName')
   @Roles(...STAFF_AND_ADMIN)
-  listForTeacher(@Param('courseName') courseName: string, @Param('groupName') groupName: string, @CurrentUser() actor: any) {
-    return this.videosService.listForTeacher(courseName, groupName, actor);
+  listForTeacher(
+    @Param('courseName') courseName: string,
+    @Param('groupName') groupName: string,
+    @CurrentUser() actor: any,
+    @Query('teacherId') teacherId?: string,
+  ) {
+    return this.videosService.listForTeacher(courseName, groupName, actor, teacherId);
   }
 
   @Get('student/:courseName/:groupName')

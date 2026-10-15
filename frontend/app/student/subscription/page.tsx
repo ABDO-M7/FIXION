@@ -13,7 +13,7 @@ type CodeType = 'timed' | 'snapshot' | 'chapter';
 const CODE_TYPE_META: Record<CodeType, { label: string; color: string; Icon: any; description: string }> = {
   timed:    { label: 'Timed',    color: '#6366f1', Icon: Timer,    description: 'Access expires after the subscription period.' },
   snapshot: { label: 'Snapshot', color: '#10b981', Icon: Camera,   description: 'Access to content available at time of enrollment, forever.' },
-  chapter:  { label: 'Chapter',  color: '#f59e0b', Icon: BookOpen, description: 'Access to specific chapters only, forever.' },
+  chapter:  { label: 'Chapter',  color: '#f59e0b', Icon: BookOpen, description: 'Access to selected chapters and lessons.' },
 };
 
 export default function SubscriptionPage() {
@@ -108,8 +108,9 @@ export default function SubscriptionPage() {
                 const codeType: CodeType = enrollment.codeType ?? 'timed';
                 const meta = CODE_TYPE_META[codeType] ?? CODE_TYPE_META.timed;
 
-                const isExpired = codeType === 'timed' && enrollment.expiresAt && new Date(enrollment.expiresAt) < now;
-                const daysLeft = !isExpired && codeType === 'timed' && enrollment.expiresAt
+                const hasDuration = (codeType === 'timed' || codeType === 'chapter') && Boolean(enrollment.expiresAt);
+                const isExpired = hasDuration && new Date(enrollment.expiresAt) < now;
+                const daysLeft = !isExpired && hasDuration
                   ? Math.ceil((new Date(enrollment.expiresAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
                   : null;
 
@@ -185,15 +186,26 @@ export default function SubscriptionPage() {
                         {codeType === 'chapter' && (
                           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                             <CheckCircle size={12} style={{ color: meta.color, display: 'inline', marginRight: 4 }} />
-                            Permanent access to:&nbsp;
+                            Access to:&nbsp;
                             {(enrollment.accessScope?.chapters || []).map((ch: string) => (
                               <span key={ch} style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 10, background: `${meta.color}18`, color: meta.color, marginRight: 4, marginBottom: 2 }}>{ch}</span>
                             ))}
+                            {(enrollment.accessScope?.lessons || []).map((lesson: string | { chapterName: string; lessonName: string }) => {
+                              const label = typeof lesson === 'string'
+                                ? lesson
+                                : `${lesson.chapterName} · ${lesson.lessonName}`;
+                              return <span key={label} style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 10, background: `${meta.color}18`, color: meta.color, marginRight: 4, marginBottom: 2 }}>{label}</span>;
+                            })}
+                            <div style={{ marginTop: 5, color: isExpired ? 'var(--danger)' : 'var(--text-muted)' }}>
+                              {enrollment.expiresAt
+                                ? `${isExpired ? 'Expired' : 'Access expires'}: ${new Date(enrollment.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${!isExpired && daysLeft !== null ? ` · ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left` : ''}`
+                                : 'Permanent access'}
+                            </div>
                           </div>
                         )}
 
                         {/* Progress bar for timed */}
-                        {codeType === 'timed' && !isExpired && enrollment.expiresAt && enrollment.createdAt && (
+                        {hasDuration && !isExpired && enrollment.expiresAt && enrollment.createdAt && (
                           <div style={{ marginTop: 10 }}>
                             <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
                               <div style={{

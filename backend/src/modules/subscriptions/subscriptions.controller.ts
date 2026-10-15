@@ -44,7 +44,10 @@ export class CodesController {
     @Body('quantity') quantity: number,
     @Body('codeType') codeType: CodeType,
     @Body('durationDays') durationDays: number,
-    @Body('accessScope') accessScope: { chapters?: string[]; lessons?: string[] },
+    @Body('accessScope') accessScope: {
+      chapters?: string[];
+      lessons?: Array<string | { chapterName: string; lessonName: string }>;
+    },
     @Body('codeExpiresAt') codeExpiresAt: string,
     @Body('courseName') courseName: string,
     @Body('teacherId') teacherId: string,

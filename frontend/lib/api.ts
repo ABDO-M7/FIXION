@@ -169,7 +169,10 @@ export const codesApi = {
     quantity: number;
     codeType: 'timed' | 'snapshot' | 'chapter';
     durationDays?: number;
-    accessScope?: { chapters?: string[]; lessons?: string[] };
+    accessScope?: {
+      chapters?: string[];
+      lessons?: Array<string | { chapterName: string; lessonName: string }>;
+    };
     codeExpiresAt?: string;
     courseName?: string;
     teacherId?: string;
@@ -264,7 +267,8 @@ export const videosApi = {
   answerCheckpoint: (videoId: string, checkpointId: string, data: any) => api.post('/videos/' + videoId + '/checkpoints/' + checkpointId + '/answer', data),
   create: (data: { courseName: string; groupName: string; title: string; description?: string; provider?: string; sourceUrl?: string; youtubeUrl?: string; chapterName?: string; lessonName?: string; contentOrder?: number; unlockRule?: string; unlockAssignmentId?: string; unlockScore?: number; unlockVideoId?: string; unlockPercent?: number; attachments?: string[] }) => api.post('/videos', data),
   update: (id: string, data: any) => api.patch(`/videos/${id}`, data),
-  teacherList: (courseName: string, groupName: string) => api.get(`/videos/teacher/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`),
+  teacherList: (courseName: string, groupName: string, teacherId?: string) =>
+    api.get(`/videos/teacher/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`, { params: teacherId ? { teacherId } : {} }),
   studentList: (courseName: string, groupName: string) => api.get(`/videos/student/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`),
   delete: (id: string) => api.delete(`/videos/${id}`),
 };

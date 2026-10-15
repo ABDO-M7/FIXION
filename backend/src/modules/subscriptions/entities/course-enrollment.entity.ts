@@ -55,8 +55,8 @@ export class CourseEnrollment {
   codeType: CodeType;
 
   /**
-   * TIMED: when access expires and the student can no longer watch content.
-   * SNAPSHOT / CHAPTER: null (access never expires).
+   * TIMED or time-limited CHAPTER: when access expires.
+   * SNAPSHOT and permanent CHAPTER: null.
    */
   @Column({ nullable: true, type: 'timestamptz' })
   expiresAt: Date | null;
@@ -71,11 +71,11 @@ export class CourseEnrollment {
 
   /**
    * CHAPTER: restricted chapters/lessons.
-   * Shape: { chapters?: string[]; lessons?: string[] }
+   * Shape: { chapters?: string[]; lessons?: Array<string | { chapterName: string; lessonName: string }> }
    * TIMED / SNAPSHOT: null (all content is accessible within expiry / snapshot window).
    */
   @Column({ type: 'jsonb', nullable: true })
-  accessScope: { chapters?: string[]; lessons?: string[] } | null;
+  accessScope: { chapters?: string[]; lessons?: Array<string | { chapterName: string; lessonName: string }> } | null;
 
   @CreateDateColumn()
   createdAt: Date;
