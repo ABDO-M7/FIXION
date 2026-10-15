@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/auth.guard';
@@ -17,6 +17,7 @@ export class VideosController {
   create(@Body() dto: any, @CurrentUser() actor: any) { return this.videosService.create(dto, actor); }
 
   @Get('teacher/:courseName/:groupName')
+  @Header('Cache-Control', 'no-store')
   @Roles(...STAFF_AND_ADMIN)
   listForTeacher(
     @Param('courseName') courseName: string,

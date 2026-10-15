@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Delete,
+  Controller, Get, Post, Patch, Delete, Header,
   Body, Param, Query, UseGuards,
 } from '@nestjs/common';
 import { AssignmentsService } from './assignments.service';
@@ -71,6 +71,7 @@ export class AssignmentsController {
 
   // ── Teacher: get groups for a course ──────────────────────────────────────
   @Get('courses/:courseName/groups')
+  @Header('Cache-Control', 'no-store')
   @Roles(...STAFF_AND_ADMIN)
   getGroups(@Param('courseName') courseName: string, @CurrentUser() actor: any) {
     return this.assignmentsService.getGroupsForCourse(courseName, actor);
@@ -78,12 +79,14 @@ export class AssignmentsController {
 
   // ── Teacher/Admin: get groups with teacher and student count ──────────────
   @Get('courses/:courseName/groups-detailed')
+  @Header('Cache-Control', 'no-store')
   @Roles(...STAFF_AND_ADMIN)
   getGroupsDetailed(@Param('courseName') courseName: string, @CurrentUser() actor: any) {
     return this.assignmentsService.getGroupsDetailedForCourse(courseName, actor);
   }
 
   @Get('admin/courses/:courseName/teachers/:teacherId/groups')
+  @Header('Cache-Control', 'no-store')
   @Roles(UserRole.ADMIN)
   getAdminTeacherGroups(
     @Param('courseName') courseName: string,
@@ -93,6 +96,7 @@ export class AssignmentsController {
   }
 
   @Get('admin/courses/:courseName/groups/:groupName/outline')
+  @Header('Cache-Control', 'no-store')
   @Roles(UserRole.ADMIN)
   getAdminTeacherCourseOutline(
     @Param('courseName') courseName: string,
@@ -115,6 +119,7 @@ export class AssignmentsController {
 
   // ── Teacher/Student: list assignments for a group ─────────────────────────
   @Get('courses/:courseName/groups/:groupName')
+  @Header('Cache-Control', 'no-store')
   @Roles(...STAFF_AND_ADMIN)
   getAssignments(
     @Param('courseName') courseName: string,

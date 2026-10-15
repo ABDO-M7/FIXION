@@ -75,12 +75,8 @@ export default function AdminCodesPage() {
     accessScope: { chapters: [] as string[], lessons: [] as LessonScope[] },
   });
   const LIMIT = 50;
-  const groupBelongsToTeacher = (group: GroupOption, teacherId: string) =>
-    group.teacherId === teacherId || group.teacherIds?.includes(teacherId) === true;
   const hasTeacherLinkedGroups = availableGroupDetails.some(group => Boolean(group.teacherId || group.teacherIds?.length));
-  const selectableGroups = form.codeType === 'chapter' && form.teacherId && hasTeacherLinkedGroups
-    ? availableGroupDetails.filter(group => groupBelongsToTeacher(group, form.teacherId)).map(group => group.groupName)
-    : availableGroups;
+  const selectableGroups = availableGroups;
 
   const fetchCodes = async () => {
     setLoading(true);
@@ -228,7 +224,7 @@ export default function AdminCodesPage() {
     Promise.allSettled([
       assignmentsApi.adminTeacherOutline(form.courseName, form.groupName, form.teacherId),
       ...categorySubjects.map(subject => categoriesApi.list(subject)),
-      videosApi.teacherList(form.courseName, form.groupName, form.teacherId),
+      videosApi.teacherList(form.courseName, form.groupName),
       assignmentsApi.list(form.courseName, form.groupName),
     ])
       .then(([outlineResult, ...contentResults]) => {
@@ -269,7 +265,7 @@ export default function AdminCodesPage() {
         }
         if (assignmentsResult.status === 'fulfilled' && Array.isArray(assignmentsResult.value.data)) {
           for (const assignment of assignmentsResult.value.data) {
-            if (assignment.teacherId === form.teacherId) addChapter(assignment.chapterName, assignment.lessonName);
+            addChapter(assignment.chapterName, assignment.lessonName);
           }
         }
         const normalizedSubjects = new Set(categorySubjects.map(subject => subject.toLocaleLowerCase()));

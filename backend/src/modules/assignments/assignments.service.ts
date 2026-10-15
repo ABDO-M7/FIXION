@@ -574,20 +574,8 @@ export class AssignmentsService {
     if (!teacher) throw new NotFoundException('Teacher not found');
 
     const [assignments, videos] = await Promise.all([
-      this.assignmentsRepo.find({
-        where: [
-          { courseName, groupName, teacherId },
-          { courseName, groupName, teacher: { name: teacher.name } },
-        ],
-        relations: ['teacher'],
-      }),
-      this.videosRepo.find({
-        where: [
-          { courseName, groupName, teacherId },
-          { courseName, groupName, teacher: { name: teacher.name } },
-        ],
-        relations: ['teacher'],
-      }),
+      this.assignmentsRepo.find({ where: { courseName, groupName } }),
+      this.videosRepo.find({ where: { courseName, groupName } }),
     ]);
 
     const chapters = new Map<string, Set<string>>();

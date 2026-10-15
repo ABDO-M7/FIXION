@@ -133,18 +133,18 @@ describe('AssignmentsService staff access', () => {
     });
   });
 
-  it('includes legacy content linked to the selected teacher by name when its teacher ID differs', async () => {
+  it('builds the outline from all content in the selected group despite differing owner IDs', async () => {
     const assignments = {
       find: jest.fn().mockResolvedValue([
         {
           teacherId: 'legacy-teacher-id',
-          teacher: { name: 'Teacher One' },
+          teacher: { name: 'Another Teacher' },
           chapterName: 'Chapter 1',
           lessonName: 'Lesson B',
         },
         {
-          teacherId: 'teacher-1',
-          teacher: { name: 'Teacher One' },
+          teacherId: 'assistant-1',
+          teacher: { name: 'Another Assistant' },
           chapterName: 'Chapter 1',
           lessonName: 'Lesson A',
         },
@@ -152,9 +152,9 @@ describe('AssignmentsService staff access', () => {
     };
     const videos = {
       find: jest.fn().mockResolvedValue([
-        { teacher: { name: 'Teacher One' }, chapterName: 'Chapter 1', lessonName: 'Lesson A' },
-        { teacher: { name: 'Teacher One' }, chapterName: 'Chapter 2', lessonName: null },
-        { teacher: { name: 'Teacher One' }, chapterName: null, lessonName: 'Unassigned lesson' },
+        { teacherId: 'legacy-teacher-id', chapterName: 'Chapter 1', lessonName: 'Lesson A' },
+        { teacherId: 'assistant-1', chapterName: 'Chapter 2', lessonName: null },
+        { teacherId: 'assistant-1', chapterName: null, lessonName: 'Unassigned lesson' },
       ]),
     };
     const users = {
@@ -168,11 +168,10 @@ describe('AssignmentsService staff access', () => {
         { name: 'Chapter 2', lessons: [] },
       ]);
     expect(assignments.find).toHaveBeenCalledWith({
-      where: [
-        { courseName: 'Physics', groupName: 'Group A', teacherId: 'teacher-1' },
-        { courseName: 'Physics', groupName: 'Group A', teacher: { name: 'Teacher One' } },
-      ],
-      relations: ['teacher'],
+      where: { courseName: 'Physics', groupName: 'Group A' },
+    });
+    expect(videos.find).toHaveBeenCalledWith({
+      where: { courseName: 'Physics', groupName: 'Group A' },
     });
   });
 });

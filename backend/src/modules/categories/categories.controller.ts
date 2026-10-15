@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Post, Patch, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { CategoriesService, CreateCategoryDto } from './categories.service';
 import { JwtAuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -12,6 +12,7 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
+  @Header('Cache-Control', 'no-store')
   @Roles(...STAFF_AND_ADMIN)
   findAll(@Query('subject') subject?: string) {
     return this.categoriesService.findAll(subject);
