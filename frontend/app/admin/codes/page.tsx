@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, type FormEvent } from 'react';
 import AppShell from '@/components/AppShell';
-import { adminApi, codesApi, assignmentsApi, videosApi } from '@/lib/api';
+import { adminApi, codesApi, assignmentsApi, categoriesApi, videosApi } from '@/lib/api';
 import {
   Key, Copy, Trash2, CheckCircle, Clock, GraduationCap,
   FileDown, Printer, BarChart3, Timer, Camera, BookOpen,
@@ -133,15 +133,38 @@ export default function AdminCodesPage() {
     const groupsRequest = teacherScopedGroups
       ? assignmentsApi.adminTeacherGroups(form.courseName, form.teacherId)
       : assignmentsApi.groupsDetailed(form.courseName);
+    const loadTeacherGroupFallback = async () => {
+      const fallback = await assignmentsApi.groupsDetailed(form.courseName);
+      if (!active) return;
+      const allDetails = (Array.isArray(fallback.data) ? fallback.data : [])
+        .map((group: any) => typeof group === 'string' ? { groupName: group } : group)
+        .filter((group: any) => group.groupName);
+      const teacher = teachers.find(item => item.id === form.teacherId);
+      const matchingDetails = allDetails.filter((group: any) =>
+        group.teacherId === form.teacherId ||
+        group.teacherIds?.includes(form.teacherId) ||
+        (teacher?.name && group.teacherName?.trim() === teacher.name.trim()),
+      );
+      const details = matchingDetails.length > 0 ? matchingDetails : allDetails;
+      const groupNames = details.map((group: GroupOption) => group.groupName);
+      setAvailableGroups(groupNames);
+      setAvailableGroupDetails(details);
+      setForm(p => ({
+        ...p,
+        groupName: p.groupName && groupNames.includes(p.groupName) ? p.groupName : (groupNames[0] || ''),
+      }));
+    };
 
     groupsRequest
       .then(res => {
         if (!active) return;
-        const list = Array.isArray(res.data) ? res.data : [];
-        const details = list.map((g: any) => typeof g === 'string'
+        let list = Array.isArray(res.data) ? res.data : [];
+        let details = list.map((g: any) => typeof g === 'string'
           ? { groupName: g, ...(teacherScopedGroups ? { teacherId: form.teacherId, teacherIds: [form.teacherId] } : {}) }
-          : g)
-          .filter((g: any) => g.groupName);
+          : g).filter((g: any) => g.groupName);
+        if (teacherScopedGroups && details.length === 0) {
+          return loadTeacherGroupFallback();
+        }
         const groupNames = details.map((g: GroupOption) => g.groupName);
         const resolvedGroups = groupNames;
         setAvailableGroups(resolvedGroups);
@@ -158,13 +181,9 @@ export default function AdminCodesPage() {
       })
       .catch(() => {
         if (teacherScopedGroups) {
-          if (active) {
-            setAvailableGroups([]);
-            setAvailableGroupDetails([]);
-            setForm(p => ({ ...p, groupName: '' }));
-            setGroupError('Could not load groups for this teacher. Please try again.');
-          }
-          return;
+          return loadTeacherGroupFallback().catch(() => {
+            if (active) setGroupError('Could not load course groups. Please try again.');
+          });
         }
         assignmentsApi.groups(form.courseName)
           .then(res => {
@@ -201,13 +220,72 @@ export default function AdminCodesPage() {
     }
 
     setLoadingOutline(true);
-    assignmentsApi.adminTeacherOutline(form.courseName, form.groupName, form.teacherId)
-      .then(res => {
+    const selectedTeacher = teachers.find(teacher => teacher.id === form.teacherId);
+    const categorySubjects = Array.from(new Set([
+      form.courseName,
+      ...(selectedTeacher?.subjects || []),
+    ].map(subject => subject.trim()).filter(Boolean)));
+    Promise.allSettled([
+      assignmentsApi.adminTeacherOutline(form.courseName, form.groupName, form.teacherId),
+      ...categorySubjects.map(subject => categoriesApi.list(subject)),
+      videosApi.teacherList(form.courseName, form.groupName, form.teacherId),
+      assignmentsApi.list(form.courseName, form.groupName),
+    ])
+      .then(([outlineResult, ...contentResults]) => {
         if (!active) return;
-        setChapterOptions(Array.isArray(res.data) ? res.data : []);
-      })
-      .catch(() => {
-        if (active) setOutlineError('Could not load this teacher’s course content. Please try again.');
+        const categoryResults = contentResults.slice(0, categorySubjects.length);
+        const videosResult = contentResults[categorySubjects.length];
+        const assignmentsResult = contentResults[categorySubjects.length + 1];
+        const categoriesFailed = categoryResults.every(result => result.status === 'rejected');
+        if (
+          outlineResult.status === 'rejected' &&
+          categoriesFailed &&
+          videosResult.status === 'rejected' &&
+          assignmentsResult.status === 'rejected'
+        ) {
+          setOutlineError('Could not load this teacher’s chapters and lessons. Please try again.');
+          return;
+        }
+
+        const chapterMap = new Map<string, Set<string>>();
+        const addChapter = (chapterValue: unknown, lessonValue?: unknown) => {
+          const chapterName = String(chapterValue || '').trim();
+          const lessonName = String(lessonValue || '').trim();
+          if (!chapterName) return;
+          if (!chapterMap.has(chapterName)) chapterMap.set(chapterName, new Set());
+          if (lessonName) chapterMap.get(chapterName)!.add(lessonName);
+        };
+
+        if (outlineResult.status === 'fulfilled' && Array.isArray(outlineResult.value.data)) {
+          for (const chapter of outlineResult.value.data) {
+            addChapter(chapter.name);
+            for (const lesson of Array.isArray(chapter.lessons) ? chapter.lessons : []) {
+              addChapter(chapter.name, lesson);
+            }
+          }
+        }
+        if (videosResult.status === 'fulfilled' && Array.isArray(videosResult.value.data)) {
+          for (const video of videosResult.value.data) addChapter(video.chapterName, video.lessonName);
+        }
+        if (assignmentsResult.status === 'fulfilled' && Array.isArray(assignmentsResult.value.data)) {
+          for (const assignment of assignmentsResult.value.data) {
+            if (assignment.teacherId === form.teacherId) addChapter(assignment.chapterName, assignment.lessonName);
+          }
+        }
+        const normalizedSubjects = new Set(categorySubjects.map(subject => subject.toLocaleLowerCase()));
+        for (const result of categoryResults) {
+          if (result.status !== 'fulfilled' || !Array.isArray(result.value.data)) continue;
+          for (const category of result.value.data) {
+            if (normalizedSubjects.has(String(category.subject || '').trim().toLocaleLowerCase())) {
+              addChapter(category.chapter, category.lesson);
+            }
+          }
+        }
+
+        setChapterOptions(Array.from(chapterMap, ([name, lessons]) => ({
+          name,
+          lessons: Array.from(lessons).sort((left, right) => left.localeCompare(right)),
+        })).sort((left, right) => left.name.localeCompare(right.name)));
       })
       .finally(() => {
         if (active) setLoadingOutline(false);

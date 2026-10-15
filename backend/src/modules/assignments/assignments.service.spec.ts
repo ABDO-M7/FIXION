@@ -104,10 +104,14 @@ describe('AssignmentsService staff access', () => {
 
   it('returns groups linked to the selected teacher through groups, enrollments, assignments, or videos', async () => {
     const groups = {
-      find: jest.fn().mockResolvedValue([{ groupName: 'Group A' }]),
+      find: jest.fn().mockResolvedValue([{ groupName: 'Group A', teacherId: 'teacher-1' }]),
     };
     const enrollments = {
-      find: jest.fn().mockResolvedValue([{ groupName: 'Group B' }, { groupName: null }]),
+      find: jest.fn().mockResolvedValue([
+        { groupName: 'Group B', teacherName: 'Teacher One' },
+        { groupName: 'Other Teacher Group', teacherName: 'Teacher Two' },
+        { groupName: null },
+      ]),
     };
     const assignments = {
       find: jest.fn().mockResolvedValue([{ groupName: 'Group C' }]),
@@ -115,7 +119,7 @@ describe('AssignmentsService staff access', () => {
     const videos = {
       find: jest.fn().mockResolvedValue([{ groupName: 'Group D' }]),
     };
-    const users = { findOne: jest.fn().mockResolvedValue({ id: 'teacher-1', role: UserRole.TEACHER }) };
+    const users = { findOne: jest.fn().mockResolvedValue({ id: 'teacher-1', name: 'Teacher One', role: UserRole.TEACHER }) };
     const service = createService({ assignments, submissions: {}, groups, enrollments, users, videos });
 
     await expect(service.getAdminTeacherGroups('Physics', 'teacher-1'))

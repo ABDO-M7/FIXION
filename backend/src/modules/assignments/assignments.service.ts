@@ -534,16 +534,22 @@ export class AssignmentsService {
     const teacher = await this.usersRepo.findOne({ where: { id: teacherId, role: UserRole.TEACHER } });
     if (!teacher) throw new NotFoundException('Teacher not found');
 
-    const [savedGroups, enrollments, assignments, videos] = await Promise.all([
-      this.courseGroupsRepo.find({ where: { courseName, teacherId } }),
-      this.enrollmentsRepo.find({ where: { courseName, teacherId } }),
+    const [savedGroups, courseEnrollments, assignments, videos] = await Promise.all([
+      this.courseGroupsRepo.find({ where: { courseName }, relations: ['teacher'] }),
+      this.enrollmentsRepo.find({ where: { courseName }, relations: ['teacher'] }),
       this.assignmentsRepo.find({ where: { courseName, teacherId } }),
       this.videosRepo.find({ where: { courseName, teacherId } }),
     ]);
+    const teacherGroups = savedGroups
+      .filter(group => group.teacherId === teacher.id || group.teacherName?.trim() === teacher.name.trim() || group.teacher?.name?.trim() === teacher.name.trim())
+      .map(group => group.groupName);
+    const enrollments = courseEnrollments
+      .filter(enrollment => enrollment.teacherId === teacher.id || enrollment.teacherName?.trim() === teacher.name.trim() || enrollment.teacher?.name?.trim() === teacher.name.trim())
+      .map(enrollment => enrollment.groupName);
 
     return Array.from(new Set([
-      ...savedGroups.map(group => group.groupName),
-      ...enrollments.map(enrollment => enrollment.groupName),
+      ...teacherGroups,
+      ...enrollments,
       ...assignments.map(assignment => assignment.groupName),
       ...videos.map(video => video.groupName),
     ].filter((groupName): groupName is string => typeof groupName === 'string' && Boolean(groupName.trim()))))
