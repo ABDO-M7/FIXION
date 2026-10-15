@@ -473,7 +473,7 @@ export class AssignmentsService {
       groupNames.map(async (groupName) => {
         const explicitGroup = savedGroupMap.get(groupName);
 
-        const [studentCount, enrollmentWithTeacher, assignmentWithTeacher] = await Promise.all([
+        const [studentCount, enrollmentWithTeacher, assignmentWithTeacher, videoWithTeacher] = await Promise.all([
           this.enrollmentsRepo.count({ where: { courseName, groupName } }),
           this.enrollmentsRepo.findOne({
             where: { courseName, groupName },
@@ -485,12 +485,18 @@ export class AssignmentsService {
             relations: ['teacher'],
             order: { createdAt: 'DESC' },
           }),
+          this.videosRepo.findOne({
+            where: { courseName, groupName },
+            relations: ['teacher'],
+            order: { createdAt: 'DESC' },
+          }),
         ]);
 
         const teacher =
           explicitGroup?.teacher ||
           enrollmentWithTeacher?.teacher ||
           assignmentWithTeacher?.teacher ||
+          videoWithTeacher?.teacher ||
           defaultTeacher;
 
         const teacherName =
@@ -498,6 +504,7 @@ export class AssignmentsService {
           explicitGroup?.teacherName ||
           teacher?.name ||
           enrollmentWithTeacher?.teacherName ||
+          videoWithTeacher?.teacher?.name ||
           defaultTeacher?.name ||
           'مدرس المادة';
 
@@ -506,6 +513,13 @@ export class AssignmentsService {
           courseName,
           teacherName,
           teacherId: teacher?.id || explicitGroup?.teacherId || null,
+          teacherIds: Array.from(new Set([
+            explicitGroup?.teacherId,
+            enrollmentWithTeacher?.teacherId,
+            assignmentWithTeacher?.teacherId,
+            videoWithTeacher?.teacherId,
+            defaultTeacher?.id,
+          ].filter((id): id is string => Boolean(id)))),
           studentCount,
           schedule: explicitGroup?.schedule || null,
         };

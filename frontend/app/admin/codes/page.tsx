@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 type CodeType = 'timed' | 'snapshot' | 'chapter';
 type LessonScope = { chapterName: string; lessonName: string };
 type ChapterOption = { name: string; lessons: string[] };
-type GroupOption = { groupName: string; teacherId?: string | null };
+type GroupOption = { groupName: string; teacherId?: string | null; teacherIds?: string[] };
 
 const CODE_TYPE_META: Record<CodeType, { label: string; description: string; color: string; Icon: any }> = {
   timed: {
@@ -54,6 +54,7 @@ export default function AdminCodesPage() {
   const [availableGroupDetails, setAvailableGroupDetails] = useState<GroupOption[]>([]);
   const [chapterOptions, setChapterOptions] = useState<ChapterOption[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
+  const [groupError, setGroupError] = useState('');
   const [loadingOutline, setLoadingOutline] = useState(false);
   const [outlineError, setOutlineError] = useState('');
   const [customGroup, setCustomGroup] = useState(false);
@@ -74,6 +75,12 @@ export default function AdminCodesPage() {
     accessScope: { chapters: [] as string[], lessons: [] as LessonScope[] },
   });
   const LIMIT = 50;
+  const groupBelongsToTeacher = (group: GroupOption, teacherId: string) =>
+    group.teacherId === teacherId || group.teacherIds?.includes(teacherId) === true;
+  const hasTeacherLinkedGroups = availableGroupDetails.some(group => Boolean(group.teacherId || group.teacherIds?.length));
+  const selectableGroups = form.codeType === 'chapter' && form.teacherId && hasTeacherLinkedGroups
+    ? availableGroupDetails.filter(group => groupBelongsToTeacher(group, form.teacherId)).map(group => group.groupName)
+    : availableGroups;
 
   const fetchCodes = async () => {
     setLoading(true);
@@ -114,11 +121,13 @@ export default function AdminCodesPage() {
     if (!form.courseName) {
       setAvailableGroups([]);
       setAvailableGroupDetails([]);
+      setGroupError('');
       setCustomGroup(false);
       setLoadingGroups(false);
       return () => { active = false; };
     }
     setLoadingGroups(true);
+    setGroupError('');
     assignmentsApi.groupsDetailed(form.courseName)
       .then(res => {
         if (!active) return;
@@ -126,7 +135,7 @@ export default function AdminCodesPage() {
         const details = list.map((g: any) => typeof g === 'string' ? { groupName: g } : g)
           .filter((g: any) => g.groupName);
         const groupNames = details.map((g: GroupOption) => g.groupName);
-        const resolvedGroups = groupNames.length > 0 ? groupNames : ['Group 1'];
+        const resolvedGroups = groupNames;
         setAvailableGroups(resolvedGroups);
         setAvailableGroupDetails(details);
         setCustomGroup(false);
@@ -142,7 +151,7 @@ export default function AdminCodesPage() {
           .then(res => {
             if (!active) return;
             const list = Array.isArray(res.data) ? res.data : [];
-            const resolvedGroups = list.length > 0 ? list : ['Group 1'];
+            const resolvedGroups = list;
             setAvailableGroups(resolvedGroups);
             setAvailableGroupDetails(list.map((groupName: string) => ({ groupName })));
             setForm(p => ({
@@ -154,6 +163,7 @@ export default function AdminCodesPage() {
             if (active) {
               setAvailableGroups([]);
               setAvailableGroupDetails([]);
+              setGroupError('Could not load groups for this course. Please try again.');
             }
           });
       })
@@ -391,14 +401,16 @@ export default function AdminCodesPage() {
               </p>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div className="form-group">
-                <label className="form-label">Plan</label>
-                <select value={form.plan} onChange={e => setForm(p => ({ ...p, plan: e.target.value }))} className="form-input" style={{ appearance: 'auto' }}>
-                  <option value="weekly">Weekly (7 days)</option>
-                  <option value="monthly">Monthly (30 days)</option>
-                </select>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: form.codeType === 'chapter' ? '1fr' : '1fr 1fr', gap: 10 }}>
+              {form.codeType !== 'chapter' && (
+                <div className="form-group">
+                  <label className="form-label">Plan</label>
+                  <select value={form.plan} onChange={e => setForm(p => ({ ...p, plan: e.target.value }))} className="form-input" style={{ appearance: 'auto' }}>
+                    <option value="weekly">Weekly (7 days)</option>
+                    <option value="monthly">Monthly (30 days)</option>
+                  </select>
+                </div>
+              )}
               <div className="form-group">
                 <label className="form-label">Quantity (max 500)</label>
                 <input type="number" value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} className="form-input" min={1} max={500} />
@@ -432,7 +444,26 @@ export default function AdminCodesPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: 12 }}>Teacher</label>
-                    <select value={form.teacherId} onChange={e => setForm(p => ({ ...p, teacherId: e.target.value }))} className="form-input" style={{ fontSize: 13 }}>
+                    <select
+                      value={form.teacherId}
+                      onChange={e => {
+                        const teacherId = e.target.value;
+                        const teacherGroups = availableGroupDetails
+                          .filter(group => groupBelongsToTeacher(group, teacherId))
+                          .map(group => group.groupName);
+                        const shouldFilterGroups = form.codeType === 'chapter' && hasTeacherLinkedGroups;
+                        setForm(p => ({
+                          ...p,
+                          teacherId,
+                          groupName: shouldFilterGroups
+                            ? (teacherGroups.includes(p.groupName) ? p.groupName : (teacherGroups[0] || ''))
+                            : p.groupName,
+                          accessScope: { chapters: [], lessons: [] },
+                        }));
+                      }}
+                      className="form-input"
+                      style={{ fontSize: 13 }}
+                    >
                       <option value="">— Select teacher —</option>
                       {teachers
                         .filter(t => !form.courseName || !t.subjects?.length || t.subjects.includes(form.courseName) || t.id === form.teacherId)
@@ -466,7 +497,9 @@ export default function AdminCodesPage() {
                             setForm(p => ({
                               ...p,
                               groupName: e.target.value,
-                              teacherId: selectedGroup?.teacherId || p.teacherId,
+                              teacherId: form.codeType === 'chapter'
+                                ? p.teacherId || selectedGroup?.teacherId || ''
+                                : selectedGroup?.teacherId || p.teacherId,
                             }));
                           }
                         }}
@@ -474,12 +507,20 @@ export default function AdminCodesPage() {
                       >
                         {!form.courseName ? <option value="">— Select course first —</option> : (
                           <>
-                            <option value="">— No group —</option>
-                            {availableGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                            <option value="">
+                              {form.codeType === 'chapter' && form.teacherId && selectableGroups.length === 0
+                                ? '— No groups assigned to this teacher —'
+                                : '— Select group —'}
+                            </option>
+                            {selectableGroups.map(g => <option key={g} value={g}>{g}</option>)}
                             {form.codeType !== 'chapter' && <option value="__custom__">+ Custom group...</option>}
                           </>
                         )}
                       </select>
+                    )}
+                    {groupError && <p role="alert" style={{ color: 'var(--danger)', fontSize: 11, margin: '4px 0 0' }}>{groupError}</p>}
+                    {form.codeType === 'chapter' && form.teacherId && !loadingGroups && hasTeacherLinkedGroups && selectableGroups.length === 0 && (
+                      <p style={{ color: 'var(--text-muted)', fontSize: 11, margin: '4px 0 0' }}>No course groups are assigned to this teacher.</p>
                     )}
                   </div>
                 </div>
@@ -573,9 +614,11 @@ export default function AdminCodesPage() {
 
             {/* Code window expiry */}
             <div className="form-group">
-              <label className="form-label">Code Redemption Window Expiry <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+              <label className="form-label">Redeem code by <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
               <input type="date" value={form.codeExpiresAt} onChange={e => setForm(p => ({ ...p, codeExpiresAt: e.target.value }))} className="form-input" />
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>After this date the code itself can no longer be redeemed (access expiry is separate).</p>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                The student must redeem the code by this date. It does not set how long the selected chapters stay open; that duration starts when the code is redeemed.
+              </p>
             </div>
 
             {/* Code format */}
