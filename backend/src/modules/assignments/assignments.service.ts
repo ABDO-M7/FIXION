@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Assignment, AssignmentType } from './entities/assignment.entity';
 import { AssignmentSubmission } from './entities/assignment-submission.entity';
 import { QuizQuestion, QuizQuestionType, QuizOption } from './entities/quiz-question.entity';
@@ -518,12 +518,15 @@ export class AssignmentsService {
 
 
   // ─── TEACHER: get students enrolled in a specific group ───────────────────
-  async getStudentsInGroup(courseName: string, groupName: string) {
-    // Step 1: get all enrollment rows (just the studentId column, no join needed)
-    const enrollments = await this.enrollmentsRepo.find({
-      where: { courseName, groupName },
-      select: ['studentId'],
-    });
+  async getStudentsInGroup(courseName: string, groupName: string, actor: User) {
+    const scope = await this.assertCanManageGroup(courseName, groupName, actor);
+    const enrollmentsQuery = this.enrollmentsRepo
+      .createQueryBuilder('e')
+      .select('e.studentId', 'studentId')
+      .where('e.courseName = :courseName', { courseName })
+      .andWhere('e.groupName = :groupName', { groupName });
+    this.applyEnrollmentScope(enrollmentsQuery, scope);
+    const enrollments = await enrollmentsQuery.getRawMany<{ studentId: string }>();
     const studentIds = Array.from(new Set(enrollments.map((e) => e.studentId).filter(Boolean)));
     if (studentIds.length === 0) return [];
 
@@ -629,15 +632,18 @@ export class AssignmentsService {
   }
 
   // ─── GET single assignment with submissions ────────────────────────────────
-  async getAssignmentWithSubmissions(assignmentId: string, courseName: string, groupName: string) {
-    const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
+  async getAssignmentWithSubmissions(assignmentId: string, courseName: string, groupName: string, actor: User) {
+    const students = await this.getStudentsInGroup(courseName, groupName, actor);
+    const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId, courseName, groupName } });
     if (!assignment) throw new NotFoundException('Assignment not found');
 
-    const students = await this.getStudentsInGroup(courseName, groupName);
-    const submissions = await this.submissionsRepo.find({
-      where: { assignmentId },
-      relations: ['student'],
-    });
+    const scope = await this.staffScope(actor);
+    const submissions = students.length > 0
+      ? await this.submissionsRepo.find({
+          where: { assignmentId, studentId: In(students.map(student => student.id)) },
+          relations: ['student'],
+        })
+      : [];
 
     const submissionMap = new Map(submissions.map((s) => [s.studentId, s]));
 
@@ -666,7 +672,13 @@ export class AssignmentsService {
       };
     });
 
-    return { assignment, studentRows };
+    return {
+      assignment: {
+        ...assignment,
+        canManage: canManageOwnedWork(scope, actor, assignment.teacherId),
+      },
+      studentRows,
+    };
   }
 
   // ─── STUDENT: submit assignment (homework) ────────────────────────────────
@@ -764,28 +776,30 @@ export class AssignmentsService {
   }
 
   // ─── TEACHER: grade a submission ──────────────────────────────────────────
-  async gradeSubmission(submissionId: string, grade: number, feedback?: string) {
+  async gradeSubmission(submissionId: string, grade: number, feedback: string | undefined, actor: User) {
     const submission = await this.submissionsRepo.findOne({ where: { id: submissionId } });
     if (!submission) throw new NotFoundException('Submission not found');
     const assignment = await this.assignmentsRepo.findOne({ where: { id: submission.assignmentId } });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+    const scope = await this.staffScope(actor);
+    if (!canManageOwnedWork(scope, actor, assignment.teacherId)) throw new ForbiddenException();
     await this.submissionsRepo.update(submissionId, { grade, feedback });
-    if (assignment) {
-      await this.invalidateStudentCourse(assignment.courseName, assignment.groupName, submission.studentId);
-    }
+    await this.invalidateStudentCourse(assignment.courseName, assignment.groupName, submission.studentId);
     return this.submissionsRepo.findOne({ where: { id: submissionId } });
   }
 
   // ─── TEACHER: get grade matrix for a group ────────────────────────────────
-  async getGradeMatrix(courseName: string, groupName: string) {
-    const students = await this.getStudentsInGroup(courseName, groupName);
-    const assignments = await this.getAssignments(courseName, groupName);
+  async getGradeMatrix(courseName: string, groupName: string, actor: User) {
+    const students = await this.getStudentsInGroup(courseName, groupName, actor);
+    const assignments = await this.getAssignments(courseName, groupName, undefined, actor);
 
-    const submissions = await this.submissionsRepo
-      .createQueryBuilder('s')
-      .where('s.assignmentId IN (:...ids)', {
-        ids: assignments.length > 0 ? assignments.map((a) => a.id) : ['00000000-0000-0000-0000-000000000000'],
-      })
-      .getMany();
+    const submissions = assignments.length > 0 && students.length > 0
+      ? await this.submissionsRepo
+          .createQueryBuilder('s')
+          .where('s.assignmentId IN (:...ids)', { ids: assignments.map((a) => a.id) })
+          .andWhere('s.studentId IN (:...studentIds)', { studentIds: students.map(student => student.id) })
+          .getMany()
+      : [];
 
     const gradeMap = new Map<string, Map<string, number | null>>();
     for (const student of students) {
@@ -818,7 +832,7 @@ export class AssignmentsService {
     }
 
     const [students, allAssignments, videos] = await Promise.all([
-      this.getStudentsInGroup(courseName, groupName),
+      this.getStudentsInGroup(courseName, groupName, actor),
       this.getAssignments(courseName, groupName),
       this.videosRepo.find({ where: { courseName, groupName } }),
     ]);

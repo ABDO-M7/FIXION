@@ -192,6 +192,7 @@ export default function TeacherSubmissionsPage() {
 
   const maxGrade = assignment?.maxGrade ?? 100;
   const isQuiz = assignment?.type === 'QUIZ';
+  const canManageAssignment = user?.role === 'admin' || assignment?.canManage === true;
 
   return (
     <AppShell>
@@ -207,7 +208,7 @@ export default function TeacherSubmissionsPage() {
             <ArrowLeft size={16} /> Back to {decodedGroup}
           </Link>
 
-          {isQuiz && (
+          {isQuiz && canManageAssignment && (
             <Link
               href={`/teacher/courses/${encodeURIComponent(decodedCourse)}/${encodeURIComponent(decodedGroup)}/quiz/${assignmentId}`}
               className="btn btn-secondary btn-sm"
@@ -586,7 +587,7 @@ export default function TeacherSubmissionsPage() {
                     {isSubmitted ? (
                       <div>
                         {/* Grading Controls Bar (Available ALL THE TIME, before AND after grading) */}
-                        <div style={{
+                        {canManageAssignment && <div style={{
                           background: '#162238',
                           border: '1px solid #233454',
                           borderRadius: 12,
@@ -692,7 +693,7 @@ export default function TeacherSubmissionsPage() {
                               )}
                             </button>
                           </div>
-                        </div>
+                        </div>}
 
                         {/* QUIZ STUDENT ANSWERS: ALWAYS VISIBLE ALL THE TIME (BEFORE & AFTER GRADING) */}
                         {isQuiz && (

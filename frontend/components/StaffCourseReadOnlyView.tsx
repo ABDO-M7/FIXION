@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, CheckCircle2, ClipboardList, Edit3, FileText, Play, Send, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, ClipboardList, Edit3, Eye, FileText, Play, Send, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StudentCourseHierarchy from '@/components/StudentCourseHierarchy';
 import InteractiveCourseVideoPlayer, { type InteractiveCourseVideo } from '@/components/InteractiveCourseVideoPlayer';
@@ -168,6 +168,8 @@ export default function StaffCourseReadOnlyView({
           <ReadOnlyAssignmentCard
             key={assignment.id}
             assignment={assignment as CourseAssignment}
+            courseName={courseName}
+            groupName={groupName}
           />
         )}
       />
@@ -198,7 +200,15 @@ export default function StaffCourseReadOnlyView({
   );
 }
 
-function ReadOnlyAssignmentCard({ assignment }: { assignment: CourseAssignment }) {
+function ReadOnlyAssignmentCard({
+  assignment,
+  courseName,
+  groupName,
+}: {
+  assignment: CourseAssignment;
+  courseName: string;
+  groupName: string;
+}) {
   const [showQuiz, setShowQuiz] = useState(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
@@ -220,7 +230,7 @@ function ReadOnlyAssignmentCard({ assignment }: { assignment: CourseAssignment }
 
   return (
     <>
-      <article className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16 }}>
+      <article className="card" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 14, padding: 16 }}>
         <div style={{
           width: 40, height: 40, borderRadius: 10, flexShrink: 0,
           display: 'grid', placeItems: 'center',
@@ -254,6 +264,13 @@ function ReadOnlyAssignmentCard({ assignment }: { assignment: CourseAssignment }
             <Play size={13} /> معاينة الأسئلة
           </button>
         )}
+        <Link
+          href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/submissions/${assignment.id}`}
+          className="btn btn-secondary btn-sm"
+          style={{ flexShrink: 0 }}
+        >
+          <Eye size={13} aria-hidden="true" /> عرض تسليمات الطلاب
+        </Link>
       </article>
       {showQuiz && (
         <div

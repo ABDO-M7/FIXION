@@ -89,8 +89,9 @@ export class AssignmentsController {
   getStudents(
     @Param('courseName') courseName: string,
     @Param('groupName') groupName: string,
+    @CurrentUser() actor: any,
   ) {
-    return this.assignmentsService.getStudentsInGroup(courseName, groupName);
+    return this.assignmentsService.getStudentsInGroup(courseName, groupName, actor);
   }
 
   // ── Teacher/Student: list assignments for a group ─────────────────────────
@@ -119,8 +120,9 @@ export class AssignmentsController {
     @Param('id') id: string,
     @Query('courseName') courseName: string,
     @Query('groupName') groupName: string,
+    @CurrentUser() actor: any,
   ) {
-    return this.assignmentsService.getAssignmentWithSubmissions(id, courseName, groupName);
+    return this.assignmentsService.getAssignmentWithSubmissions(id, courseName, groupName, actor);
   }
 
   // ── Student: submit a homework assignment ──────────────────────────────────
@@ -158,9 +160,10 @@ export class AssignmentsController {
   gradeSubmission(
     @Param('submissionId') submissionId: string,
     @Body('grade') grade: number,
+    @CurrentUser() actor: any,
     @Body('feedback') feedback?: string,
   ) {
-    return this.assignmentsService.gradeSubmission(submissionId, grade, feedback);
+    return this.assignmentsService.gradeSubmission(submissionId, grade, feedback, actor);
   }
 
   // ── Teacher: grade matrix ─────────────────────────────────────────────────
@@ -169,8 +172,9 @@ export class AssignmentsController {
   getGradeMatrix(
     @Param('courseName') courseName: string,
     @Param('groupName') groupName: string,
+    @CurrentUser() actor: any,
   ) {
-    return this.assignmentsService.getGradeMatrix(courseName, groupName);
+    return this.assignmentsService.getGradeMatrix(courseName, groupName, actor);
   }
 
   @Get('courses/:courseName/groups/:groupName/analytics')
