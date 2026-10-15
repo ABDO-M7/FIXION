@@ -187,7 +187,7 @@ export class VideosService {
       },
     );
     return videos
-      .filter(video => canAccessCourseContent(enrollment, video.chapterName, video.lessonName, video.teacherId))
+      .filter(video => canAccessCourseContent(enrollment, video.chapterName, video.lessonName))
       .map(({ teacherId, ...video }) => {
         void teacherId;
         return video;
@@ -234,7 +234,7 @@ export class VideosService {
   async getStudentExperience(videoId: string, student: User) {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
-    await this.assertEnrollment(video.courseName, video.groupName, student.id, video.chapterName, video.lessonName, video.teacherId);
+    await this.assertEnrollment(video.courseName, video.groupName, student.id, video.chapterName, video.lessonName);
     const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, video.unlockVideoId, video.unlockPercent, student.id);
     if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
     const checkpoints = await this.checkpointsRepo.find({
@@ -268,7 +268,7 @@ export class VideosService {
   async updateProgress(videoId: string, studentId: string, dto: { watchedSeconds: number; durationSeconds: number }) {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
-    await this.assertEnrollment(video.courseName, video.groupName, studentId, video.chapterName, video.lessonName, video.teacherId);
+    await this.assertEnrollment(video.courseName, video.groupName, studentId, video.chapterName, video.lessonName);
     const currentPosition = Number(dto.watchedSeconds);
     const reportedDuration = Number(dto.durationSeconds);
     if (!Number.isFinite(currentPosition) || !Number.isFinite(reportedDuration) || currentPosition < 0 || reportedDuration < 1) {
@@ -317,7 +317,7 @@ export class VideosService {
   async markDocumentOpened(videoId: string, studentId: string, attachmentIndex?: number) {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Course content not found');
-    await this.assertEnrollment(video.courseName, video.groupName, studentId, video.chapterName, video.lessonName, video.teacherId);
+    await this.assertEnrollment(video.courseName, video.groupName, studentId, video.chapterName, video.lessonName);
     const progress = await this.progressRepo.findOne({ where: { videoId, studentId } })
       || this.progressRepo.create({ videoId, studentId, watchedSeconds: 0, durationSeconds: 0, watchedPercent: 0 });
     if (attachmentIndex !== undefined) {
@@ -338,7 +338,7 @@ export class VideosService {
   async answerCheckpoint(videoId: string, checkpointId: string, student: User, dto: AnswerDto) {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
-    await this.assertEnrollment(video.courseName, video.groupName, student.id, video.chapterName, video.lessonName, video.teacherId);
+    await this.assertEnrollment(video.courseName, video.groupName, student.id, video.chapterName, video.lessonName);
     const checkpoint = await this.checkpointsRepo.findOne({ where: { id: checkpointId, videoId } });
     if (!checkpoint) throw new NotFoundException('Checkpoint not found');
 
@@ -537,12 +537,11 @@ export class VideosService {
     studentId: string,
     chapterName?: string | null,
     lessonName?: string | null,
-    contentTeacherId?: string | null,
   ): Promise<CourseEnrollment> {
     const enrollment = await this.enrollmentsRepo.findOne({ where: { courseName, groupName, studentId } });
     if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
     if (chapterName !== undefined || lessonName !== undefined) {
-      assertCourseContentAccess(enrollment, chapterName, lessonName, contentTeacherId);
+      assertCourseContentAccess(enrollment, chapterName, lessonName);
     } else {
       assertEnrollmentActive(enrollment);
     }

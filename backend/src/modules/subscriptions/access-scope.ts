@@ -18,10 +18,8 @@ export function canAccessCourseContent(
   enrollment: CourseEnrollment,
   chapterName?: string | null,
   lessonName?: string | null,
-  contentTeacherId?: string | null,
 ): boolean {
   if ((enrollment.codeType ?? CodeType.TIMED) !== CodeType.CHAPTER) return true;
-  if (enrollment.teacherId && enrollment.teacherId !== contentTeacherId) return false;
 
   const scope = enrollment.accessScope;
   if (!scope) return false;
@@ -39,10 +37,9 @@ export function assertCourseContentAccess(
   enrollment: CourseEnrollment,
   chapterName?: string | null,
   lessonName?: string | null,
-  contentTeacherId?: string | null,
 ): void {
   assertEnrollmentActive(enrollment);
-  if (!canAccessCourseContent(enrollment, chapterName, lessonName, contentTeacherId)) {
+  if (!canAccessCourseContent(enrollment, chapterName, lessonName)) {
     throw new ForbiddenException('This content is not included in your course access');
   }
 }

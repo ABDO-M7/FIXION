@@ -1089,7 +1089,7 @@ export class AssignmentsService {
       },
     );
     return assignments.filter(assignment =>
-      canAccessCourseContent(enrollment, assignment.chapterName, assignment.lessonName, assignment.teacherId),
+      canAccessCourseContent(enrollment, assignment.chapterName, assignment.lessonName),
     );
   }
 
@@ -1103,7 +1103,7 @@ export class AssignmentsService {
         assignment.courseName,
         assignment.groupName,
       );
-      assertCourseContentAccess(enrollment, assignment.chapterName, assignment.lessonName, assignment.teacherId);
+      assertCourseContentAccess(enrollment, assignment.chapterName, assignment.lessonName);
     }
     const submission = assignment.unlockAssignmentId
       ? await this.submissionsRepo.findOne({ where: { assignmentId: assignment.unlockAssignmentId, studentId } })
