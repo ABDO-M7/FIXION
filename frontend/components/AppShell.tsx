@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useTranslation } from '@/hooks/useTranslation';
 import { dashboardPath, isStaffRole } from '@/lib/roles';
+import AIAssistantWidget from './AIAssistantWidget';
 
 const studentNav = [
   { key: 'nav.dashboard',      href: '/student',                icon: LayoutDashboard },
@@ -229,6 +230,9 @@ export default function AppShell({ children }: AppShellProps) {
         <main className="main-content">
           {children}
         </main>
+
+        {/* 3D Robot AI Guide Widget */}
+        <AIAssistantWidget />
       </div>
     </div>
   );

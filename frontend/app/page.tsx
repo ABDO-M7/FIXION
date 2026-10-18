@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import GradientWaves from '@/components/GradientWaves';
+import AIAssistantWidget from '@/components/AIAssistantWidget';
 
 type Language = 'ar' | 'en';
 
@@ -62,6 +63,7 @@ export default function HomePage() {
         <section className="landing-cta"><div><div className="landing-eyebrow">FIXION / NEXT STEP</div><h2>{t.ctaTitle}</h2><p>{t.ctaBody}</p></div><Link href="/register" className="landing-primary-button">{t.cta}<ArrowUpRight size={18} /></Link></section>
       </main>
       <footer className="landing-footer"><Link href="/" className="landing-brand"><img src="/brand/icon.png" alt="" className="landing-brand-mark" /><span>FIXION</span></Link><span>{t.footer}</span><span>© {new Date().getFullYear()} FIXION</span></footer>
+      <AIAssistantWidget />
     </div>
   );
 }
