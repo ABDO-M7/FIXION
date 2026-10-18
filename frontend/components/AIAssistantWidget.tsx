@@ -60,10 +60,10 @@ export default function AIAssistantWidget({
         <div
           style={{
             pointerEvents: 'auto',
-            background: 'rgba(15, 23, 42, 0.94)',
+            background: 'rgba(11, 30, 59, 0.94)',
             backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(99, 102, 241, 0.35)',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px rgba(99, 102, 241, 0.25)',
+            border: '1px solid rgba(0, 209, 255, 0.4)',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 209, 255, 0.3)',
             borderRadius: '16px 16px 4px 16px',
             padding: '10px 14px',
             maxWidth: 240,
@@ -83,7 +83,7 @@ export default function AIAssistantWidget({
             setHasInteracted(true);
           }}
         >
-          <Sparkles size={16} style={{ color: '#38bdf8', flexShrink: 0 }} />
+          <Sparkles size={16} style={{ color: '#00D1FF', flexShrink: 0 }} />
           <span>{greeting}</span>
           <button
             type="button"
@@ -111,11 +111,11 @@ export default function AIAssistantWidget({
           style={{
             pointerEvents: 'auto',
             width: 320,
-            background: 'rgba(15, 23, 42, 0.96)',
+            background: 'rgba(11, 30, 59, 0.96)',
             backdropFilter: 'blur(16px)',
-            border: '1px solid rgba(99, 102, 241, 0.35)',
+            border: '1px solid rgba(0, 209, 255, 0.35)',
             borderRadius: 20,
-            boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 0 30px rgba(99, 102, 241, 0.2)',
+            boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 209, 255, 0.25)',
             padding: 16,
             marginBottom: 12,
             animation: 'scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -132,7 +132,7 @@ export default function AIAssistantWidget({
                   width: 28,
                   height: 28,
                   borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #6366f1, #38bdf8)',
+                  background: 'linear-gradient(135deg, #00D1FF, #FF4ED8)',
                   display: 'grid',
                   placeItems: 'center',
                 }}
@@ -140,8 +140,8 @@ export default function AIAssistantWidget({
                 <Sparkles size={14} color="#fff" />
               </div>
               <div>
-                <strong style={{ fontSize: 13, color: '#f8fafc', display: 'block' }}>FIXION AI Guide</strong>
-                <span style={{ fontSize: 10, color: '#38bdf8' }}>متصل ومتفاعل 3D 🟢</span>
+                <strong style={{ fontSize: 13, color: '#f8fafc', display: 'block' }}>Fixion Learning Buddy</strong>
+                <span style={{ fontSize: 10, color: '#00D1FF' }}>متصل وتفاعلي 3D 🟢</span>
               </div>
             </div>
             <button
@@ -156,11 +156,11 @@ export default function AIAssistantWidget({
           {/* 3D Showcase Window inside Expanded Card */}
           <div
             style={{
-              height: 180,
+              height: 195,
               width: '100%',
               borderRadius: 14,
-              background: 'radial-gradient(circle at 50% 60%, rgba(99, 102, 241, 0.15) 0%, rgba(15, 23, 42, 0.4) 70%)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
+              background: 'radial-gradient(circle at 50% 60%, rgba(0, 209, 255, 0.16) 0%, rgba(11, 30, 59, 0.6) 70%)',
+              border: '1px solid rgba(0, 209, 255, 0.18)',
               overflow: 'hidden',
               position: 'relative',
             }}
@@ -179,11 +179,11 @@ export default function AIAssistantWidget({
                 bottom: 8,
                 left: 10,
                 fontSize: 10,
-                color: 'rgba(255,255,255,0.45)',
+                color: 'rgba(255,255,255,0.6)',
                 pointerEvents: 'none',
               }}
             >
-              اضغط على الروبوت للتحية 👋
+              اضغط للقفز والترحيب! 🚀
             </span>
           </div>
 
@@ -210,7 +210,7 @@ export default function AIAssistantWidget({
                   transition: 'background 0.2s',
                 }}
               >
-                <GraduationCap size={15} style={{ color: '#6366f1' }} />
+                <GraduationCap size={15} style={{ color: '#00D1FF' }} />
                 <span>كورساتي</span>
               </Link>
 
@@ -230,7 +230,7 @@ export default function AIAssistantWidget({
                   textDecoration: 'none',
                 }}
               >
-                <HelpCircle size={15} style={{ color: '#38bdf8' }} />
+                <HelpCircle size={15} style={{ color: '#FF4ED8' }} />
                 <span>بنك الأسئلة</span>
               </Link>
             </div>
@@ -245,9 +245,9 @@ export default function AIAssistantWidget({
           width: 90,
           height: 90,
           borderRadius: '50%',
-          background: 'radial-gradient(circle at 40% 40%, rgba(99, 102, 241, 0.3) 0%, rgba(15, 23, 42, 0.95) 75%)',
-          border: '2px solid rgba(99, 102, 241, 0.45)',
-          boxShadow: '0 8px 30px rgba(99, 102, 241, 0.4), 0 0 15px rgba(56, 189, 248, 0.3)',
+          background: 'radial-gradient(circle at 40% 40%, rgba(0, 209, 255, 0.35) 0%, rgba(11, 30, 59, 0.96) 75%)',
+          border: '2px solid rgba(0, 209, 255, 0.55)',
+          boxShadow: '0 8px 30px rgba(0, 209, 255, 0.45), 0 0 18px rgba(255, 78, 216, 0.35)',
           cursor: 'pointer',
           position: 'relative',
           transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s',
@@ -257,14 +257,14 @@ export default function AIAssistantWidget({
           setHasInteracted(true);
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.08)';
-          e.currentTarget.style.boxShadow = '0 12px 35px rgba(99, 102, 241, 0.6), 0 0 25px rgba(56, 189, 248, 0.5)';
+          e.currentTarget.style.transform = 'scale(1.1)';
+          e.currentTarget.style.boxShadow = '0 12px 35px rgba(0, 209, 255, 0.65), 0 0 25px rgba(255, 78, 216, 0.5)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 8px 30px rgba(99, 102, 241, 0.4), 0 0 15px rgba(56, 189, 248, 0.3)';
+          e.currentTarget.style.boxShadow = '0 8px 30px rgba(0, 209, 255, 0.45), 0 0 18px rgba(255, 78, 216, 0.35)';
         }}
-        title="مرشدك الذكي ثلاثي الأبعاد"
+        title="Fixion Learning Buddy — اضغط للفتح!"
       >
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', borderRadius: '50%' }}>
           <RobotMascot3D
