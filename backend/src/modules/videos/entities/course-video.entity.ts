@@ -75,6 +75,16 @@ export class CourseVideo {
   @Column({ type: 'varchar', length: 20, nullable: true })
   youtubeVideoId: string | null;
 
+  // Multi-prerequisite support: array of individual unlock conditions (AND logic)
+  @Column({ type: 'jsonb', nullable: true })
+  prerequisites: Array<{
+    unlockRule: string;
+    unlockVideoId?: string | null;
+    unlockPercent?: number | null;
+    unlockAssignmentId?: string | null;
+    unlockScore?: number | null;
+  }> | null;
+
   @Column({ type: 'jsonb', nullable: true, default: [] })
   attachments: string[];
 

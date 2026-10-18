@@ -34,6 +34,13 @@ type CreateVideoDto = {
   unlockScore?: number;
   unlockVideoId?: string;
   unlockPercent?: number;
+  prerequisites?: Array<{
+    unlockRule: string;
+    unlockVideoId?: string | null;
+    unlockPercent?: number | null;
+    unlockAssignmentId?: string | null;
+    unlockScore?: number | null;
+  }>;
   attachments?: string[];
 };
 
@@ -105,6 +112,7 @@ export class VideosService {
       unlockScore: dto.unlockScore ?? null,
       unlockVideoId: dto.unlockVideoId || null,
       unlockPercent: dto.unlockPercent ?? null,
+      prerequisites: Array.isArray(dto.prerequisites) && dto.prerequisites.length > 0 ? dto.prerequisites : null,
       provider: source.provider,
       providerVideoId: source.providerVideoId,
       youtubeVideoId: source.provider === 'youtube' ? source.providerVideoId : null,
@@ -172,6 +180,7 @@ export class VideosService {
             video.unlockVideoId,
             video.unlockPercent,
             studentId,
+            video.prerequisites,
           );
           return {
             ...this.publicVideo(video),
@@ -235,7 +244,7 @@ export class VideosService {
     const video = await this.videosRepo.findOne({ where: { id: videoId } });
     if (!video) throw new NotFoundException('Video not found');
     await this.assertEnrollment(video.courseName, video.groupName, student.id, video.chapterName, video.lessonName);
-    const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, video.unlockVideoId, video.unlockPercent, student.id);
+    const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, video.unlockVideoId, video.unlockPercent, student.id, video.prerequisites);
     if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
     const checkpoints = await this.checkpointsRepo.find({
       where: { videoId },
@@ -406,6 +415,9 @@ export class VideosService {
     if (dto.unlockScore !== undefined) video.unlockScore = dto.unlockScore ?? null;
     if (dto.unlockVideoId !== undefined) video.unlockVideoId = dto.unlockVideoId || null;
     if (dto.unlockPercent !== undefined) video.unlockPercent = dto.unlockPercent ?? null;
+    if (dto.prerequisites !== undefined) {
+      video.prerequisites = Array.isArray(dto.prerequisites) && dto.prerequisites.length > 0 ? dto.prerequisites : null;
+    }
     if (dto.attachments !== undefined) {
       video.attachments = Array.isArray(dto.attachments) ? dto.attachments : [];
     }
@@ -496,6 +508,7 @@ export class VideosService {
       unlockScore: video.unlockScore,
       unlockVideoId: video.unlockVideoId,
       unlockPercent: video.unlockPercent,
+      prerequisites: video.prerequisites || null,
       provider: video.provider || 'youtube',
       providerVideoId: video.providerVideoId || video.youtubeVideoId,
       embedUrl: isBunny ? this.generateSignedBunnyUrl(video.providerVideoId) : null,
@@ -505,7 +518,14 @@ export class VideosService {
     };
   }
 
-  private async getUnlockState(rule: UnlockRuleType, prerequisiteId: string | null, requiredScore: number | null, prerequisiteVideoId: string | null, requiredPercent: number | null, studentId: string) {
+  private async evaluateSingleCondition(
+    rule: string,
+    prerequisiteId: string | null | undefined,
+    requiredScore: number | null | undefined,
+    prerequisiteVideoId: string | null | undefined,
+    requiredPercent: number | null | undefined,
+    studentId: string,
+  ): Promise<{ isLocked: boolean; lockReason: string | null }> {
     if (!rule || rule === UnlockRuleType.NONE) return { isLocked: false, lockReason: null };
     if (rule === UnlockRuleType.WATCH_VIDEO) {
       if (!prerequisiteVideoId) return { isLocked: false, lockReason: null };
@@ -529,6 +549,29 @@ export class VideosService {
       return { isLocked: true, lockReason: `You need at least ${requiredScore ?? 50}% in the previous quiz` };
     }
     return { isLocked: false, lockReason: null };
+  }
+
+  private async getUnlockState(
+    rule: UnlockRuleType,
+    prerequisiteId: string | null,
+    requiredScore: number | null,
+    prerequisiteVideoId: string | null,
+    requiredPercent: number | null,
+    studentId: string,
+    prerequisites?: Array<{ unlockRule: string; unlockVideoId?: string | null; unlockPercent?: number | null; unlockAssignmentId?: string | null; unlockScore?: number | null }> | null,
+  ) {
+    // Multi-prerequisite mode: evaluate ALL conditions (AND logic)
+    if (prerequisites && prerequisites.length > 0) {
+      for (const p of prerequisites) {
+        const result = await this.evaluateSingleCondition(
+          p.unlockRule, p.unlockAssignmentId, p.unlockScore, p.unlockVideoId, p.unlockPercent, studentId,
+        );
+        if (result.isLocked) return result;
+      }
+      return { isLocked: false, lockReason: null };
+    }
+    // Legacy single-condition fallback
+    return this.evaluateSingleCondition(rule, prerequisiteId, requiredScore, prerequisiteVideoId, requiredPercent, studentId);
   }
 
   private async assertEnrollment(

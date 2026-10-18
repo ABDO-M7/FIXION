@@ -14,6 +14,14 @@ import { assignmentsApi, videosApi, uploadsApi } from '@/lib/api';
 
 export type WorkflowItemKind = 'video' | 'assignment';
 
+export type PrerequisiteItem = {
+  unlockRule: string;
+  unlockVideoId?: string | null;
+  unlockPercent?: number | null;
+  unlockAssignmentId?: string | null;
+  unlockScore?: number | null;
+};
+
 export type WorkflowVideo = {
   id: string;
   courseName: string;
@@ -31,6 +39,7 @@ export type WorkflowVideo = {
   unlockScore?: number | null;
   unlockVideoId?: string | null;
   unlockPercent?: number | null;
+  prerequisites?: PrerequisiteItem[] | null;
   attachments?: string[];
   createdAt?: string;
   checkpoints?: any[];
@@ -54,6 +63,7 @@ export type WorkflowAssignment = {
   unlockScore?: number | null;
   unlockVideoId?: string | null;
   unlockPercent?: number | null;
+  prerequisites?: PrerequisiteItem[] | null;
   attachments?: string[];
   createdAt?: string;
 };
@@ -519,25 +529,37 @@ function WorkflowItemRow({
   const isQuiz = !isVideo && (item as WorkflowAssignment).type === 'QUIZ';
   const isHW = !isVideo && (item as WorkflowAssignment).type === 'HOMEWORK';
 
-  // Find prerequisite name
-  const prereqText = useMemo(() => {
-    if (!item.unlockRule || item.unlockRule === 'NONE') return 'Available immediately';
-    if (item.unlockRule === 'WATCH_VIDEO') {
-      const v = allVideos.find(x => x.id === item.unlockVideoId);
-      return `After watching ${item.unlockPercent || 100}% of video "${v?.title || 'previous video'}"`;
+  // Find prerequisite details
+  const prereqItems = useMemo(() => {
+    const list: string[] = [];
+    const sourceList: PrerequisiteItem[] = (item.prerequisites && item.prerequisites.length > 0)
+      ? item.prerequisites
+      : (item.unlockRule && item.unlockRule !== 'NONE')
+        ? [{
+            unlockRule: item.unlockRule,
+            unlockVideoId: item.unlockVideoId,
+            unlockPercent: item.unlockPercent,
+            unlockAssignmentId: item.unlockAssignmentId,
+            unlockScore: item.unlockScore,
+          }]
+        : [];
+
+    for (const p of sourceList) {
+      if (p.unlockRule === 'WATCH_VIDEO') {
+        const v = allVideos.find(x => x.id === p.unlockVideoId);
+        list.push(`مشاهدة ${p.unlockPercent || 100}% من "${v?.title || 'فيديو سابق'}"`);
+      } else if (p.unlockRule === 'PASS_QUIZ') {
+        const a = allAssignments.find(x => x.id === p.unlockAssignmentId);
+        list.push(`اجتياز "${a?.title || 'كويز سابق'}" بنسبة ${p.unlockScore || 50}%+`);
+      } else if (p.unlockRule === 'SUBMIT_ASSIGNMENT') {
+        const a = allAssignments.find(x => x.id === p.unlockAssignmentId);
+        list.push(`تسليم واجب "${a?.title || 'واجب سابق'}"`);
+      }
     }
-    if (item.unlockRule === 'PASS_QUIZ') {
-      const a = allAssignments.find(x => x.id === item.unlockAssignmentId);
-      return `After passing quiz "${a?.title || 'previous quiz'}" with at least ${item.unlockScore || 50}%`;
-    }
-    if (item.unlockRule === 'SUBMIT_ASSIGNMENT') {
-      const a = allAssignments.find(x => x.id === item.unlockAssignmentId);
-      return `After submitting homework "${a?.title || 'previous homework'}"`;
-    }
-    return item.unlockRule;
+    return list;
   }, [item, allVideos, allAssignments]);
 
-  const isPrereqActive = item.unlockRule && item.unlockRule !== 'NONE';
+  const isPrereqActive = prereqItems.length > 0;
 
   return (
     <div style={{
@@ -603,9 +625,22 @@ function WorkflowItemRow({
         </div>
 
         {/* Prerequisite & Unlock Rule */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 4, color: isPrereqActive ? '#38bdf8' : 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 4, color: isPrereqActive ? '#38bdf8' : 'var(--text-muted)', flexWrap: 'wrap' }}>
           {isPrereqActive ? <Lock size={12} /> : <Unlock size={12} />}
-          <span>{prereqText}</span>
+          {isPrereqActive ? (
+            prereqItems.length === 1 ? (
+              <span>بعد {prereqItems[0]}</span>
+            ) : (
+              <span title={prereqItems.join(' • ')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span className="badge" style={{ fontSize: 10, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', padding: '1px 6px', fontWeight: 700 }}>
+                  {prereqItems.length} شروط مسبقة للفتح (AND)
+                </span>
+                <span>{prereqItems.join(' + ')}</span>
+              </span>
+            )
+          ) : (
+            <span>متاح مباشرة (بدون قفل)</span>
+          )}
         </div>
       </div>
 
@@ -852,36 +887,22 @@ function AttachmentsManager({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub-component: Unified Prerequisite Lock Selector
+// Sub-component: Unified Prerequisite Lock Selector (Multi-Condition Support)
 // ─────────────────────────────────────────────────────────────────────────────
 function PrerequisiteLockSelector({
   allVideos,
   allAssignments,
   currentId,
-  unlockRule,
-  unlockVideoId,
-  unlockAssignmentId,
-  unlockPercent,
-  unlockScore,
+  prerequisites = [],
   onChange,
 }: {
   allVideos: WorkflowVideo[];
   allAssignments: WorkflowAssignment[];
   currentId?: string;
-  unlockRule: string;
-  unlockVideoId: string;
-  unlockAssignmentId: string;
-  unlockPercent: string;
-  unlockScore: string;
-  onChange: (data: {
-    unlockRule: string;
-    unlockVideoId: string;
-    unlockAssignmentId: string;
-    unlockPercent: string;
-    unlockScore: string;
-  }) => void;
+  prerequisites: PrerequisiteItem[];
+  onChange: (prerequisites: PrerequisiteItem[]) => void;
 }) {
-  const isLocked = unlockRule !== 'NONE';
+  const isLocked = prerequisites.length > 0;
 
   // Group all available items by chapter & lesson
   const groupedContent = useMemo(() => {
@@ -924,37 +945,50 @@ function PrerequisiteLockSelector({
     return chaptersMap;
   }, [allVideos, allAssignments, currentId]);
 
-  // Current selected key
-  const selectedKey = useMemo(() => {
-    if (unlockRule === 'WATCH_VIDEO' && unlockVideoId) return `video:${unlockVideoId}`;
-    if ((unlockRule === 'PASS_QUIZ' || unlockRule === 'SUBMIT_ASSIGNMENT') && unlockAssignmentId) return `assignment:${unlockAssignmentId}`;
-    return '';
-  }, [unlockRule, unlockVideoId, unlockAssignmentId]);
-
-  // Find selected item kind
-  const selectedItemKind = useMemo(() => {
-    if (selectedKey.startsWith('video:')) {
-      const id = selectedKey.replace('video:', '');
-      const v = allVideos.find(x => x.id === id);
-      return v?.provider === 'document' ? 'document' : 'video';
-    }
-    if (selectedKey.startsWith('assignment:')) {
-      const id = selectedKey.replace('assignment:', '');
-      const a = allAssignments.find(x => x.id === id);
-      return a?.type === 'QUIZ' ? 'quiz' : 'homework';
-    }
-    return null;
-  }, [selectedKey, allVideos, allAssignments]);
-
-  const handleSelect = (key: string) => {
-    if (!key) {
-      onChange({
+  const handleToggleLock = (active: boolean) => {
+    if (!active) {
+      onChange([]);
+    } else {
+      onChange([{
         unlockRule: 'SELECT_REQUIRED',
-        unlockVideoId: '',
-        unlockAssignmentId: '',
-        unlockPercent,
-        unlockScore,
-      });
+        unlockVideoId: null,
+        unlockAssignmentId: null,
+        unlockPercent: 100,
+        unlockScore: 50,
+      }]);
+    }
+  };
+
+  const handleAddCondition = () => {
+    onChange([
+      ...prerequisites,
+      {
+        unlockRule: 'SELECT_REQUIRED',
+        unlockVideoId: null,
+        unlockAssignmentId: null,
+        unlockPercent: 100,
+        unlockScore: 50,
+      },
+    ]);
+  };
+
+  const handleRemoveCondition = (index: number) => {
+    const next = prerequisites.filter((_, i) => i !== index);
+    onChange(next);
+  };
+
+  const handleSelectConditionItem = (index: number, key: string) => {
+    const item = prerequisites[index] || {};
+    if (!key) {
+      const next = [...prerequisites];
+      next[index] = {
+        unlockRule: 'SELECT_REQUIRED',
+        unlockVideoId: null,
+        unlockAssignmentId: null,
+        unlockPercent: item.unlockPercent,
+        unlockScore: item.unlockScore,
+      };
+      onChange(next);
       return;
     }
 
@@ -962,55 +996,41 @@ function PrerequisiteLockSelector({
       const id = key.replace('video:', '');
       const v = allVideos.find(x => x.id === id);
       const isDoc = v?.provider === 'document';
-      onChange({
+      const next = [...prerequisites];
+      next[index] = {
         unlockRule: 'WATCH_VIDEO',
         unlockVideoId: id,
-        unlockAssignmentId: '',
-        unlockPercent: isDoc ? '100' : (unlockPercent || '100'),
-        unlockScore,
-      });
+        unlockAssignmentId: null,
+        unlockPercent: isDoc ? 100 : (item.unlockPercent || 100),
+        unlockScore: null,
+      };
+      onChange(next);
     } else {
       const id = key.replace('assignment:', '');
       const a = allAssignments.find(x => x.id === id);
-      if (a?.type === 'QUIZ') {
-        onChange({
-          unlockRule: 'PASS_QUIZ',
-          unlockVideoId: '',
-          unlockAssignmentId: id,
-          unlockPercent,
-          unlockScore: unlockScore || '50',
-        });
-      } else {
-        onChange({
-          unlockRule: 'SUBMIT_ASSIGNMENT',
-          unlockVideoId: '',
-          unlockAssignmentId: id,
-          unlockPercent,
-          unlockScore,
-        });
-      }
+      const isQuiz = a?.type === 'QUIZ';
+      const next = [...prerequisites];
+      next[index] = {
+        unlockRule: isQuiz ? 'PASS_QUIZ' : 'SUBMIT_ASSIGNMENT',
+        unlockVideoId: null,
+        unlockAssignmentId: id,
+        unlockPercent: null,
+        unlockScore: isQuiz ? (item.unlockScore || 50) : null,
+      };
+      onChange(next);
     }
   };
 
-  const handleToggleLock = (active: boolean) => {
-    if (!active) {
-      onChange({
-        unlockRule: 'NONE',
-        unlockVideoId: '',
-        unlockAssignmentId: '',
-        unlockPercent: '',
-        unlockScore: '',
-      });
-    } else {
-      // User must choose prerequisite explicitly - no auto-default video or 80%
-      onChange({
-        unlockRule: 'SELECT_REQUIRED',
-        unlockVideoId: '',
-        unlockAssignmentId: '',
-        unlockPercent: '',
-        unlockScore: '',
-      });
-    }
+  const handleUpdatePercent = (index: number, val: number) => {
+    const next = [...prerequisites];
+    next[index] = { ...next[index], unlockPercent: val };
+    onChange(next);
+  };
+
+  const handleUpdateScore = (index: number, val: number) => {
+    const next = [...prerequisites];
+    next[index] = { ...next[index], unlockScore: val };
+    onChange(next);
   };
 
   return (
@@ -1021,12 +1041,12 @@ function PrerequisiteLockSelector({
       border: isLocked ? '1px solid rgba(239,68,68,0.3)' : '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
-      gap: 10,
+      gap: 12,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
         <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
           <Lock size={15} style={{ color: isLocked ? '#ef4444' : 'var(--text-muted)' }} />
-          قفل هذا العنصر بربطه بمحتوى أو حصة سابقة (Unlock Prerequisite)
+          قفل هذا العنصر بشروط مسبقة (Unlock Prerequisites)
         </label>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: isLocked ? '#f87171' : 'var(--text-muted)' }}>
           <input
@@ -1035,98 +1055,163 @@ function PrerequisiteLockSelector({
             onChange={e => handleToggleLock(e.target.checked)}
             style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#ef4444' }}
           />
-          {isLocked ? 'مقفول بمتطلب سابق' : 'متاح مباشرة (بدون قفل)'}
+          {isLocked ? `مقفول بشروط (${prerequisites.length})` : 'متاح مباشرة (بدون شروط)'}
         </label>
       </div>
 
       {isLocked && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label" style={{ fontSize: 12, marginBottom: 4 }}>
-              اختر المحتوى المطلوب إكماله من قائمة كل الحصص والواجبات:
-            </label>
-            <select
-              className="form-input"
-              value={selectedKey}
-              onChange={e => handleSelect(e.target.value)}
-            >
-              <option value="">-- اضغط لاختيار المحتوى المطلوب لفتح هذا العنصر --</option>
-              {Array.from(groupedContent.entries()).map(([ch, lsMap]) =>
-                Array.from(lsMap.entries()).map(([ls, items]) => (
-                  <optgroup key={`${ch}-${ls}`} label={`${ch} / ${ls}`}>
-                    {items.map(it => (
-                      <option key={it.valueKey} value={it.valueKey}>
-                        {it.kind === 'document' ? '[ملف] ' : it.kind === 'video' ? '[حصة] ' : it.kind === 'quiz' ? '[كويز] ' : '[واجب] '}
-                        {it.title}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))
-              )}
-            </select>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {prerequisites.map((p, idx) => {
+            const selectedKey = p.unlockRule === 'WATCH_VIDEO' && p.unlockVideoId
+              ? `video:${p.unlockVideoId}`
+              : (p.unlockRule === 'PASS_QUIZ' || p.unlockRule === 'SUBMIT_ASSIGNMENT') && p.unlockAssignmentId
+                ? `assignment:${p.unlockAssignmentId}`
+                : '';
 
-          {selectedItemKind === 'video' && (
-            <div style={{ background: 'rgba(59,130,246,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(59,130,246,0.2)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
-                  نسبة المشاهدة المطلوبة للفتح (%):
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    className="form-input"
-                    style={{ width: 75, padding: '4px 8px' }}
-                    value={unlockPercent}
-                    placeholder="100"
-                    onChange={e => onChange({ unlockRule, unlockVideoId, unlockAssignmentId, unlockPercent: e.target.value, unlockScore })}
-                  />
-                  <span style={{ fontSize: 12 }}>%</span>
+            let itemKind: 'video' | 'document' | 'quiz' | 'homework' | null = null;
+            if (selectedKey.startsWith('video:')) {
+              const v = allVideos.find(x => x.id === p.unlockVideoId);
+              itemKind = v?.provider === 'document' ? 'document' : 'video';
+            } else if (selectedKey.startsWith('assignment:')) {
+              const a = allAssignments.find(x => x.id === p.unlockAssignmentId);
+              itemKind = a?.type === 'QUIZ' ? 'quiz' : 'homework';
+            }
+
+            return (
+              <div
+                key={idx}
+                style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 8,
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#38bdf8' }}>
+                    الشرط #{idx + 1}
+                  </span>
+                  {prerequisites.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCondition(idx)}
+                      className="icon-btn"
+                      title="حذف هذا الشرط"
+                      style={{ color: '#ef4444', padding: '2px 6px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    >
+                      <Trash2 size={13} />
+                      <span>حذف الشرط</span>
+                    </button>
+                  )}
                 </div>
-              </div>
-              <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
-                لن يتمكن الطالب من فتح هذا المحتوى إلا بعد أن يشاهد {unlockPercent || 100}% على الأقل من هذا الفيديو.
-              </p>
-            </div>
-          )}
 
-          {selectedItemKind === 'document' && (
-            <div style={{ background: 'rgba(14,165,233,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(14,165,233,0.2)', fontSize: 12, color: 'var(--text-primary)' }}>
-              <strong>تحميل / فتح الملف:</strong> سيتم فتح هذا المحتوى للطالب بعد توفر الملف ومراجعته.
-            </div>
-          )}
-
-          {selectedItemKind === 'quiz' && (
-            <div style={{ background: 'rgba(139,92,246,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(139,92,246,0.2)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
-                  نسبة النجاح المطلوبة في الكويز (%):
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: 11, marginBottom: 4, color: 'var(--text-muted)' }}>
+                    المحتوى المطلوب إكماله:
+                  </label>
+                  <select
                     className="form-input"
-                    style={{ width: 75, padding: '4px 8px' }}
-                    value={unlockScore}
-                    placeholder="50"
-                    onChange={e => onChange({ unlockRule, unlockVideoId, unlockAssignmentId, unlockPercent, unlockScore: e.target.value })}
-                  />
-                  <span style={{ fontSize: 12 }}>%</span>
+                    value={selectedKey}
+                    onChange={e => handleSelectConditionItem(idx, e.target.value)}
+                  >
+                    <option value="">-- اضغط لاختيار المحتوى المطلوب لفتح هذا العنصر --</option>
+                    {Array.from(groupedContent.entries()).map(([ch, lsMap]) =>
+                      Array.from(lsMap.entries()).map(([ls, items]) => (
+                        <optgroup key={`${ch}-${ls}`} label={`${ch} / ${ls}`}>
+                          {items.map(it => (
+                            <option key={it.valueKey} value={it.valueKey}>
+                              {it.kind === 'document' ? '[ملف] ' : it.kind === 'video' ? '[حصة] ' : it.kind === 'quiz' ? '[كويز] ' : '[واجب] '}
+                              {it.title}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))
+                    )}
+                  </select>
                 </div>
-              </div>
-              <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
-                يجب أن يحصل الطالب على درجة لا تقل عن {unlockScore || 50}% في هذا الكويز ليتم فتح العنصر.
-              </p>
-            </div>
-          )}
 
-          {selectedItemKind === 'homework' && (
-            <div style={{ background: 'rgba(245,158,11,0.08)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(245,158,11,0.2)', fontSize: 12, color: 'var(--text-primary)' }}>
-              <strong>تسليم الواجب:</strong> سيتم فتح هذا العنصر للطالب تلقائياً بمجرد قيامه بتسليم الواجب المحدد.
+                {itemKind === 'video' && (
+                  <div style={{ background: 'rgba(59,130,246,0.08)', padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(59,130,246,0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
+                        نسبة المشاهدة المطلوبة للفتح (%):
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          className="form-input"
+                          style={{ width: 75, padding: '4px 8px' }}
+                          value={p.unlockPercent != null ? p.unlockPercent : 100}
+                          onChange={e => handleUpdatePercent(idx, Math.min(100, Math.max(1, Number(e.target.value) || 100)))}
+                        />
+                        <span style={{ fontSize: 12 }}>%</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+                      لن يتمكن الطالب من فتح هذا المحتوى إلا بعد أن يشاهد {p.unlockPercent || 100}% على الأقل من هذا الفيديو.
+                    </p>
+                  </div>
+                )}
+
+                {itemKind === 'document' && (
+                  <div style={{ background: 'rgba(14,165,233,0.08)', padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(14,165,233,0.2)', fontSize: 12, color: 'var(--text-primary)' }}>
+                    <strong>فتح الملف:</strong> سيتم فتح هذا المحتوى للطالب بعد توفر الملف ومراجعته.
+                  </div>
+                )}
+
+                {itemKind === 'quiz' && (
+                  <div style={{ background: 'rgba(139,92,246,0.08)', padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(139,92,246,0.2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>
+                        نسبة النجاح المطلوبة في الكويز (%):
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          className="form-input"
+                          style={{ width: 75, padding: '4px 8px' }}
+                          value={p.unlockScore != null ? p.unlockScore : 50}
+                          onChange={e => handleUpdateScore(idx, Math.min(100, Math.max(1, Number(e.target.value) || 50)))}
+                        />
+                        <span style={{ fontSize: 12 }}>%</span>
+                      </div>
+                    </div>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>
+                      يجب أن يحصل الطالب على درجة لا تقل عن {p.unlockScore || 50}% في هذا الكويز ليتم فتح العنصر.
+                    </p>
+                  </div>
+                )}
+
+                {itemKind === 'homework' && (
+                  <div style={{ background: 'rgba(245,158,11,0.08)', padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(245,158,11,0.2)', fontSize: 12, color: 'var(--text-primary)' }}>
+                    <strong>تسليم الواجب:</strong> سيتم فتح هذا العنصر للطالب تلقائياً بمجرد قيامه بتسليم الواجب المحدد.
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleAddCondition}
+            style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 2 }}
+          >
+            <Plus size={14} />
+            <span>إضافة شرط مسبق آخر (Add Condition)</span>
+          </button>
+
+          {prerequisites.length > 1 && (
+            <div style={{ fontSize: 11, color: '#38bdf8', background: 'rgba(56,189,248,0.08)', padding: '8px 10px', borderRadius: 6, border: '1px solid rgba(56,189,248,0.15)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <AlertCircle size={14} style={{ flexShrink: 0 }} />
+              <span>يجب على الطالب تحقيق <strong>جميع الشروط المحددة أعلاه معاً (AND)</strong> حتى يتمكن من فتح هذا المحتوى.</span>
             </div>
           )}
         </div>
@@ -1170,12 +1255,8 @@ function AddItemModal({
   const [dueDate, setDueDate] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
 
-  // Unlock rules - default NONE, no auto-lock or forced percentages
-  const [unlockRule, setUnlockRule] = useState('NONE');
-  const [unlockVideoId, setUnlockVideoId] = useState('');
-  const [unlockPercent, setUnlockPercent] = useState('');
-  const [unlockAssignmentId, setUnlockAssignmentId] = useState('');
-  const [unlockScore, setUnlockScore] = useState('');
+  // Unlock rules - multi-condition support
+  const [prerequisites, setPrerequisites] = useState<PrerequisiteItem[]>([]);
 
   const [saving, setSaving] = useState(false);
 
@@ -1186,7 +1267,18 @@ function AddItemModal({
     // Calculate sequential order so newly added items are placed chronologically below prior items
     const maxOrder = existingLessonItems.reduce((max, u) => Math.max(max, u.item.contentOrder ?? 0), 0);
     const contentOrder = existingLessonItems.length > 0 ? maxOrder + 1 : 1;
-    const effectiveRule = unlockRule === 'SELECT_REQUIRED' ? 'NONE' : unlockRule;
+
+    const validPrereqs = prerequisites.filter(p =>
+      (p.unlockRule === 'WATCH_VIDEO' && p.unlockVideoId) ||
+      ((p.unlockRule === 'PASS_QUIZ' || p.unlockRule === 'SUBMIT_ASSIGNMENT') && p.unlockAssignmentId)
+    );
+    const primary = validPrereqs[0] || null;
+    const effectiveRule = primary ? primary.unlockRule : 'NONE';
+    const effectiveVideoId = primary?.unlockVideoId || undefined;
+    const effectivePercent = primary?.unlockPercent != null ? Number(primary.unlockPercent) : undefined;
+    const effectiveAssignmentId = primary?.unlockAssignmentId || undefined;
+    const effectiveScore = primary?.unlockScore != null ? Number(primary.unlockScore) : undefined;
+    const effectivePrereqs = validPrereqs.length > 0 ? validPrereqs : undefined;
 
     try {
       if (kind === 'DOCUMENT') {
@@ -1207,10 +1299,11 @@ function AddItemModal({
           contentOrder,
           attachments,
           unlockRule: effectiveRule,
-          unlockVideoId: effectiveRule === 'WATCH_VIDEO' ? unlockVideoId : undefined,
-          unlockPercent: effectiveRule === 'WATCH_VIDEO' ? (+unlockPercent || 100) : undefined,
-          unlockAssignmentId: (effectiveRule === 'PASS_QUIZ' || effectiveRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
-          unlockScore: effectiveRule === 'PASS_QUIZ' ? (+unlockScore || 50) : undefined,
+          unlockVideoId: effectiveVideoId,
+          unlockPercent: effectivePercent,
+          unlockAssignmentId: effectiveAssignmentId,
+          unlockScore: effectiveScore,
+          prerequisites: effectivePrereqs,
         });
         toast.success('تمت إضافة الملف بنجاح');
         onCreated();
@@ -1228,10 +1321,11 @@ function AddItemModal({
           contentOrder,
           attachments,
           unlockRule: effectiveRule,
-          unlockVideoId: effectiveRule === 'WATCH_VIDEO' ? unlockVideoId : undefined,
-          unlockPercent: effectiveRule === 'WATCH_VIDEO' ? (+unlockPercent || 100) : undefined,
-          unlockAssignmentId: (effectiveRule === 'PASS_QUIZ' || effectiveRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
-          unlockScore: effectiveRule === 'PASS_QUIZ' ? (+unlockScore || 50) : undefined,
+          unlockVideoId: effectiveVideoId,
+          unlockPercent: effectivePercent,
+          unlockAssignmentId: effectiveAssignmentId,
+          unlockScore: effectiveScore,
+          prerequisites: effectivePrereqs,
         });
         toast.success('تمت إضافة الحصة بنجاح');
         onCreated();
@@ -1249,10 +1343,11 @@ function AddItemModal({
           maxGrade: +maxGrade || 100,
           dueDate: dueDate || undefined,
           unlockRule: effectiveRule,
-          unlockVideoId: effectiveRule === 'WATCH_VIDEO' ? unlockVideoId : undefined,
-          unlockPercent: effectiveRule === 'WATCH_VIDEO' ? (+unlockPercent || 100) : undefined,
-          unlockAssignmentId: (effectiveRule === 'PASS_QUIZ' || effectiveRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : undefined,
-          unlockScore: effectiveRule === 'PASS_QUIZ' ? (+unlockScore || 50) : undefined,
+          unlockVideoId: effectiveVideoId,
+          unlockPercent: effectivePercent,
+          unlockAssignmentId: effectiveAssignmentId,
+          unlockScore: effectiveScore,
+          prerequisites: effectivePrereqs,
         });
         toast.success(`تم إنشاء ${kind === 'QUIZ' ? 'الكويز' : 'الواجب'} بنجاح`);
         onCreated();
@@ -1411,22 +1506,12 @@ function AddItemModal({
             onChange={setAttachments}
           />
 
-          {/* ── Unlock Prerequisite Rules with Unified Content Dropdown ── */}
+          {/* ── Unlock Prerequisite Rules with Multi-Condition Support ── */}
           <PrerequisiteLockSelector
             allVideos={allVideos}
             allAssignments={allAssignments}
-            unlockRule={unlockRule}
-            unlockVideoId={unlockVideoId}
-            unlockAssignmentId={unlockAssignmentId}
-            unlockPercent={unlockPercent}
-            unlockScore={unlockScore}
-            onChange={data => {
-              setUnlockRule(data.unlockRule);
-              setUnlockVideoId(data.unlockVideoId);
-              setUnlockAssignmentId(data.unlockAssignmentId);
-              setUnlockPercent(data.unlockPercent);
-              setUnlockScore(data.unlockScore);
-            }}
+            prerequisites={prerequisites}
+            onChange={setPrerequisites}
           />
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
@@ -1471,17 +1556,32 @@ function EditItemModal({
   const [dueDate, setDueDate] = useState(!isVideo && (item as WorkflowAssignment).dueDate ? (item as WorkflowAssignment).dueDate!.substring(0, 16) : '');
   const [attachments, setAttachments] = useState<string[]>((item as any).attachments || []);
 
-  const [unlockRule, setUnlockRule] = useState(item.unlockRule || 'NONE');
-  const [unlockVideoId, setUnlockVideoId] = useState(item.unlockVideoId || '');
-  const [unlockPercent, setUnlockPercent] = useState(item.unlockPercent != null ? String(item.unlockPercent) : '');
-  const [unlockAssignmentId, setUnlockAssignmentId] = useState(item.unlockAssignmentId || '');
-  const [unlockScore, setUnlockScore] = useState(item.unlockScore != null ? String(item.unlockScore) : '');
+  const [prerequisites, setPrerequisites] = useState<PrerequisiteItem[]>(() => {
+    if (item.prerequisites && Array.isArray(item.prerequisites) && item.prerequisites.length > 0) {
+      return item.prerequisites;
+    }
+    if (item.unlockRule && item.unlockRule !== 'NONE') {
+      return [{
+        unlockRule: item.unlockRule,
+        unlockVideoId: item.unlockVideoId || null,
+        unlockPercent: item.unlockPercent != null ? Number(item.unlockPercent) : null,
+        unlockAssignmentId: item.unlockAssignmentId || null,
+        unlockScore: item.unlockScore != null ? Number(item.unlockScore) : null,
+      }];
+    }
+    return [];
+  });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     if (!title.trim()) { toast.error('العنوان مطلوب'); return; }
     setSaving(true);
-    const effectiveRule = unlockRule === 'SELECT_REQUIRED' ? 'NONE' : unlockRule;
+    const validPrereqs = prerequisites.filter(p =>
+      (p.unlockRule === 'WATCH_VIDEO' && p.unlockVideoId) ||
+      ((p.unlockRule === 'PASS_QUIZ' || p.unlockRule === 'SUBMIT_ASSIGNMENT') && p.unlockAssignmentId)
+    );
+    const primary = validPrereqs[0] || null;
+    const effectiveRule = primary ? primary.unlockRule : 'NONE';
     try {
       const payload: any = {
         title: title.trim(),
@@ -1490,10 +1590,11 @@ function EditItemModal({
         lessonName: lessonName.trim() || null,
         attachments,
         unlockRule: effectiveRule,
-        unlockVideoId: effectiveRule === 'WATCH_VIDEO' ? unlockVideoId : null,
-        unlockPercent: effectiveRule === 'WATCH_VIDEO' ? (+unlockPercent || 100) : null,
-        unlockAssignmentId: (effectiveRule === 'PASS_QUIZ' || effectiveRule === 'SUBMIT_ASSIGNMENT') ? unlockAssignmentId : null,
-        unlockScore: effectiveRule === 'PASS_QUIZ' ? (+unlockScore || 50) : null,
+        unlockVideoId: primary?.unlockVideoId || null,
+        unlockPercent: primary?.unlockPercent != null ? Number(primary.unlockPercent) : null,
+        unlockAssignmentId: primary?.unlockAssignmentId || null,
+        unlockScore: primary?.unlockScore != null ? Number(primary.unlockScore) : null,
+        prerequisites: validPrereqs.length > 0 ? validPrereqs : null,
       };
 
       if (isDoc) {
@@ -1615,18 +1716,8 @@ function EditItemModal({
             allVideos={allVideos}
             allAssignments={allAssignments}
             currentId={item.id}
-            unlockRule={unlockRule}
-            unlockVideoId={unlockVideoId}
-            unlockAssignmentId={unlockAssignmentId}
-            unlockPercent={unlockPercent}
-            unlockScore={unlockScore}
-            onChange={data => {
-              setUnlockRule(data.unlockRule);
-              setUnlockVideoId(data.unlockVideoId);
-              setUnlockAssignmentId(data.unlockAssignmentId);
-              setUnlockPercent(data.unlockPercent);
-              setUnlockScore(data.unlockScore);
-            }}
+            prerequisites={prerequisites}
+            onChange={setPrerequisites}
           />
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>

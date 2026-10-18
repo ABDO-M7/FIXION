@@ -271,7 +271,7 @@ export const videosApi = {
   markDocumentOpened: (videoId: string, attachmentIndex?: number) =>
     api.post(`/videos/student/video/${encodeURIComponent(videoId)}/opened`, { attachmentIndex }),
   answerCheckpoint: (videoId: string, checkpointId: string, data: any) => api.post('/videos/' + videoId + '/checkpoints/' + checkpointId + '/answer', data),
-  create: (data: { courseName: string; groupName: string; title: string; description?: string; provider?: string; sourceUrl?: string; youtubeUrl?: string; chapterName?: string; lessonName?: string; contentOrder?: number; unlockRule?: string; unlockAssignmentId?: string; unlockScore?: number; unlockVideoId?: string; unlockPercent?: number; attachments?: string[] }) => api.post('/videos', data),
+  create: (data: { courseName: string; groupName: string; title: string; description?: string; provider?: string; sourceUrl?: string; youtubeUrl?: string; chapterName?: string; lessonName?: string; contentOrder?: number; unlockRule?: string; unlockAssignmentId?: string; unlockScore?: number; unlockVideoId?: string; unlockPercent?: number; attachments?: string[]; prerequisites?: any[] }) => api.post('/videos', data),
   update: (id: string, data: any) => api.patch(`/videos/${id}`, data),
   teacherList: (courseName: string, groupName: string, teacherId?: string) =>
     api.get(`/videos/teacher/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`, { params: teacherId ? { teacherId } : {} }),

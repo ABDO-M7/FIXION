@@ -643,6 +643,7 @@ export class AssignmentsService {
     unlockScore?: number;
     unlockVideoId?: string;
     unlockPercent?: number;
+    prerequisites?: Array<{ unlockRule: string; unlockVideoId?: string | null; unlockPercent?: number | null; unlockAssignmentId?: string | null; unlockScore?: number | null }>;
     isPublished?: boolean;
   }, teacher: User): Promise<Assignment> {
     if (![AssignmentType.QUIZ, AssignmentType.HOMEWORK].includes(dto.type)) {
@@ -674,6 +675,7 @@ export class AssignmentsService {
       unlockScore: dto.unlockScore ?? null,
       unlockVideoId: dto.unlockVideoId || null,
       unlockPercent: dto.unlockPercent ?? null,
+      prerequisites: Array.isArray(dto.prerequisites) && dto.prerequisites.length > 0 ? dto.prerequisites : null,
       teacherId: workOwnerId(scope, teacher),
     });
     const saved = await this.assignmentsRepo.save(assignment);
@@ -1083,6 +1085,7 @@ export class AssignmentsService {
             assignment.unlockPercent,
             studentId,
             subMap,
+            assignment.prerequisites,
           );
           return { ...assignment, submission, ...unlock };
         }));
@@ -1105,9 +1108,14 @@ export class AssignmentsService {
       );
       assertCourseContentAccess(enrollment, assignment.chapterName, assignment.lessonName);
     }
-    const submission = assignment.unlockAssignmentId
-      ? await this.submissionsRepo.findOne({ where: { assignmentId: assignment.unlockAssignmentId, studentId } })
-      : null;
+    // Collect all prerequisite assignment IDs for lookup
+    const prereqAssignmentIds = [
+      ...(assignment.unlockAssignmentId ? [assignment.unlockAssignmentId] : []),
+      ...(assignment.prerequisites ?? []).filter(p => p.unlockAssignmentId).map(p => p.unlockAssignmentId!),
+    ];
+    const submissionsList = prereqAssignmentIds.length
+      ? await this.submissionsRepo.find({ where: prereqAssignmentIds.map(id => ({ assignmentId: id, studentId })) })
+      : [];
     const unlock = await this.getUnlockState(
       assignment.unlockRule,
       assignment.unlockAssignmentId,
@@ -1115,21 +1123,22 @@ export class AssignmentsService {
       assignment.unlockVideoId,
       assignment.unlockPercent,
       studentId,
-      new Map(assignment.unlockAssignmentId ? [[assignment.unlockAssignmentId, submission as AssignmentSubmission]] : []),
+      new Map(submissionsList.map(s => [s.assignmentId, s])),
+      assignment.prerequisites,
     );
     if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
     return assignment;
   }
 
-  private async getUnlockState(
-    rule: UnlockRuleType,
-    prerequisiteId: string | null,
-    requiredScore: number | null,
-    prerequisiteVideoId: string | null,
-    requiredPercent: number | null,
+  private async evaluateSingleAssignmentCondition(
+    rule: string,
+    prerequisiteId: string | null | undefined,
+    requiredScore: number | null | undefined,
+    prerequisiteVideoId: string | null | undefined,
+    requiredPercent: number | null | undefined,
     studentId: string,
     submissions: Map<string, AssignmentSubmission>,
-  ) {
+  ): Promise<{ isLocked: boolean; lockReason: string | null }> {
     if (rule === UnlockRuleType.WATCH_VIDEO) {
       if (!prerequisiteVideoId) return { isLocked: false, lockReason: null };
       const progress = await this.videoProgressRepo.findOne({ where: { videoId: prerequisiteVideoId, studentId } });
@@ -1152,6 +1161,30 @@ export class AssignmentsService {
       return { isLocked: true, lockReason: `You need at least ${requiredScore ?? 50}% in the previous quiz` };
     }
     return { isLocked: false, lockReason: null };
+  }
+
+  private async getUnlockState(
+    rule: UnlockRuleType,
+    prerequisiteId: string | null,
+    requiredScore: number | null,
+    prerequisiteVideoId: string | null,
+    requiredPercent: number | null,
+    studentId: string,
+    submissions: Map<string, AssignmentSubmission>,
+    prerequisites?: Array<{ unlockRule: string; unlockVideoId?: string | null; unlockPercent?: number | null; unlockAssignmentId?: string | null; unlockScore?: number | null }> | null,
+  ) {
+    // Multi-prerequisite mode: evaluate ALL conditions (AND logic)
+    if (prerequisites && prerequisites.length > 0) {
+      for (const p of prerequisites) {
+        const result = await this.evaluateSingleAssignmentCondition(
+          p.unlockRule, p.unlockAssignmentId, p.unlockScore, p.unlockVideoId, p.unlockPercent, studentId, submissions,
+        );
+        if (result.isLocked) return result;
+      }
+      return { isLocked: false, lockReason: null };
+    }
+    // Legacy single-condition fallback
+    return this.evaluateSingleAssignmentCondition(rule, prerequisiteId, requiredScore, prerequisiteVideoId, requiredPercent, studentId, submissions);
   }
 
   async getStudentSubmission(assignmentId: string, studentId: string) {
@@ -1228,6 +1261,9 @@ export class AssignmentsService {
     if (dto.unlockScore !== undefined) a.unlockScore = dto.unlockScore ?? null;
     if (dto.unlockVideoId !== undefined) a.unlockVideoId = dto.unlockVideoId || null;
     if (dto.unlockPercent !== undefined) a.unlockPercent = dto.unlockPercent ?? null;
+    if (dto.prerequisites !== undefined) {
+      a.prerequisites = Array.isArray(dto.prerequisites) && dto.prerequisites.length > 0 ? dto.prerequisites : null;
+    }
     if (dto.attachments !== undefined) a.attachments = dto.attachments;
     if (dto.isPublished !== undefined) a.isPublished = Boolean(dto.isPublished);
 

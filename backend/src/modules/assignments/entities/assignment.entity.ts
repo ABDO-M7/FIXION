@@ -74,6 +74,16 @@ export class Assignment {
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  // Multi-prerequisite support: array of individual unlock conditions (AND logic)
+  @Column({ type: 'jsonb', nullable: true })
+  prerequisites: Array<{
+    unlockRule: string;
+    unlockVideoId?: string | null;
+    unlockPercent?: number | null;
+    unlockAssignmentId?: string | null;
+    unlockScore?: number | null;
+  }> | null;
+
   @Column({ type: 'jsonb', nullable: true, default: [] })
   attachments: string[];
 
