@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import RobotMascot3D from './RobotMascot3D';
+import dynamic from 'next/dynamic';
 import {
-  MessageSquare, Sparkles, X, ChevronUp, BookOpen,
-  HelpCircle, Calendar, GraduationCap, ArrowRight, Heart
+  Sparkles, X, HelpCircle, GraduationCap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuthStore } from '@/store';
+
+const BlueBuddyModel = dynamic(() => import('./BlueBuddyModel'), { ssr: false });
 
 interface AIAssistantWidgetProps {
   initialGreeting?: string;
@@ -20,7 +21,6 @@ export default function AIAssistantWidget({
 }: AIAssistantWidgetProps) {
   const { user } = useAuthStore();
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [hasInteracted, setHasInteracted] = useState(false);
   const [showSpeechBubble, setShowSpeechBubble] = useState(true);
 
   // Periodic speech bubble prompt
@@ -80,7 +80,6 @@ export default function AIAssistantWidget({
           }}
           onClick={() => {
             setIsOpen(true);
-            setHasInteracted(true);
           }}
         >
           <Sparkles size={16} style={{ color: '#00D1FF', flexShrink: 0 }} />
@@ -165,13 +164,14 @@ export default function AIAssistantWidget({
               position: 'relative',
             }}
           >
-            <RobotMascot3D
-              width="100%"
-              height="100%"
-              scale={0.92}
+            <BlueBuddyModel
+              compact
               interactive={true}
               enableTracking={true}
               enableFloating={true}
+              loadingLabel="جاري تحميل المجسم"
+              errorLabel="تعذر تحميل المجسم ثلاثي الأبعاد."
+              accessibleLabel="رفيق FIXION ثلاثي الأبعاد"
             />
             <span
               style={{
@@ -254,7 +254,6 @@ export default function AIAssistantWidget({
         }}
         onClick={() => {
           setIsOpen(!isOpen);
-          setHasInteracted(true);
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'scale(1.1)';
@@ -267,14 +266,13 @@ export default function AIAssistantWidget({
         title="Fixion Learning Buddy — اضغط للفتح!"
       >
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', borderRadius: '50%' }}>
-          <RobotMascot3D
-            width="100%"
-            height="100%"
-            scale={0.58}
+          <BlueBuddyModel
+            compact
+            focus="head"
             interactive={false}
-            enableTracking={true}
-            enableFloating={true}
-            showShadow={false}
+            loadingLabel="جاري التحميل"
+            errorLabel="تعذر التحميل"
+            accessibleLabel="رفيق FIXION ثلاثي الأبعاد"
           />
         </div>
 
