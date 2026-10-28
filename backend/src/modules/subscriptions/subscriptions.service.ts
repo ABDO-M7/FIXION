@@ -54,12 +54,10 @@ export class SubscriptionsService {
       const usersRepo = manager.getRepository(User);
 
       // Lock code row for update to prevent concurrent double-redemption
-      const subCode = await codesRepo
-        .createQueryBuilder('c')
-        .setLock('pessimistic_write')
-        .leftJoinAndSelect('c.teacher', 'teacher')
-        .where('c.code = :code AND c.isUsed = :isUsed', { code: rawCode, isUsed: false })
-        .getOne();
+      const subCode = await codesRepo.findOne({
+        where: { code: rawCode, isUsed: false },
+        lock: { mode: 'pessimistic_write' },
+      });
 
       if (!subCode) {
         throw new NotFoundException('Invalid or already used code');
@@ -76,9 +74,12 @@ export class SubscriptionsService {
       }
 
       // Resolve teacher
-      let teacher = subCode.teacher || null;
-      let teacherName = subCode.teacherName || subCode.teacher?.name || null;
-      let teacherId = subCode.teacherId || subCode.teacher?.id || null;
+      let teacher: User | null = null;
+      if (subCode.teacherId) {
+        teacher = await usersRepo.findOne({ where: { id: subCode.teacherId } });
+      }
+      let teacherName = subCode.teacherName || teacher?.name || null;
+      let teacherId = subCode.teacherId || teacher?.id || null;
 
       if (!teacherName && subCode.courseName) {
         const teachers = await usersRepo.find({ where: { role: UserRole.TEACHER, isActive: true } });
