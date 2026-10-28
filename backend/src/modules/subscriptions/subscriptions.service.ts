@@ -2,7 +2,7 @@ import {
   Injectable, NotFoundException, BadRequestException, ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { randomInt } from 'crypto';
 import { addDays } from 'date-fns';
 import { isUUID } from 'class-validator';
@@ -10,6 +10,8 @@ import { Subscription, SubscriptionPlan } from './entities/subscription.entity';
 import { SubscriptionCode, CodeType } from './entities/subscription-code.entity';
 import { CourseEnrollment } from './entities/course-enrollment.entity';
 import { User, UserRole } from '../users/entities/user.entity';
+import { RedisCacheService } from '../../common/cache/redis-cache.service';
+import { studentCourseVersionKey } from '../../common/cache/course-cache-keys';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const DIGIT_ALPHABET = '0123456789';
@@ -37,90 +39,202 @@ export class SubscriptionsService {
     private enrollmentsRepo: Repository<CourseEnrollment>,
     @InjectRepository(User)
     private usersRepo: Repository<User>,
+    private dataSource: DataSource,
+    private cache: RedisCacheService,
   ) {}
 
   // ─── Redeem ───────────────────────────────────────────────────────────────
   async redeemCode(code: string, student: User): Promise<{ enrollment: CourseEnrollment | null }> {
-    const subCode = await this.codesRepo.findOne({
-      where: { code: code.toUpperCase().trim(), isUsed: false },
-      relations: ['teacher'],
-    });
+    const rawCode = (code || '').toUpperCase().trim();
+    if (!rawCode) throw new BadRequestException('Code is required');
 
-    if (!subCode) throw new NotFoundException('Invalid or already used code');
+    return this.dataSource.transaction(async manager => {
+      const codesRepo = manager.getRepository(SubscriptionCode);
+      const enrollmentsRepo = manager.getRepository(CourseEnrollment);
+      const usersRepo = manager.getRepository(User);
 
-    // Code itself expired (redemption window) — separate from access expiry
-    if (subCode.expiresAt && subCode.expiresAt < new Date()) {
-      throw new BadRequestException('This code has expired');
-    }
+      // Lock code row for update to prevent concurrent double-redemption
+      const subCode = await codesRepo
+        .createQueryBuilder('c')
+        .setLock('pessimistic_write')
+        .leftJoinAndSelect('c.teacher', 'teacher')
+        .where('c.code = :code AND c.isUsed = :isUsed', { code: rawCode, isUsed: false })
+        .getOne();
 
-    // Course code: require courseName
-    if (!subCode.courseName) {
-      throw new BadRequestException('This code is not linked to a course');
-    }
-
-    // Mark the code as used
-    await this.codesRepo.update(subCode.id, {
-      isUsed: true,
-      usedById: student.id,
-      usedAt: new Date(),
-    });
-
-    // Resolve teacher
-    let teacher = subCode.teacher || null;
-    let teacherName = subCode.teacherName || subCode.teacher?.name || null;
-    let teacherId = subCode.teacherId || subCode.teacher?.id || null;
-
-    if (!teacherName) {
-      const teachers = await this.usersRepo.find({ where: { role: UserRole.TEACHER, isActive: true } });
-      const matched = teachers.find(t => Array.isArray(t.subjects) && t.subjects.includes(subCode.courseName!));
-      if (matched) {
-        teacher = matched;
-        teacherId = matched.id;
-        teacherName = matched.name;
+      if (!subCode) {
+        throw new NotFoundException('Invalid or already used code');
       }
-    }
 
-    // Calculate per-enrollment expiry based on code type
-    const now = new Date();
-    let enrollmentExpiresAt: Date | null = null;
-    let snapshotAt: Date | null = null;
-    let accessScope: {
-      chapters?: string[];
-      lessons?: Array<string | { chapterName: string; lessonName: string }>;
-    } | null = null;
+      // Code itself expired (redemption window) — separate from access expiry
+      if (subCode.expiresAt && subCode.expiresAt < new Date()) {
+        throw new BadRequestException('This code has expired');
+      }
 
-    const codeType = subCode.codeType ?? CodeType.TIMED;
+      // Course code: require courseName
+      if (!subCode.courseName) {
+        throw new BadRequestException('This code is not linked to a course');
+      }
 
-    if (codeType === CodeType.TIMED) {
-      const durationDays = subCode.durationDays ?? PLAN_DURATION[subCode.plan] ?? 30;
-      enrollmentExpiresAt = addDays(now, durationDays);
-    } else if (codeType === CodeType.SNAPSHOT) {
-      // Access to content published at or before this moment, forever
-      snapshotAt = now;
-      enrollmentExpiresAt = null;
-    } else if (codeType === CodeType.CHAPTER) {
-      // Chapter access is permanent unless the generated code sets a duration.
-      accessScope = subCode.accessScope ?? null;
-      enrollmentExpiresAt = subCode.durationDays ? addDays(now, subCode.durationDays) : null;
-    }
+      // Resolve teacher
+      let teacher = subCode.teacher || null;
+      let teacherName = subCode.teacherName || subCode.teacher?.name || null;
+      let teacherId = subCode.teacherId || subCode.teacher?.id || null;
 
-    const enrollment = await this.enrollmentsRepo.save(
-      this.enrollmentsRepo.create({
-        studentId: student.id,
-        courseName: subCode.courseName,
-        teacherName: teacherName || undefined,
-        teacherId: teacherId || undefined,
-        teacher: teacher || undefined,
-        groupName: subCode.groupName || 'المجموعة الأساسية',
-        codeId: subCode.id,
-        codeType,
-        expiresAt: enrollmentExpiresAt,
-        snapshotAt,
-        accessScope,
-      }),
-    );
+      if (!teacherName && subCode.courseName) {
+        const teachers = await usersRepo.find({ where: { role: UserRole.TEACHER, isActive: true } });
+        const matched = teachers.find(t => Array.isArray(t.subjects) && t.subjects.includes(subCode.courseName!));
+        if (matched) {
+          teacher = matched;
+          teacherId = matched.id;
+          teacherName = matched.name;
+        }
+      }
 
-    return { enrollment };
+      // Check if student already has a group for this course if new code doesn't specify one
+      let targetGroupName = subCode.groupName?.trim() || '';
+      if (!targetGroupName) {
+        const existingForGroup = await enrollmentsRepo.findOne({
+          where: [
+            ...(teacherId ? [{ studentId: student.id, courseName: subCode.courseName, teacherId }] : []),
+            { studentId: student.id, courseName: subCode.courseName },
+          ],
+          order: { createdAt: 'DESC' },
+        });
+        targetGroupName = existingForGroup?.groupName || 'المجموعة الأساسية';
+      }
+
+      const now = new Date();
+      const codeType = subCode.codeType ?? CodeType.TIMED;
+
+      // Find if student ALREADY has an enrollment for this course & group & teacher
+      const existingEnrollment = await enrollmentsRepo.findOne({
+        where: [
+          ...(teacherId ? [{ studentId: student.id, courseName: subCode.courseName, groupName: targetGroupName, teacherId }] : []),
+          { studentId: student.id, courseName: subCode.courseName, groupName: targetGroupName },
+        ],
+        order: { createdAt: 'DESC' },
+      });
+
+      let savedEnrollment: CourseEnrollment;
+
+      if (existingEnrollment) {
+        // UPGRADE / EXTEND existing enrollment — prevents unique constraint violation!
+        existingEnrollment.codeId = subCode.id;
+        if (teacherId && !existingEnrollment.teacherId) {
+          existingEnrollment.teacherId = teacherId;
+          existingEnrollment.teacher = teacher;
+        }
+        if (teacherName && !existingEnrollment.teacherName) {
+          existingEnrollment.teacherName = teacherName;
+        }
+
+        if (codeType === CodeType.TIMED) {
+          const durationDays = subCode.durationDays ?? PLAN_DURATION[subCode.plan] ?? 30;
+          // Upgrading to full TIMED (monthly) access
+          existingEnrollment.codeType = CodeType.TIMED;
+          if (existingEnrollment.expiresAt && existingEnrollment.expiresAt > now) {
+            // Extend existing active subscription
+            existingEnrollment.expiresAt = addDays(existingEnrollment.expiresAt, durationDays);
+          } else {
+            // Was expired or was chapter/snapshot: full fresh subscription from now
+            existingEnrollment.expiresAt = addDays(now, durationDays);
+          }
+        } else if (codeType === CodeType.CHAPTER) {
+          if (existingEnrollment.codeType === CodeType.CHAPTER) {
+            // Merge chapters and lessons
+            const existingChapters = existingEnrollment.accessScope?.chapters || [];
+            const newChapters = subCode.accessScope?.chapters || [];
+            const mergedChapters = Array.from(new Set([...existingChapters, ...newChapters]));
+
+            const existingLessons = existingEnrollment.accessScope?.lessons || [];
+            const newLessons = subCode.accessScope?.lessons || [];
+            const mergedLessons = [...existingLessons];
+            for (const l of newLessons) {
+              const already = mergedLessons.some(el =>
+                typeof el === 'string' && typeof l === 'string' ? el === l :
+                typeof el === 'object' && typeof l === 'object' ? el.chapterName === l.chapterName && el.lessonName === l.lessonName :
+                false
+              );
+              if (!already) mergedLessons.push(l);
+            }
+            existingEnrollment.accessScope = { chapters: mergedChapters, lessons: mergedLessons };
+
+            if (subCode.durationDays) {
+              const chDuration = subCode.durationDays;
+              if (existingEnrollment.expiresAt && existingEnrollment.expiresAt > now) {
+                existingEnrollment.expiresAt = addDays(existingEnrollment.expiresAt, chDuration);
+              } else {
+                existingEnrollment.expiresAt = addDays(now, chDuration);
+              }
+            }
+          } else if (existingEnrollment.codeType === CodeType.TIMED) {
+            const isTimedActive = !existingEnrollment.expiresAt || existingEnrollment.expiresAt > now;
+            if (!isTimedActive) {
+              // Expired timed code: activates chapter
+              existingEnrollment.codeType = CodeType.CHAPTER;
+              existingEnrollment.accessScope = subCode.accessScope ?? null;
+              existingEnrollment.expiresAt = subCode.durationDays ? addDays(now, subCode.durationDays) : null;
+            } else {
+              // Still actively on timed (monthly): keep TIMED full access and save chapter
+              const existingChapters = existingEnrollment.accessScope?.chapters || [];
+              const newChapters = subCode.accessScope?.chapters || [];
+              existingEnrollment.accessScope = {
+                chapters: Array.from(new Set([...existingChapters, ...newChapters])),
+                lessons: subCode.accessScope?.lessons || existingEnrollment.accessScope?.lessons || [],
+              };
+            }
+          }
+        } else if (codeType === CodeType.SNAPSHOT) {
+          existingEnrollment.codeType = CodeType.SNAPSHOT;
+          existingEnrollment.snapshotAt = now;
+          existingEnrollment.expiresAt = null;
+        }
+
+        savedEnrollment = await enrollmentsRepo.save(existingEnrollment);
+      } else {
+        // Fresh enrollment
+        let enrollmentExpiresAt: Date | null = null;
+        let snapshotAt: Date | null = null;
+        let accessScope: any = null;
+
+        if (codeType === CodeType.TIMED) {
+          const durationDays = subCode.durationDays ?? PLAN_DURATION[subCode.plan] ?? 30;
+          enrollmentExpiresAt = addDays(now, durationDays);
+        } else if (codeType === CodeType.SNAPSHOT) {
+          snapshotAt = now;
+        } else if (codeType === CodeType.CHAPTER) {
+          accessScope = subCode.accessScope ?? null;
+          enrollmentExpiresAt = subCode.durationDays ? addDays(now, subCode.durationDays) : null;
+        }
+
+        const newEnrollment = enrollmentsRepo.create({
+          studentId: student.id,
+          courseName: subCode.courseName,
+          teacherName: teacherName || undefined,
+          teacherId: teacherId || undefined,
+          teacher: teacher || undefined,
+          groupName: targetGroupName,
+          codeId: subCode.id,
+          codeType,
+          expiresAt: enrollmentExpiresAt,
+          snapshotAt,
+          accessScope,
+        });
+        savedEnrollment = await enrollmentsRepo.save(newEnrollment);
+      }
+
+      // Mark code as used
+      await codesRepo.update(subCode.id, {
+        isUsed: true,
+        usedById: student.id,
+        usedAt: now,
+      });
+
+      // Invalidate student course cache
+      await this.cache.bumpVersion(studentCourseVersionKey(subCode.courseName, targetGroupName, student.id));
+
+      return { enrollment: savedEnrollment };
+    });
   }
 
   // ─── Enrollments ─────────────────────────────────────────────────────────

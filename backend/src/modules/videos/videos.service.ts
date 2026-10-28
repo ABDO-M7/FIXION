@@ -15,7 +15,15 @@ import { UnlockRuleType } from '../learning/unlock-rule';
 import { VideoProgress } from './entities/video-progress.entity';
 import { RedisCacheService } from '../../common/cache/redis-cache.service';
 import { courseContentVersionKey, studentCourseCacheKey, studentCourseVersionKey } from '../../common/cache/course-cache-keys';
-import { assertCourseContentAccess, assertEnrollmentActive, canAccessCourseContent } from '../subscriptions/access-scope';
+import {
+  assertCourseContentAccess,
+  assertCourseContentAccessAcrossEnrollments,
+  assertEnrollmentActive,
+  canAccessCourseContent,
+  canAccessCourseContentAcrossEnrollments,
+  isEnrollmentExpired,
+} from '../subscriptions/access-scope';
+import { CodeType } from '../subscriptions/entities/subscription-code.entity';
 
 type CreateVideoDto = {
   courseName: string;
@@ -154,7 +162,7 @@ export class VideosService {
   }
 
   async listForStudent(courseName: string, groupName: string, studentId: string) {
-    const enrollment = await this.assertEnrollment(courseName, groupName, studentId);
+    const enrollments = await this.getStudentEnrollments(courseName, groupName, studentId);
     const videos = await this.cache.remember(
       studentCourseCacheKey('videos', courseName, groupName, studentId),
       20,
@@ -196,7 +204,7 @@ export class VideosService {
       },
     );
     return videos
-      .filter(video => canAccessCourseContent(enrollment, video.chapterName, video.lessonName))
+      .filter(video => canAccessCourseContentAcrossEnrollments(enrollments, video.chapterName, video.lessonName))
       .map(({ teacherId, ...video }) => {
         void teacherId;
         return video;
@@ -574,6 +582,21 @@ export class VideosService {
     return this.evaluateSingleCondition(rule, prerequisiteId, requiredScore, prerequisiteVideoId, requiredPercent, studentId);
   }
 
+  private async getStudentEnrollments(
+    courseName: string,
+    groupName: string,
+    studentId: string,
+  ): Promise<CourseEnrollment[]> {
+    const enrollments = await this.enrollmentsRepo.find({
+      where: { courseName, groupName, studentId },
+      order: { createdAt: 'DESC' },
+    });
+    if (!enrollments.length) throw new ForbiddenException('You are not enrolled in this course group');
+    const active = enrollments.filter(e => !isEnrollmentExpired(e));
+    if (!active.length) throw new ForbiddenException('This course access has expired');
+    return active;
+  }
+
   private async assertEnrollment(
     courseName: string,
     groupName: string,
@@ -581,14 +604,11 @@ export class VideosService {
     chapterName?: string | null,
     lessonName?: string | null,
   ): Promise<CourseEnrollment> {
-    const enrollment = await this.enrollmentsRepo.findOne({ where: { courseName, groupName, studentId } });
-    if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
+    const enrollments = await this.getStudentEnrollments(courseName, groupName, studentId);
     if (chapterName !== undefined || lessonName !== undefined) {
-      assertCourseContentAccess(enrollment, chapterName, lessonName);
-    } else {
-      assertEnrollmentActive(enrollment);
+      assertCourseContentAccessAcrossEnrollments(enrollments, chapterName, lessonName);
     }
-    return enrollment;
+    return enrollments.find(e => e.codeType === CodeType.TIMED) || enrollments[0];
   }
 
   private validateCheckpoint(dto: CheckpointDto, current?: VideoCheckpoint) {

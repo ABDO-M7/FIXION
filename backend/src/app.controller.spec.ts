@@ -15,8 +15,14 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return service health status', () => {
+      const result = appController.getHello();
+      expect(result).toMatchObject({
+        status: 'ok',
+        service: 'Fixion Backend API',
+      });
+      expect(result.timestamp).toBeDefined();
     });
   });
 });
+

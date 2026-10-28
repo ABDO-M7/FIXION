@@ -13,8 +13,15 @@ import { VideoProgress } from '../videos/entities/video-progress.entity';
 import { Course } from './entities/course.entity';
 import { CourseGroup } from './entities/course-group.entity';
 import { CourseVideo } from '../videos/entities/course-video.entity';
-import { SubscriptionCode } from '../subscriptions/entities/subscription-code.entity';
-import { assertCourseContentAccess, assertEnrollmentActive, canAccessCourseContent } from '../subscriptions/access-scope';
+import { CodeType, SubscriptionCode } from '../subscriptions/entities/subscription-code.entity';
+import {
+  assertCourseContentAccess,
+  assertCourseContentAccessAcrossEnrollments,
+  assertEnrollmentActive,
+  canAccessCourseContent,
+  canAccessCourseContentAcrossEnrollments,
+  isEnrollmentExpired,
+} from '../subscriptions/access-scope';
 import { Question } from '../questions/entities/question.entity';
 import { RedisCacheService } from '../../common/cache/redis-cache.service';
 import { courseContentVersionKey, studentCourseCacheKey, studentCourseVersionKey } from '../../common/cache/course-cache-keys';
@@ -1061,7 +1068,7 @@ export class AssignmentsService {
 
   // ─── STUDENT: get their assignments for a course/group ────────────────────
   async getStudentAssignments(studentId: string, courseName: string, groupName: string) {
-    const enrollment = await this.getStudentCourseEnrollment(studentId, courseName, groupName);
+    const enrollments = await this.getStudentCourseEnrollments(studentId, courseName, groupName);
     const assignments = await this.cache.remember(
       studentCourseCacheKey('assignments', courseName, groupName, studentId),
       15,
@@ -1092,7 +1099,7 @@ export class AssignmentsService {
       },
     );
     return assignments.filter(assignment =>
-      canAccessCourseContent(enrollment, assignment.chapterName, assignment.lessonName),
+      canAccessCourseContentAcrossEnrollments(enrollments, assignment.chapterName, assignment.lessonName),
     );
   }
 
@@ -1101,12 +1108,12 @@ export class AssignmentsService {
     if (!assignment) throw new NotFoundException('Assignment not found');
     if (studentId) {
       if (!assignment.isPublished) throw new ForbiddenException('This assignment is not published');
-      const enrollment = await this.getStudentCourseEnrollment(
+      const enrollments = await this.getStudentCourseEnrollments(
         studentId,
         assignment.courseName,
         assignment.groupName,
       );
-      assertCourseContentAccess(enrollment, assignment.chapterName, assignment.lessonName);
+      assertCourseContentAccessAcrossEnrollments(enrollments, assignment.chapterName, assignment.lessonName);
     }
     // Collect all prerequisite assignment IDs for lookup
     const prereqAssignmentIds = [
@@ -1195,17 +1202,28 @@ export class AssignmentsService {
     return { ...submission, maxGrade: assignment?.maxGrade ?? 100 };
   }
 
+  private async getStudentCourseEnrollments(
+    studentId: string,
+    courseName: string,
+    groupName: string,
+  ): Promise<CourseEnrollment[]> {
+    const enrollments = await this.enrollmentsRepo.find({
+      where: { studentId, courseName, groupName },
+      order: { createdAt: 'DESC' },
+    });
+    if (!enrollments.length) throw new ForbiddenException('You are not enrolled in this course group');
+    const active = enrollments.filter(e => !isEnrollmentExpired(e));
+    if (!active.length) throw new ForbiddenException('This course access has expired');
+    return active;
+  }
+
   private async getStudentCourseEnrollment(
     studentId: string,
     courseName: string,
     groupName: string,
   ): Promise<CourseEnrollment> {
-    const enrollment = await this.enrollmentsRepo.findOne({
-      where: { studentId, courseName, groupName },
-    });
-    if (!enrollment) throw new ForbiddenException('You are not enrolled in this course group');
-    assertEnrollmentActive(enrollment);
-    return enrollment;
+    const enrollments = await this.getStudentCourseEnrollments(studentId, courseName, groupName);
+    return enrollments.find(e => e.codeType === CodeType.TIMED) || enrollments[0];
   }
 
   // ─── TEACHER: publish assignment ───────────────────────────────────────────
