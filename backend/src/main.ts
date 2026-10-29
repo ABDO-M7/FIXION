@@ -55,6 +55,26 @@ async function bootstrap() {
     exclude: ['/', 'health'],
   });
 
+  // Root & Health check aliases (for UptimeRobot and Render pings)
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.get('/', (_req: any, res: any) => {
+    res.json({ status: 'ok', service: 'Fixion Backend API', timestamp: new Date().toISOString() });
+  });
+  expressApp.head('/', (_req: any, res: any) => {
+    res.status(200).end();
+  });
+  expressApp.get('/api/v1/health', (_req: any, res: any) => {
+    res.json({
+      status: 'ok',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      memory: process.memoryUsage(),
+    });
+  });
+  expressApp.head('/api/v1/health', (_req: any, res: any) => {
+    res.status(200).end();
+  });
+
   const port = process.env.PORT || 3001;
   await app.listen(port);
   console.log(`🚀 Fixion backend running at http://localhost:${port}/api/v1`);
