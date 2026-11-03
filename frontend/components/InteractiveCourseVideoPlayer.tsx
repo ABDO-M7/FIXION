@@ -53,7 +53,7 @@ function playerOrigin(provider: string) {
   if (provider === 'vimeo') return 'https://player.vimeo.com';
   if (provider === 'wistia') return 'https://fast.wistia.net';
   if (provider === 'bunny') return 'https://iframe.mediadelivery.net';
-  return 'https://www.youtube-nocookie.com';
+  return 'https://www.youtube.com';
 }
 
 export default function InteractiveCourseVideoPlayer({ video, preview = false }: { video: InteractiveCourseVideo; preview?: boolean }) {
@@ -61,8 +61,11 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const hlsVideoRef = useRef<HTMLVideoElement>(null);
   const wistiaElementRef = useRef<HTMLElement>(null);
   const providerPlayerRef = useRef<any>(null);
+  const durationRef = useRef<number>(0);
+  const currentTimeRef = useRef<number>(0);
   const checkpointPauseLockRef = useRef(false);
   const provider = video.provider || 'youtube';
+  const mediaId = video.providerVideoId || video.youtubeVideoId || '';
   const isBunny = provider === 'bunny';
   const isHls = provider === 'hls';
   const [started, setStarted] = useState(isBunny);
@@ -70,6 +73,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const [experience, setExperience] = useState<Experience | null>(null);
   const [loadingExperience, setLoadingExperience] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [watchedPercent, setWatchedPercent] = useState<number>(video.watchedPercent ?? 0);
   const [pending, setPending] = useState<VideoCheckpoint | null>(null);
   const [answer, setAnswer] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
@@ -78,6 +82,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const [solution, setSolution] = useState<{ text?: string | null; url?: string | null } | null>(null);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const lastProgressReportRef = useRef(0);
+  const experienceLoadedForRef = useRef<string | null>(null);
 
   const checkpoints = experience?.checkpoints || [];
   const solvedIds = useMemo(() => new Set(checkpoints.filter(item => item.response?.isCorrect).map(item => item.id)), [checkpoints]);
@@ -113,17 +118,26 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     }
   }, [provider]);
 
-  const loadExperience = async () => {
+  const loadExperience = useCallback(async () => {
+    if (preview || experienceLoadedForRef.current === video.id) return;
+    experienceLoadedForRef.current = video.id;
     setLoadingExperience(true);
     try {
       const response = await videosApi.studentExperience(video.id);
       setExperience(response.data);
     } catch {
+      experienceLoadedForRef.current = null;
       toast.error('Could not load video questions');
     } finally {
       setLoadingExperience(false);
     }
-  };
+  }, [preview, video.id]);
+
+  useEffect(() => {
+    if (started && !preview) {
+      void loadExperience();
+    }
+  }, [started, preview, loadExperience]);
 
   const start = async () => {
     checkpointPauseLockRef.current = false;
@@ -141,6 +155,9 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
           func: 'addEventListener',
           args: ['onStateChange', 'infoDelivery'],
         }), playerOrigin(provider));
+      } else if (provider === 'vimeo') {
+        iframeRef.current?.contentWindow?.postMessage({ method: 'addEventListener', value: 'playProgress' }, playerOrigin(provider));
+        iframeRef.current?.contentWindow?.postMessage({ method: 'getDuration' }, playerOrigin(provider));
       }
       sendPlayerCommand('playVideo');
     }, 250);
@@ -166,16 +183,55 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     if (checkpoint) pauseForCheckpoint(checkpoint);
   }, [checkpoints, experience, pauseForCheckpoint, pending, solvedIds]);
 
-  const reportProgress = useCallback((time: number) => {
-    if (preview || !Number.isFinite(time) || Date.now() - lastProgressReportRef.current < 4000) return;
+  const resolveDuration = useCallback((explicitDuration?: number) => {
+    if (Number.isFinite(explicitDuration) && (explicitDuration as number) > 0) {
+      durationRef.current = explicitDuration as number;
+      return explicitDuration as number;
+    }
     const player = providerPlayerRef.current;
-    const duration = provider === 'youtube'
-      ? Number(player?.getDuration?.())
-      : Number(player?.duration ?? player?.getDuration?.());
+    let candidate = NaN;
+    if (provider === 'youtube') {
+      candidate = Number(player?.getDuration?.());
+    } else if (provider === 'bunny') {
+      if (typeof player?.getDuration === 'function') {
+        try {
+          const maybeSync = player.getDuration((d: number) => {
+            if (Number.isFinite(Number(d)) && Number(d) > 0) durationRef.current = Number(d);
+          });
+          if (Number.isFinite(Number(maybeSync)) && Number(maybeSync) > 0) candidate = Number(maybeSync);
+        } catch {
+          // callback-only getDuration
+        }
+      }
+      if (!Number.isFinite(candidate) || candidate <= 0) {
+        candidate = Number(player?.duration);
+      }
+    } else {
+      candidate = Number(player?.duration ?? player?.getDuration?.());
+    }
+    if (Number.isFinite(candidate) && candidate > 0) {
+      durationRef.current = candidate;
+      return candidate;
+    }
+    return durationRef.current > 0 ? durationRef.current : NaN;
+  }, [provider]);
+
+  const reportProgress = useCallback((time: number, explicitDuration?: number, force = false) => {
+    if (preview || !Number.isFinite(time) || time < 0) return;
+    currentTimeRef.current = time;
+    if (!force && Date.now() - lastProgressReportRef.current < 4000) return;
+    const duration = resolveDuration(explicitDuration);
     if (!Number.isFinite(duration) || duration <= 0) return;
     lastProgressReportRef.current = Date.now();
-    videosApi.updateProgress(video.id, time, duration).catch(() => {});
-  }, [preview, provider, video.id]);
+    videosApi.updateProgress(video.id, time, duration)
+      .then(res => {
+        const nextPct = Number(res?.data?.watchedPercent);
+        if (Number.isFinite(nextPct)) {
+          setWatchedPercent(prev => Math.max(prev, nextPct));
+        }
+      })
+      .catch(() => {});
+  }, [preview, resolveDuration, video.id]);
 
   const checkpointHandlerRef = useRef(checkForCheckpoint);
   useEffect(() => {
@@ -185,7 +241,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   useEffect(() => {
     if (!started || provider !== 'hls') return;
     const player = hlsVideoRef.current;
-    const sourceUrl = video.providerVideoId;
+    const sourceUrl = mediaId;
     if (!player || !sourceUrl) return;
 
     let hls: { destroy: () => void } | null = null;
@@ -194,7 +250,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       const time = player.currentTime;
       setCurrentTime(time);
       checkpointHandlerRef.current(time);
-      reportProgress(time);
+      reportProgress(time, player.duration);
     };
     const onPlay = () => {
       if (checkpointPauseLockRef.current) {
@@ -204,11 +260,19 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       }
       setPlaying(true);
     };
-    const onPause = () => setPlaying(false);
+    const onPause = () => {
+      setPlaying(false);
+      reportProgress(player.currentTime, player.duration, true);
+    };
+    const onEnded = () => {
+      setPlaying(false);
+      reportProgress(player.duration || player.currentTime, player.duration, true);
+    };
     const onError = () => setPlayerError('hls-player-error');
     player.addEventListener('timeupdate', onTimeUpdate);
     player.addEventListener('play', onPlay);
     player.addEventListener('pause', onPause);
+    player.addEventListener('ended', onEnded);
     player.addEventListener('error', onError);
     providerPlayerRef.current = player;
 
@@ -238,19 +302,20 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       player.removeEventListener('timeupdate', onTimeUpdate);
       player.removeEventListener('play', onPlay);
       player.removeEventListener('pause', onPause);
+      player.removeEventListener('ended', onEnded);
       player.removeEventListener('error', onError);
       if (hls) hls.destroy();
       player.removeAttribute('src');
       player.load();
       if (providerPlayerRef.current === player) providerPlayerRef.current = null;
     };
-  }, [provider, reportProgress, started, video.providerVideoId]);
+  }, [mediaId, provider, reportProgress, started]);
 
   // The YouTube postMessage protocol does not reliably emit current-time
   // events in every browser until its listener handshake has completed.
   // Attach the official player object as a reliable time source instead.
   useEffect(() => {
-    if (!started || provider !== 'youtube' || !video.providerVideoId) return;
+    if (!started || provider !== 'youtube' || !mediaId) return;
     let cancelled = false;
     let timer: number | undefined;
 
@@ -264,6 +329,8 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
           onReady: () => {
             if (!cancelled) {
               providerPlayerRef.current = player;
+              const d = Number(player?.getDuration?.());
+              if (Number.isFinite(d) && d > 0) durationRef.current = d;
               setPlayerError(null);
               player.playVideo?.();
             }
@@ -278,12 +345,15 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
               setPlaying(false);
               return;
             }
-            setPlaying(event?.data === 1);
+            const isNowPlaying = event?.data === 1;
+            const isEndedOrPaused = event?.data === 0 || event?.data === 2;
+            setPlaying(isNowPlaying);
             const time = Number(player?.getCurrentTime?.());
+            const d = Number(player?.getDuration?.());
             if (Number.isFinite(time)) {
               setCurrentTime(time);
               checkpointHandlerRef.current(time);
-              reportProgress(time);
+              reportProgress(time, d, isEndedOrPaused);
             }
           },
         },
@@ -313,7 +383,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       if (timer) window.clearInterval(timer);
       providerPlayerRef.current = null;
     };
-  }, [provider, reportProgress, started, video.providerVideoId]);
+  }, [mediaId, provider, reportProgress, started]);
 
   useEffect(() => {
     if (!started) return;
@@ -322,13 +392,26 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       if (typeof data === 'string') {
         try { data = JSON.parse(data); } catch { return; }
       }
-      const time = Number(data?.info?.currentTime ?? data?.infoDelivery?.currentTime ?? data?.value);
-      const externalTime = Number(data?.currentTime ?? data?.time ?? data?.seconds ?? data?.eventData?.currentTime);
+      const msgDuration = Number(
+        data?.info?.duration
+        ?? data?.infoDelivery?.duration
+        ?? data?.duration
+        ?? data?.data?.duration
+        ?? data?.eventData?.duration,
+      );
+      if (Number.isFinite(msgDuration) && msgDuration > 0) {
+        durationRef.current = msgDuration;
+      }
+      if (data?.method === 'getDuration' && Number.isFinite(Number(data?.value)) && Number(data?.value) > 0) {
+        durationRef.current = Number(data.value);
+      }
+      const time = Number(data?.info?.currentTime ?? data?.infoDelivery?.currentTime ?? (data?.method !== 'getDuration' ? data?.value : NaN));
+      const externalTime = Number(data?.currentTime ?? data?.time ?? data?.seconds ?? data?.data?.seconds ?? data?.eventData?.currentTime);
       const resolvedTime = Number.isFinite(time) ? time : externalTime;
       if (Number.isFinite(resolvedTime)) {
         setCurrentTime(resolvedTime);
         checkForCheckpoint(resolvedTime);
-        reportProgress(resolvedTime);
+        reportProgress(resolvedTime, msgDuration);
       }
     };
     window.addEventListener('message', handleMessage);
@@ -337,19 +420,21 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       if (provider === 'vimeo') sendPlayerCommand('getCurrentTime');
       else if (provider === 'youtube') {
         const time = Number(providerPlayerRef.current?.getCurrentTime?.());
+        const d = Number(providerPlayerRef.current?.getDuration?.());
         if (Number.isFinite(time)) {
           setCurrentTime(time);
           checkForCheckpoint(time);
-          reportProgress(time);
+          reportProgress(time, d);
         } else {
           sendPlayerCommand('getCurrentTime');
         }
       } else if (provider === 'wistia') {
         const time = Number(providerPlayerRef.current?.currentTime ?? providerPlayerRef.current?.time?.());
+        const d = Number(providerPlayerRef.current?.duration ?? providerPlayerRef.current?.duration?.());
         if (Number.isFinite(time)) {
           setCurrentTime(time);
           checkForCheckpoint(time);
-          reportProgress(time);
+          reportProgress(time, d);
         }
       }
     }, 450);
@@ -360,7 +445,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   }, [checkForCheckpoint, playing, provider, reportProgress, sendPlayerCommand, started]);
 
   useEffect(() => {
-    if (!started || !video.providerVideoId) return;
+    if (!started || (!mediaId && !video.embedUrl)) return;
     const scriptId = 'fixion-bunny-playerjs';
     if (provider !== 'bunny') return;
 
@@ -370,14 +455,38 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         if (!playerjs || !iframeRef.current) return;
         const player = new playerjs.Player(iframeRef.current);
         providerPlayerRef.current = player;
+        player.on('ready', () => {
+          try {
+            player.getDuration?.((d: number) => {
+              if (Number.isFinite(Number(d)) && Number(d) > 0) {
+                durationRef.current = Number(d);
+              }
+            });
+          } catch {
+            // ignore
+          }
+        });
         player.on('timeupdate', (payload: any) => {
           let data = payload;
           if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
           const time = Number(data?.seconds ?? data?.currentTime);
-          if (Number.isFinite(time)) { setCurrentTime(time); checkForCheckpoint(time); reportProgress(time); }
+          const dur = Number(data?.duration);
+          if (Number.isFinite(dur) && dur > 0) durationRef.current = dur;
+          if (Number.isFinite(time)) {
+            setCurrentTime(time);
+            checkForCheckpoint(time);
+            reportProgress(time, dur);
+          }
         });
         player.on('play', () => setPlaying(true));
-        player.on('pause', () => setPlaying(false));
+        player.on('pause', () => {
+          setPlaying(false);
+          reportProgress(currentTimeRef.current, durationRef.current, true);
+        });
+        player.on('ended', () => {
+          setPlaying(false);
+          reportProgress(durationRef.current || currentTimeRef.current, durationRef.current, true);
+        });
       }
     };
 
@@ -389,7 +498,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     script.src = 'https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js';
     script.onload = attach;
     document.body.appendChild(script);
-  }, [checkForCheckpoint, provider, reportProgress, started, video.providerVideoId]);
+  }, [checkForCheckpoint, mediaId, provider, reportProgress, started, video.embedUrl]);
 
   useEffect(() => {
     if (!started || provider !== 'wistia' || !video.providerVideoId) return;
@@ -398,18 +507,20 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     let cancelled = false;
     const onTimeUpdate = () => {
       const time = Number(element.currentTime);
+      const dur = Number(element.duration);
       if (Number.isFinite(time)) {
         setCurrentTime(time);
         checkpointHandlerRef.current(time);
-        reportProgress(time);
+        reportProgress(time, dur);
       }
     };
     const onSecondChange = (event: any) => {
       const time = Number(event?.detail?.second ?? element.currentTime);
+      const dur = Number(element.duration);
       if (Number.isFinite(time)) {
         setCurrentTime(time);
         checkpointHandlerRef.current(time);
-        reportProgress(time);
+        reportProgress(time, dur);
       }
     };
     const onPlay = () => {
@@ -420,7 +531,10 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
       }
       setPlaying(true);
     };
-    const onPause = () => setPlaying(false);
+    const onPause = () => {
+      setPlaying(false);
+      reportProgress(Number(element.currentTime), Number(element.duration), true);
+    };
     const onReady = () => {
       if (cancelled) return;
       providerPlayerRef.current = element;
@@ -608,8 +722,21 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
         {loadingExperience && started && !pending && <div style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'grid', placeItems: 'center', background: 'rgba(7,12,20,.66)', color: '#fff' }}><span className="spinner" /></div>}
       </div>
       <div style={{ padding: '16px 18px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{video.title}</h3>
+          {!preview && (
+            <span
+              className="badge"
+              style={{
+                background: watchedPercent >= 90 ? 'rgba(16,185,129,.15)' : 'rgba(99,102,241,.14)',
+                color: watchedPercent >= 90 ? '#34d399' : '#818cf8',
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              نسبة المشاهدة: {watchedPercent}%
+            </span>
+          )}
           {checkpoints.length > 0 && <span className="badge badge-pending">{solvedIds.size}/{checkpoints.length} checkpoints</span>}
         </div>
         {video.description && <p style={{ margin: '7px 0 0', color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.5 }}>{video.description}</p>}

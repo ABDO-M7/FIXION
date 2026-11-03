@@ -45,6 +45,8 @@ type VideoItem = {
   provider?: string;
   providerVideoId?: string | null;
   youtubeVideoId?: string | null;
+  watchedPercent?: number;
+  opened?: boolean;
 };
 
 type Lesson = {
@@ -392,6 +394,23 @@ function VideoRow({
               حصة دراسية
             </span>
           )}
+          {!isDoc && typeof video.watchedPercent === 'number' && video.watchedPercent > 0 && (
+            <span
+              className="badge"
+              style={{
+                fontSize: 10,
+                background: video.watchedPercent >= 90 ? 'rgba(16,185,129,0.14)' : 'rgba(56,189,248,0.14)',
+                color: video.watchedPercent >= 90 ? '#34d399' : '#38bdf8',
+              }}
+            >
+              {video.watchedPercent >= 90 ? `مكتمل (${video.watchedPercent}%)` : `تمت مشاهدة ${video.watchedPercent}%`}
+            </span>
+          )}
+          {isDoc && video.opened && (
+            <span className="badge" style={{ fontSize: 10, background: 'rgba(16,185,129,0.14)', color: '#34d399' }}>
+              تم فتحه
+            </span>
+          )}
         </div>
 
         {video.description && (
@@ -501,6 +520,18 @@ function VideoRow({
       >
         {content}
       </a>
+    );
+  }
+
+  if (isDoc && enrollmentId) {
+    return (
+      <Link
+        href={`/student/courses/${encodeURIComponent(enrollmentId)}/videos/${encodeURIComponent(video.id)}`}
+        onClick={() => onDocumentOpen?.(video.id, video.attachments?.length ? 0 : undefined)}
+        style={{ textDecoration: 'none', color: 'inherit' }}
+      >
+        {content}
+      </Link>
     );
   }
 

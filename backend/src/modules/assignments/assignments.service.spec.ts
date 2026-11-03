@@ -174,4 +174,100 @@ describe('AssignmentsService staff access', () => {
       where: { courseName: 'Physics', groupName: 'Group A' },
     });
   });
+
+  it('returns complete student analytics for an assistant including watch percent, solved/unsolved assignments, and opened files', async () => {
+    const enrollmentQuery = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([{ groupName: 'Group A', studentId: 'student-1' }]),
+    };
+    const groupQuery = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([{ groupName: 'Group A' }]),
+    };
+    const assignmentQuery = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([{ groupName: 'Group A' }]),
+      getMany: jest.fn().mockResolvedValue([
+        { id: 'quiz-1', title: 'Quiz 1', type: 'QUIZ', maxGrade: 20, isPublished: true, chapterName: 'Ch 1', lessonName: 'L1' },
+        { id: 'hw-1', title: 'Homework 1', type: 'HOMEWORK', maxGrade: 10, isPublished: true, chapterName: 'Ch 1', lessonName: 'L1' },
+      ]),
+    };
+    const videoQuery = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([{ groupName: 'Group A' }]),
+    };
+    const submissionQuery = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        { id: 'sub-1', assignmentId: 'quiz-1', studentId: 'student-1', grade: 18, submittedAt: new Date('2026-01-10T10:00:00Z') },
+      ]),
+    };
+    const progressQuery = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        { videoId: 'vid-1', studentId: 'student-1', opened: true, watchedPercent: 85, watchedSeconds: 510, durationSeconds: 600, openedAttachments: [0], updatedAt: new Date('2026-01-10T11:00:00Z') },
+        { videoId: 'doc-1', studentId: 'student-1', opened: true, watchedPercent: 0, watchedSeconds: 0, durationSeconds: 0, openedAttachments: [], updatedAt: new Date('2026-01-10T11:05:00Z') },
+      ]),
+    };
+
+    const service = new AssignmentsService(
+      { createQueryBuilder: jest.fn().mockReturnValue(assignmentQuery) } as any,
+      { createQueryBuilder: jest.fn().mockReturnValue(submissionQuery) } as any,
+      {} as any,
+      { createQueryBuilder: jest.fn().mockReturnValue(enrollmentQuery) } as any,
+      {
+        findOne: jest.fn().mockResolvedValue({ id: 'teacher-1', name: 'Teacher One', role: UserRole.TEACHER, subjects: ['Physics'] }),
+        findByIds: jest.fn().mockResolvedValue([{ id: 'student-1', name: 'Ali', email: 'ali@example.com', studentId: 'S100' }]),
+      } as any,
+      { createQueryBuilder: jest.fn().mockReturnValue(progressQuery) } as any,
+      {} as any,
+      { createQueryBuilder: jest.fn().mockReturnValue(groupQuery), find: jest.fn().mockResolvedValue([{ groupName: 'Group A', teacherId: 'teacher-1' }]) } as any,
+      {
+        createQueryBuilder: jest.fn().mockReturnValue(videoQuery),
+        find: jest.fn().mockResolvedValue([
+          { id: 'vid-1', title: 'Lecture 1', provider: 'bunny', attachments: ['https://example.com/notes.pdf'], chapterName: 'Ch 1', lessonName: 'L1' },
+          { id: 'doc-1', title: 'Summary PDF', provider: 'document', attachments: ['https://example.com/summary.pdf'], chapterName: 'Ch 1', lessonName: 'L1' },
+        ]),
+      } as any,
+      { bumpVersion: jest.fn() } as any,
+      { find: jest.fn().mockResolvedValue([{ id: 'cp-1', videoId: 'vid-1' }]) } as any,
+      { find: jest.fn().mockResolvedValue([{ id: 'vr-1', videoId: 'vid-1', studentId: 'student-1', isCorrect: true, submittedAt: new Date('2026-01-10T11:02:00Z') }]) } as any,
+    );
+
+    const analytics = await service.getGroupAnalytics('Physics', 'Group A', {
+      id: 'assistant-1',
+      role: UserRole.ASSISTANT,
+      assignedTeacherId: 'teacher-1',
+    } as User);
+
+    expect(analytics.summary.studentCount).toBe(1);
+    expect(analytics.summary.averageVideoWatchPercent).toBe(85);
+    const student = analytics.students[0];
+    expect(student.submittedAssignments).toBe(1);
+    expect(student.unsubmittedAssignments).toBe(1);
+    expect(student.assignmentDetails['quiz-1'].submitted).toBe(true);
+    expect(student.assignmentDetails['quiz-1'].grade).toBe(18);
+    expect(student.assignmentDetails['hw-1'].submitted).toBe(false);
+    expect(student.videoDetails['vid-1']).toMatchObject({
+      opened: true,
+      watchedPercent: 85,
+      watchedSeconds: 510,
+      durationSeconds: 600,
+      solvedCheckpoints: 1,
+      totalCheckpoints: 1,
+    });
+    expect(student.documentOpens['vid-1:attachment:0']).toBe(true);
+    expect(student.documentOpens['doc-1:attachment:0']).toBe(true);
+  });
 });

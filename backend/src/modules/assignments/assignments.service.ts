@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Assignment, AssignmentType } from './entities/assignment.entity';
@@ -13,6 +13,8 @@ import { VideoProgress } from '../videos/entities/video-progress.entity';
 import { Course } from './entities/course.entity';
 import { CourseGroup } from './entities/course-group.entity';
 import { CourseVideo } from '../videos/entities/course-video.entity';
+import { VideoCheckpoint } from '../videos/entities/video-checkpoint.entity';
+import { VideoResponse } from '../videos/entities/video-response.entity';
 import { CodeType, SubscriptionCode } from '../subscriptions/entities/subscription-code.entity';
 import {
   assertCourseContentAccess,
@@ -48,6 +50,12 @@ export class AssignmentsService {
     @InjectRepository(CourseVideo)
     private videosRepo: Repository<CourseVideo>,
     private readonly cache: RedisCacheService,
+    @Optional()
+    @InjectRepository(VideoCheckpoint)
+    private checkpointsRepo?: Repository<VideoCheckpoint>,
+    @Optional()
+    @InjectRepository(VideoResponse)
+    private videoResponsesRepo?: Repository<VideoResponse>,
   ) {}
 
   private async invalidateCourseContent(courseName: string, groupName: string): Promise<void> {
@@ -393,14 +401,19 @@ export class AssignmentsService {
         .createQueryBuilder('cg')
         .select('DISTINCT cg.groupName', 'groupName')
         .where('cg.courseName = :courseName', { courseName })
-        .andWhere('cg.teacherId = :tid', { tid: effectiveTeacherId });
+        .andWhere(
+          scope.teacherName
+            ? '(cg.teacherId = :tid OR (cg.teacherId IS NULL AND cg.teacherName = :tname))'
+            : 'cg.teacherId = :tid',
+          { tid: effectiveTeacherId, tname: scope.teacherName },
+        );
       const enrollQb = this.enrollmentsRepo
         .createQueryBuilder('e')
         .select('DISTINCT e.groupName', 'groupName')
         .where('e.courseName = :courseName', { courseName })
         .andWhere('e.groupName IS NOT NULL');
       this.applyEnrollmentScope(enrollQb, scope);
-      const [savedGroups, enrolledGroupRows, assignmentGroups, videoGroups] = await Promise.all([
+      const [savedGroups, enrolledGroupRows, assignmentGroups, videoGroups, teacherUser] = await Promise.all([
         savedGroupsQb.getRawMany(),
         enrollQb.getRawMany(),
         this.assignmentsRepo
@@ -415,6 +428,7 @@ export class AssignmentsService {
           .where('v.courseName = :courseName', { courseName })
           .andWhere('v.teacherId = :tid', { tid: effectiveTeacherId })
           .getRawMany(),
+        this.usersRepo?.findOne ? this.usersRepo.findOne({ where: { id: effectiveTeacherId } }) : Promise.resolve(null),
       ]);
       const enrolledGroups = enrolledGroupRows.map((r) => r.groupName).filter(Boolean);
 
@@ -424,6 +438,54 @@ export class AssignmentsService {
         ...assignmentGroups.map((r) => r.groupName).filter(Boolean),
         ...videoGroups.map((r) => r.groupName).filter(Boolean),
       ]);
+
+      // If this teacher's subjects include this course, also include any group in this course
+      // that is not explicitly assigned to a different teacher in course_groups.
+      const teachesSubject = Array.isArray(teacherUser?.subjects) && teacherUser.subjects.includes(courseName);
+      if (teachesSubject) {
+        const [allCourseGroups, allEnrollGroups, allAssignGroups, allVideoGroups] = await Promise.all([
+          this.courseGroupsRepo?.find
+            ? this.courseGroupsRepo.find({ where: { courseName } })
+            : Promise.resolve([] as CourseGroup[]),
+          this.enrollmentsRepo
+            .createQueryBuilder('e')
+            .select('DISTINCT e.groupName', 'groupName')
+            .where('e.courseName = :courseName', { courseName })
+            .andWhere('e.groupName IS NOT NULL')
+            .getRawMany(),
+          this.assignmentsRepo
+            .createQueryBuilder('a')
+            .select('DISTINCT a.groupName', 'groupName')
+            .where('a.courseName = :courseName', { courseName })
+            .getRawMany(),
+          this.videosRepo
+            .createQueryBuilder('v')
+            .select('DISTINCT v.groupName', 'groupName')
+            .where('v.courseName = :courseName', { courseName })
+            .getRawMany(),
+        ]);
+        const otherTeacherGroups = new Set<string>(
+          allCourseGroups
+            .filter((cg) => cg.teacherId && cg.teacherId !== effectiveTeacherId)
+            .map((cg) => cg.groupName)
+            .filter(Boolean),
+        );
+        const candidateGroups = [
+          ...allCourseGroups.map((cg) => cg.groupName),
+          ...allEnrollGroups.map((r) => r.groupName),
+          ...allAssignGroups.map((r) => r.groupName),
+          ...allVideoGroups.map((r) => r.groupName),
+        ].filter(Boolean);
+        for (const candidate of candidateGroups) {
+          if (!otherTeacherGroups.has(candidate)) {
+            set.add(candidate);
+          }
+        }
+        if (set.size === 0 && !otherTeacherGroups.has('Group 1')) {
+          set.add('Group 1');
+        }
+      }
+
       return Array.from(set);
     }
 
@@ -603,13 +665,12 @@ export class AssignmentsService {
 
   // ─── TEACHER: get students enrolled in a specific group ───────────────────
   async getStudentsInGroup(courseName: string, groupName: string, actor: User) {
-    const scope = await this.assertCanManageGroup(courseName, groupName, actor);
+    await this.assertCanManageGroup(courseName, groupName, actor);
     const enrollmentsQuery = this.enrollmentsRepo
       .createQueryBuilder('e')
       .select('e.studentId', 'studentId')
       .where('e.courseName = :courseName', { courseName })
       .andWhere('e.groupName = :groupName', { groupName });
-    this.applyEnrollmentScope(enrollmentsQuery, scope);
     const enrollments = await enrollmentsQuery.getRawMany<{ studentId: string }>();
     const studentIds = Array.from(new Set(enrollments.map((e) => e.studentId).filter(Boolean)));
     if (studentIds.length === 0) return [];
@@ -926,36 +987,74 @@ export class AssignmentsService {
     const studentIds = students.map(student => student.id);
     const assignmentIds = assignments.map(assignment => assignment.id);
     const lessonVideos = videos.filter(video => video.provider !== 'document' && video.provider !== 'pdf');
-    const documents = videos.flatMap<{ id: string; title: string; videoId: string; attachmentIndex: number | null }>(video => {
+    const videoById = new Map(videos.map(video => [video.id, video]));
+    const documents = videos.flatMap<{
+      id: string;
+      title: string;
+      videoId: string;
+      attachmentIndex: number | null;
+      chapterName: string | null;
+      lessonName: string | null;
+    }>(video => {
       const isDocument = video.provider === 'document' || video.provider === 'pdf';
       if (Array.isArray(video.attachments) && video.attachments.length > 0) {
         return video.attachments.map((_attachment, attachmentIndex) => ({
           id: `${video.id}:attachment:${attachmentIndex}`,
-          title: `${video.title} - ملف ${attachmentIndex + 1}`,
+          title: isDocument && video.attachments.length === 1
+            ? video.title
+            : `${video.title} - ملف ${attachmentIndex + 1}`,
           videoId: video.id,
           attachmentIndex,
+          chapterName: video.chapterName ?? null,
+          lessonName: video.lessonName ?? null,
         }));
       }
       return isDocument
-        ? [{ id: video.id, title: video.title, videoId: video.id, attachmentIndex: null }]
+        ? [{
+            id: video.id,
+            title: video.title,
+            videoId: video.id,
+            attachmentIndex: null,
+            chapterName: video.chapterName ?? null,
+            lessonName: video.lessonName ?? null,
+          }]
         : [];
     });
     const videoIds = videos.map(video => video.id);
 
-    const [submissions, progress] = await Promise.all([
+    const [submissions, progress, checkpoints, checkpointResponses] = await Promise.all([
       assignmentIds.length && studentIds.length
         ? this.submissionsRepo.createQueryBuilder('submission')
           .where('submission.assignmentId IN (:...assignmentIds)', { assignmentIds })
           .andWhere('submission.studentId IN (:...studentIds)', { studentIds })
           .getMany()
-        : Promise.resolve([]),
+        : Promise.resolve([] as AssignmentSubmission[]),
       videoIds.length && studentIds.length
         ? this.videoProgressRepo.createQueryBuilder('progress')
           .where('progress.videoId IN (:...videoIds)', { videoIds })
           .andWhere('progress.studentId IN (:...studentIds)', { studentIds })
           .getMany()
-        : Promise.resolve([]),
+        : Promise.resolve([] as VideoProgress[]),
+      videoIds.length && this.checkpointsRepo?.find
+        ? this.checkpointsRepo.find({ where: { videoId: In(videoIds) } })
+        : Promise.resolve([] as VideoCheckpoint[]),
+      videoIds.length && studentIds.length && this.videoResponsesRepo?.find
+        ? this.videoResponsesRepo.find({ where: { videoId: In(videoIds), studentId: In(studentIds) } })
+        : Promise.resolve([] as VideoResponse[]),
     ]);
+
+    const checkpointCountByVideo = new Map<string, number>();
+    checkpoints.forEach(cp => {
+      checkpointCountByVideo.set(cp.videoId, (checkpointCountByVideo.get(cp.videoId) || 0) + 1);
+    });
+
+    const responsesByStudentAndVideo = new Map<string, VideoResponse[]>();
+    checkpointResponses.forEach(resp => {
+      const key = `${resp.studentId}:${resp.videoId}`;
+      const list = responsesByStudentAndVideo.get(key) || [];
+      list.push(resp);
+      responsesByStudentAndVideo.set(key, list);
+    });
 
     const submissionsByStudent = new Map<string, AssignmentSubmission[]>();
     submissions.forEach(submission => {
@@ -973,8 +1072,10 @@ export class AssignmentsService {
     const assignmentById = new Map(assignments.map(assignment => [assignment.id, assignment]));
     const studentsWithStats = students.map(student => {
       const studentSubmissions = submissionsByStudent.get(student.id) || [];
+      const submissionByAssignment = new Map(studentSubmissions.map(sub => [sub.assignmentId, sub]));
       const studentProgress = progressByStudent.get(student.id) || [];
-      const gradedSubmissions = studentSubmissions.filter(submission => submission.grade !== null);
+      const gradedSubmissions = studentSubmissions.filter(submission => submission.grade !== null && submission.grade !== undefined);
+      const pendingGradingSubmissions = studentSubmissions.filter(submission => submission.grade === null || submission.grade === undefined);
       const gradePercentages = gradedSubmissions.flatMap(submission => {
         const assignment = assignmentById.get(submission.assignmentId);
         return assignment
@@ -985,32 +1086,87 @@ export class AssignmentsService {
         ? Math.round(gradePercentages.reduce((sum, value) => sum + value, 0) / gradePercentages.length)
         : null;
       const progressByVideo = new Map(studentProgress.map(row => [row.videoId, row]));
+
+      const videoDetails = Object.fromEntries(lessonVideos.map(video => {
+        const vp = progressByVideo.get(video.id);
+        const videoResps = responsesByStudentAndVideo.get(`${student.id}:${video.id}`) || [];
+        const solvedCheckpoints = videoResps.filter(r => r.isCorrect).length;
+        const totalCheckpoints = checkpointCountByVideo.get(video.id) || 0;
+        const watchedPercent = vp?.watchedPercent ?? 0;
+        const watchedSeconds = vp?.watchedSeconds ?? 0;
+        const durationSeconds = vp?.durationSeconds ?? 0;
+        const opened = Boolean(
+          vp?.opened
+          || watchedPercent > 0
+          || watchedSeconds > 0
+          || (vp?.lastPositionSeconds ?? 0) > 0
+          || videoResps.length > 0,
+        );
+        return [
+          video.id,
+          {
+            opened,
+            watchedPercent,
+            watchedSeconds,
+            durationSeconds,
+            solvedCheckpoints,
+            totalCheckpoints,
+            lastWatchedAt: vp?.updatedAt ? new Date(vp.updatedAt).toISOString() : null,
+          },
+        ];
+      }));
+
+      const openedVideos = lessonVideos.filter(video => videoDetails[video.id]?.opened).length;
       const completedVideos = lessonVideos.filter(video => (progressByVideo.get(video.id)?.watchedPercent || 0) >= 90).length;
       const videoProgressPercent = lessonVideos.length
         ? Math.round(lessonVideos.reduce((sum, video) => sum + (progressByVideo.get(video.id)?.watchedPercent || 0), 0) / lessonVideos.length)
         : null;
+
+      const documentOpens = Object.fromEntries(documents.map(document => {
+        const resourceProgress = progressByVideo.get(document.videoId);
+        const sourceVideo = videoById.get(document.videoId);
+        const isStandaloneDoc = sourceVideo?.provider === 'document' || sourceVideo?.provider === 'pdf';
+        const isOpened = document.attachmentIndex === null
+          ? Boolean(resourceProgress?.opened || (resourceProgress?.openedAttachments || []).length > 0)
+          : (resourceProgress?.openedAttachments || []).includes(document.attachmentIndex)
+            || (isStandaloneDoc && document.attachmentIndex === 0 && Boolean(resourceProgress?.opened));
+        return [document.id, isOpened];
+      }));
+      const openedDocumentsCount = Object.values(documentOpens).filter(Boolean).length;
+
+      const assignmentDetails = Object.fromEntries(assignments.map(assignment => {
+        const sub = submissionByAssignment.get(assignment.id);
+        return [
+          assignment.id,
+          {
+            submitted: Boolean(sub),
+            grade: sub ? (sub.grade ?? null) : null,
+            submittedAt: sub?.submittedAt ? new Date(sub.submittedAt).toISOString() : null,
+            submissionId: sub?.id ?? null,
+          },
+        ];
+      }));
+
       const activityDates = [
         ...studentSubmissions.map(submission => submission.submittedAt),
         ...studentProgress.map(row => row.updatedAt),
+        ...checkpointResponses.filter(r => r.studentId === student.id).map(r => r.submittedAt),
       ].filter(Boolean);
 
       return {
         ...student,
         submittedAssignments: studentSubmissions.length,
+        unsubmittedAssignments: Math.max(0, assignments.length - studentSubmissions.length),
         gradedAssignments: gradedSubmissions.length,
+        pendingGradingAssignments: pendingGradingSubmissions.length,
         averageGradePercent,
+        openedVideos,
         completedVideos,
         totalVideos: lessonVideos.length,
         videoProgressPercent,
-        documentOpens: Object.fromEntries(documents.map(document => {
-          const resourceProgress = progressByVideo.get(document.videoId);
-          return [
-            document.id,
-            document.attachmentIndex === null
-              ? resourceProgress?.opened ?? false
-              : (resourceProgress?.openedAttachments || []).includes(document.attachmentIndex),
-          ];
-        })),
+        openedDocumentsCount,
+        totalDocuments: documents.length,
+        documentOpens,
         lastActivityAt: activityDates.length
           ? new Date(Math.max(...activityDates.map(date => new Date(date).getTime()))).toISOString()
           : null,
@@ -1018,10 +1174,12 @@ export class AssignmentsService {
           submission.assignmentId,
           submission.grade,
         ])),
+        assignmentDetails,
         videoProgress: Object.fromEntries(lessonVideos.map(video => [
           video.id,
           progressByVideo.get(video.id)?.watchedPercent ?? 0,
         ])),
+        videoDetails,
       };
     });
 
@@ -1033,8 +1191,10 @@ export class AssignmentsService {
     };
     const possibleSubmissions = students.length * assignments.length;
     const possibleVideoViews = students.length * lessonVideos.length;
+    const possibleDocOpens = students.length * documents.length;
     const lessonVideoIds = new Set(lessonVideos.map(video => video.id));
     const lessonProgressRows = progress.filter(row => lessonVideoIds.has(row.videoId));
+    const totalOpenedDocs = studentsWithStats.reduce((sum, s) => sum + s.openedDocumentsCount, 0);
 
     return {
       summary: {
@@ -1049,17 +1209,27 @@ export class AssignmentsService {
         videoCompletionRate: possibleVideoViews
           ? Math.round((lessonProgressRows.filter(row => row.watchedPercent >= 90).length / possibleVideoViews) * 100)
           : null,
+        averageVideoWatchPercent: average(studentsWithStats.map(student => student.videoProgressPercent)),
+        documentOpenRate: possibleDocOpens
+          ? Math.round((totalOpenedDocs / possibleDocOpens) * 100)
+          : null,
       },
       assignments: assignments.map(assignment => ({
         id: assignment.id,
         title: assignment.title,
         type: assignment.type,
         maxGrade: assignment.maxGrade,
+        chapterName: assignment.chapterName ?? null,
+        lessonName: assignment.lessonName ?? null,
+        dueDate: assignment.dueDate ? new Date(assignment.dueDate).toISOString() : null,
       })),
       videos: lessonVideos.map(video => ({
         id: video.id,
         title: video.title,
         provider: video.provider,
+        chapterName: video.chapterName ?? null,
+        lessonName: video.lessonName ?? null,
+        checkpointCount: checkpointCountByVideo.get(video.id) || 0,
       })),
       documents,
       students: studentsWithStats,

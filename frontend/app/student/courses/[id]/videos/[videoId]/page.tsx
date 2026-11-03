@@ -35,6 +35,12 @@ export default function StudentVideoPage() {
         if (active) {
           setCourseName(enrollment.data.courseName);
           setVideo(selected);
+          const isDoc = selected.provider === 'document' || selected.provider === 'pdf';
+          if (isDoc && Array.isArray(selected.attachments) && selected.attachments.length > 0) {
+            videosApi.markDocumentOpened(selected.id, 0).catch(() => {});
+          } else {
+            videosApi.markDocumentOpened(selected.id).catch(() => {});
+          }
         }
       } catch {
         toast.error('Could not load this video');

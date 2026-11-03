@@ -136,8 +136,14 @@ export class VideosService {
     if (scope.type === 'subjects' && !scope.subjects.includes(courseName)) return [];
     if (scope.type === 'teacher') {
       if (!scope.teacherId) return [];
-      const [assignedGroup, ownedAssignment, ownedVideo, enrollment] = await Promise.all([
-        this.courseGroupsRepo.findOne({ where: { courseName, groupName, teacherId: scope.teacherId } }),
+      const [assignedGroup, anyGroupRecord, ownedAssignment, ownedVideo, enrollment, teacherUser] = await Promise.all([
+        this.courseGroupsRepo.findOne({
+          where: [
+            { courseName, groupName, teacherId: scope.teacherId },
+            ...(scope.teacherName ? [{ courseName, groupName, teacherName: scope.teacherName }] : []),
+          ],
+        }),
+        this.courseGroupsRepo.findOne({ where: { courseName, groupName } }),
         this.assignmentsRepo.findOne({ where: { courseName, groupName, teacherId: scope.teacherId } }),
         this.videosRepo.findOne({ where: { courseName, groupName, teacherId: scope.teacherId } }),
         this.enrollmentsRepo.createQueryBuilder('e')
@@ -147,8 +153,12 @@ export class VideosService {
             teacherName: scope.teacherName,
           })
           .getOne(),
+        this.usersRepo?.findOne ? this.usersRepo.findOne({ where: { id: scope.teacherId } }) : Promise.resolve(null),
       ]);
-      if (!assignedGroup && !ownedAssignment && !ownedVideo && !enrollment) return [];
+      const teachesSubject = Array.isArray(teacherUser?.subjects) && teacherUser.subjects.includes(courseName);
+      const ownedByAnotherTeacher = Boolean(anyGroupRecord?.teacherId && anyGroupRecord.teacherId !== scope.teacherId);
+      const allowedBySubject = teachesSubject && !ownedByAnotherTeacher;
+      if (!assignedGroup && !ownedAssignment && !ownedVideo && !enrollment && !allowedBySubject) return [];
     }
     const videos = await this.videosRepo.find({
       where: {
@@ -328,6 +338,20 @@ export class VideosService {
     await this.assertEnrollment(video.courseName, video.groupName, student.id, video.chapterName, video.lessonName);
     const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, video.unlockVideoId, video.unlockPercent, student.id, video.prerequisites);
     if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
+    if (this.progressRepo?.findOne && this.progressRepo?.save) {
+      const existingProgress = await this.progressRepo.findOne({ where: { videoId, studentId: student.id } });
+      if (!existingProgress) {
+        const createdProgress = this.progressRepo.create
+          ? this.progressRepo.create({ videoId, studentId: student.id, watchedSeconds: 0, durationSeconds: 0, watchedPercent: 0, opened: true })
+          : ({ videoId, studentId: student.id, watchedSeconds: 0, durationSeconds: 0, watchedPercent: 0, opened: true } as VideoProgress);
+        await this.progressRepo.save(createdProgress);
+        await this.cache?.bumpVersion?.(studentCourseVersionKey(video.courseName, video.groupName, student.id));
+      } else if (!existingProgress.opened) {
+        existingProgress.opened = true;
+        await this.progressRepo.save(existingProgress);
+        await this.cache?.bumpVersion?.(studentCourseVersionKey(video.courseName, video.groupName, student.id));
+      }
+    }
     const checkpoints = await this.checkpointsRepo.find({
       where: { videoId },
       order: { orderIndex: 'ASC', timestampSeconds: 'ASC' },
@@ -365,19 +389,27 @@ export class VideosService {
     if (!Number.isFinite(currentPosition) || !Number.isFinite(reportedDuration) || currentPosition < 0 || reportedDuration < 1) {
       throw new BadRequestException('Valid playback position and duration are required');
     }
-    const durationSeconds = Math.floor(reportedDuration);
+    const durationSeconds = Math.max(1, Math.floor(reportedDuration));
     const position = Math.min(currentPosition, durationSeconds);
     const existing = await this.progressRepo.findOne({ where: { videoId, studentId } });
     const progress = existing || this.progressRepo.create({ videoId, studentId, watchedSeconds: 0, durationSeconds: 0, watchedPercent: 0 });
+    progress.opened = true;
     const ranges = [...(progress.watchedRanges || [])];
     let watchedStart: number | null = null;
     const previousPosition = progress.lastPositionSeconds;
     if (previousPosition !== null && previousPosition !== undefined) {
-      const elapsed = Math.max(0, (Date.now() - new Date(progress.updatedAt).getTime()) / 1000);
+      const elapsed = progress.updatedAt
+        ? Math.max(0, (Date.now() - new Date(progress.updatedAt).getTime()) / 1000)
+        : 10;
       const advance = position - previousPosition;
-      if (advance > 0 && advance <= elapsed + 2 && advance <= 12) {
+      const maxAllowedAdvance = Math.min(35, Math.max(16, elapsed * 2.5 + 5));
+      if (advance > 0 && advance <= maxAllowedAdvance) {
         watchedStart = previousPosition;
+      } else if (previousPosition <= 15 && ranges.length === 0 && position > 0 && position <= 20) {
+        watchedStart = 0;
       }
+    } else if (position > 0 && position <= 20) {
+      watchedStart = 0;
     }
     if (watchedStart !== null && position > watchedStart) {
       ranges.push([watchedStart, position]);
@@ -388,7 +420,7 @@ export class VideosService {
       const start = Math.max(0, Math.min(range[0], durationSeconds));
       const end = Math.max(start, Math.min(range[1], durationSeconds));
       const lastRange = mergedRanges[mergedRanges.length - 1];
-      if (lastRange && start <= lastRange[1]) {
+      if (lastRange && start <= lastRange[1] + 1) {
         lastRange[1] = Math.max(lastRange[1], end);
       } else if (end > start) {
         mergedRanges.push([start, end]);
@@ -397,8 +429,13 @@ export class VideosService {
     const actuallyWatchedSeconds = mergedRanges.reduce((total, [start, end]) => total + end - start, 0);
     progress.watchedRanges = mergedRanges;
     progress.watchedSeconds = Math.floor(actuallyWatchedSeconds);
-    progress.durationSeconds = Math.max(progress.durationSeconds, durationSeconds);
-    progress.watchedPercent = Math.min(100, Math.floor((actuallyWatchedSeconds / progress.durationSeconds) * 100));
+    progress.durationSeconds = Math.max(progress.durationSeconds || 0, durationSeconds);
+    const rawPercent = (actuallyWatchedSeconds / progress.durationSeconds) * 100;
+    progress.watchedPercent = actuallyWatchedSeconds >= progress.durationSeconds - 2 || rawPercent >= 98
+      ? 100
+      : actuallyWatchedSeconds > 0
+        ? Math.max(1, Math.min(100, Math.round(rawPercent)))
+        : 0;
     progress.lastPositionSeconds = position;
     const saved = await this.progressRepo.save(progress);
     await this.cache.bumpVersion(studentCourseVersionKey(video.courseName, video.groupName, studentId));
@@ -411,15 +448,18 @@ export class VideosService {
     await this.assertEnrollment(video.courseName, video.groupName, studentId, video.chapterName, video.lessonName);
     const progress = await this.progressRepo.findOne({ where: { videoId, studentId } })
       || this.progressRepo.create({ videoId, studentId, watchedSeconds: 0, durationSeconds: 0, watchedPercent: 0 });
+    const isDoc = video.provider === 'document' || video.provider === 'pdf';
     if (attachmentIndex !== undefined) {
       if (!Number.isInteger(attachmentIndex) || attachmentIndex < 0 || attachmentIndex >= (video.attachments || []).length) {
         throw new BadRequestException('Invalid course file');
       }
       progress.openedAttachments = Array.from(new Set([...(progress.openedAttachments || []), attachmentIndex]));
-    } else if (video.provider === 'document' || video.provider === 'pdf') {
-      progress.opened = true;
+      if (isDoc) progress.opened = true;
     } else {
-      throw new BadRequestException('Select a course file to record it as opened');
+      progress.opened = true;
+      if (isDoc && Array.isArray(video.attachments) && video.attachments.length > 0) {
+        progress.openedAttachments = Array.from(new Set([...(progress.openedAttachments || []), 0]));
+      }
     }
     const saved = await this.progressRepo.save(progress);
     await this.cache.bumpVersion(studentCourseVersionKey(video.courseName, video.groupName, studentId));

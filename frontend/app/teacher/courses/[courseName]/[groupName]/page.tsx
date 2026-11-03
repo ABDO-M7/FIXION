@@ -436,36 +436,33 @@ export default function GroupDetailPage() {
           </div>
         </div>
 
-        {isReadOnly && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            <Link
-              href={`/teacher/courses/${encodeURIComponent(decoded)}/${encodeURIComponent(decodedGroup)}/stats`}
-              className="btn btn-secondary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
-            >
-              <BarChart2 size={16} /> إحصائيات الطلاب
-            </Link>
-            {canCreateWork && (
-              <>
-                <button type="button" onClick={() => setCreateType('QUIZ')} className="btn btn-primary">
-                  <Plus size={14} /> إنشاء كويز
-                </button>
-                <button type="button" onClick={() => setCreateType('HOMEWORK')} className="btn btn-secondary">
-                  <Plus size={14} /> إنشاء واجب
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        {!isReadOnly && tab !== 'WORKFLOW' && tab !== 'GRADES' && tab !== 'VIDEOS' && (
-          <button
-            onClick={() => setCreateType(tab as 'QUIZ' | 'HOMEWORK')}
-            className="btn btn-primary"
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+          <Link
+            href={`/teacher/courses/${encodeURIComponent(decoded)}/${encodeURIComponent(decodedGroup)}/stats`}
+            className="btn btn-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
-            <Plus size={14} /> New {tab === 'QUIZ' ? 'Quiz' : 'Homework'}
-          </button>
-        )}
+            <BarChart2 size={16} /> إحصائيات ومتابعة الطلاب
+          </Link>
+          {isReadOnly && canCreateWork && (
+            <>
+              <button type="button" onClick={() => setCreateType('QUIZ')} className="btn btn-primary">
+                <Plus size={14} /> إنشاء كويز
+              </button>
+              <button type="button" onClick={() => setCreateType('HOMEWORK')} className="btn btn-secondary">
+                <Plus size={14} /> إنشاء واجب
+              </button>
+            </>
+          )}
+          {!isReadOnly && tab !== 'WORKFLOW' && tab !== 'GRADES' && tab !== 'VIDEOS' && (
+            <button
+              onClick={() => setCreateType(tab as 'QUIZ' | 'HOMEWORK')}
+              className="btn btn-primary"
+            >
+              <Plus size={14} /> New {tab === 'QUIZ' ? 'Quiz' : 'Homework'}
+            </button>
+          )}
+        </div>
       </div>
 
       {isReadOnly ? (

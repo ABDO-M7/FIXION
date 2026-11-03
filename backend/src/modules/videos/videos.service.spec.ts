@@ -143,4 +143,76 @@ describe('VideosService.listForStudent batching (no N+1)', () => {
       lockReason: 'Watch at least 80% of the previous video',
     });
   });
+
+  it('tracks watch percentage accurately from first ping and at 2x playback speed', async () => {
+    const enrollmentsRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'enr-1',
+          courseName: 'Physics',
+          groupName: 'G1',
+          studentId: 'student-1',
+          codeType: CodeType.TIMED,
+          expiresAt: new Date(Date.now() + 86400_000),
+        },
+      ]),
+    };
+    const videosRepo = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'vid-1',
+        courseName: 'Physics',
+        groupName: 'G1',
+        chapterName: 'Ch 1',
+        lessonName: 'L1',
+      }),
+    };
+    let storedProgress: any = null;
+    const progressRepo = {
+      findOne: jest.fn().mockImplementation(async () => storedProgress),
+      create: jest.fn().mockImplementation(data => ({ ...data })),
+      save: jest.fn().mockImplementation(async data => {
+        storedProgress = { ...data, updatedAt: new Date(Date.now() - 4000) };
+        return storedProgress;
+      }),
+    };
+    const cache = { bumpVersion: jest.fn() };
+
+    const service = new VideosService(
+      videosRepo as any,
+      enrollmentsRepo as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      progressRepo as any,
+      cache as any,
+    );
+
+    // 1st ping at 8 seconds into a 40-second video (should record [0, 8] = 20%)
+    const first = await service.updateProgress('vid-1', 'student-1', {
+      watchedSeconds: 8,
+      durationSeconds: 40,
+    });
+    expect(first.opened).toBe(true);
+    expect(first.watchedSeconds).toBe(8);
+    expect(first.watchedPercent).toBe(20);
+
+    // 2nd ping at 16s after 4s wall-clock elapsed (2x speed: 8s advance in 4s) -> [0, 16] = 40%
+    const second = await service.updateProgress('vid-1', 'student-1', {
+      watchedSeconds: 16,
+      durationSeconds: 40,
+    });
+    expect(second.watchedSeconds).toBe(16);
+    expect(second.watchedPercent).toBe(40);
+
+    // 3rd ping at 39.2s after 10s elapsed -> snaps near-completion to 100%
+    storedProgress.updatedAt = new Date(Date.now() - 10_000);
+    const third = await service.updateProgress('vid-1', 'student-1', {
+      watchedSeconds: 39.2,
+      durationSeconds: 40,
+    });
+    expect(third.watchedPercent).toBe(100);
+  });
 });

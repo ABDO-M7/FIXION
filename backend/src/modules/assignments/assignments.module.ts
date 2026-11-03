@@ -9,6 +9,8 @@ import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.en
 import { User } from '../users/entities/user.entity';
 import { VideoProgress } from '../videos/entities/video-progress.entity';
 import { CourseVideo } from '../videos/entities/course-video.entity';
+import { VideoCheckpoint } from '../videos/entities/video-checkpoint.entity';
+import { VideoResponse } from '../videos/entities/video-response.entity';
 import { AssignmentsService } from './assignments.service';
 import { AssignmentsController } from './assignments.controller';
 
@@ -24,6 +26,8 @@ import { AssignmentsController } from './assignments.controller';
       User,
       VideoProgress,
       CourseVideo,
+      VideoCheckpoint,
+      VideoResponse,
     ]),
   ],
   controllers: [AssignmentsController],
