@@ -1350,7 +1350,16 @@ body {
 .landing-mobile-sticky-cta { display: none; }
 
 /* Legal Pages (Privacy & Terms) */
-.legal-page { min-height: 100dvh; color: #0b1324; background: linear-gradient(180deg, #f5f7fc 0%, #ffffff 60%); padding: 48px 20px 80px; }
+.legal-page {
+  min-height: 100dvh;
+  color: #0b1324;
+  background-color: #eef2fa;
+  background-image:
+    radial-gradient(ellipse 68% 42% at 85% 4%, rgba(29, 78, 216, .12), transparent 65%),
+    radial-gradient(ellipse 55% 38% at 10% 18%, rgba(56, 189, 248, .11), transparent 65%),
+    linear-gradient(180deg, #eaf0fb 0%, #f1f5fc 55%, #e8eef9 100%);
+  padding: 48px 20px 80px;
+}
 .legal-container { max-width: 920px; margin: 0 auto; }
 .legal-topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 36px; padding-bottom: 20px; border-bottom: 1px solid #e3e8f1; }
 .legal-page .landing-brand { color: #0b1324; }
