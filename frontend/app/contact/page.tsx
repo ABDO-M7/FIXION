@@ -46,17 +46,17 @@ export default function ContactPage() {
                   justifyContent: 'space-between',
                   padding: '16px 20px',
                   borderRadius: 14,
-                  border: '1px solid rgba(168, 208, 229, 0.16)',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  color: '#f2f8fc',
+                  border: '1px solid #e3e8f1',
+                  background: '#ffffff',
+                  color: '#0b1324',
                   textDecoration: 'none',
                 }}
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
-                  <Phone size={18} style={{ color: '#25d6d1' }} />
+                  <Phone size={18} style={{ color: '#1d4ed8' }} />
                   رقم الهاتف / واتساب
                 </span>
-                <span dir="ltr" style={{ color: '#62d9dd', fontWeight: 700 }}>01132804264</span>
+                <span dir="ltr" style={{ color: '#1d4ed8', fontWeight: 700 }}>01132804264</span>
               </a>
 
               <a
@@ -67,17 +67,17 @@ export default function ContactPage() {
                   justifyContent: 'space-between',
                   padding: '16px 20px',
                   borderRadius: 14,
-                  border: '1px solid rgba(168, 208, 229, 0.16)',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  color: '#f2f8fc',
+                  border: '1px solid #e3e8f1',
+                  background: '#ffffff',
+                  color: '#0b1324',
                   textDecoration: 'none',
                 }}
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
-                  <Mail size={18} style={{ color: '#25d6d1' }} />
+                  <Mail size={18} style={{ color: '#1d4ed8' }} />
                   البريد الإلكتروني (Gmail)
                 </span>
-                <span dir="ltr" style={{ color: '#62d9dd', fontWeight: 700 }}>fixion.eg@gmail.com</span>
+                <span dir="ltr" style={{ color: '#1d4ed8', fontWeight: 700 }}>fixion.eg@gmail.com</span>
               </a>
 
               <a
@@ -90,17 +90,17 @@ export default function ContactPage() {
                   justifyContent: 'space-between',
                   padding: '16px 20px',
                   borderRadius: 14,
-                  border: '1px solid rgba(168, 208, 229, 0.16)',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  color: '#f2f8fc',
+                  border: '1px solid #e3e8f1',
+                  background: '#ffffff',
+                  color: '#0b1324',
                   textDecoration: 'none',
                 }}
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
-                  <Globe2 size={18} style={{ color: '#25d6d1' }} />
+                  <Globe2 size={18} style={{ color: '#1d4ed8' }} />
                   صفحتنا الرسمية على فيسبوك
                 </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#62d9dd', fontWeight: 700 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#1d4ed8', fontWeight: 700 }}>
                   زيارة الصفحة <ArrowUpRight size={16} />
                 </span>
               </a>

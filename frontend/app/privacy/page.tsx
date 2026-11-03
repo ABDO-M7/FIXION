@@ -69,9 +69,9 @@ export default function PrivacyPolicyPage() {
               يحق لك في أي وقت طلب تحديث بياناتك الشخصية أو حذف حسابك بالتواصل مع فريق الدعم الفني عبر القنوات الرسمية:
             </p>
             <ul>
-              <li><Phone size={14} style={{ display: 'inline', marginInlineEnd: 6 }} /> الهاتف: <a href="tel:01132804264" dir="ltr" style={{ color: '#25d6d1' }}>01132804264</a></li>
-              <li><Mail size={14} style={{ display: 'inline', marginInlineEnd: 6 }} /> البريد الإلكتروني: <a href="mailto:fixion.eg@gmail.com" style={{ color: '#25d6d1' }}>fixion.eg@gmail.com</a></li>
-              <li><Globe2 size={14} style={{ display: 'inline', marginInlineEnd: 6 }} /> فيسبوك: <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" style={{ color: '#25d6d1' }}>صفحة FIXION الرسمية</a></li>
+              <li><Phone size={14} style={{ display: 'inline', marginInlineEnd: 6 }} /> الهاتف: <a href="tel:01132804264" dir="ltr" style={{ color: '#1d4ed8' }}>01132804264</a></li>
+              <li><Mail size={14} style={{ display: 'inline', marginInlineEnd: 6 }} /> البريد الإلكتروني: <a href="mailto:fixion.eg@gmail.com" style={{ color: '#1d4ed8' }}>fixion.eg@gmail.com</a></li>
+              <li><Globe2 size={14} style={{ display: 'inline', marginInlineEnd: 6 }} /> فيسبوك: <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>صفحة FIXION الرسمية</a></li>
             </ul>
           </div>
         </article>
@@ -111,9 +111,9 @@ export default function PrivacyPolicyPage() {
               For privacy inquiries, data access requests, or account deletion, reach our support team at:
             </p>
             <ul>
-              <li><strong>Phone:</strong> <a href="tel:01132804264" style={{ color: '#25d6d1' }}>01132804264</a></li>
-              <li><strong>Email:</strong> <a href="mailto:fixion.eg@gmail.com" style={{ color: '#25d6d1' }}>fixion.eg@gmail.com</a></li>
-              <li><strong>Facebook:</strong> <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" style={{ color: '#25d6d1' }}>FIXION Official Facebook Page</a></li>
+              <li><strong>Phone:</strong> <a href="tel:01132804264" style={{ color: '#1d4ed8' }}>01132804264</a></li>
+              <li><strong>Email:</strong> <a href="mailto:fixion.eg@gmail.com" style={{ color: '#1d4ed8' }}>fixion.eg@gmail.com</a></li>
+              <li><strong>Facebook:</strong> <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>FIXION Official Facebook Page</a></li>
             </ul>
           </div>
         </article>
