@@ -2,10 +2,13 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://fixion.education';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: { default: 'FIXION | Learning has no limits', template: '%s | FIXION' },
   description: 'A complete learning platform for students and teachers: courses, video lessons, quizzes, assignments, support, and progress.',
-  keywords: ['education', 'courses', 'video lessons', 'quizzes', 'students', 'teachers'],
+  keywords: ['education', 'courses', 'video lessons', 'quizzes', 'students', 'teachers', 'FIXION'],
   authors: [{ name: 'FIXION' }],
   icons: {
     icon: '/favicon.ico?v=fixion-20261011',
@@ -15,7 +18,23 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'FIXION | Learning has no limits',
     description: 'Courses, video lessons, assessments, teacher support, and progress in one place.',
+    url: siteUrl,
+    siteName: 'FIXION',
     type: 'website',
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: 'FIXION — Complete Learning Platform',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'FIXION | Learning has no limits',
+    description: 'Courses, video lessons, assessments, teacher support, and progress in one place.',
+    images: ['/opengraph-image'],
   },
 };
 

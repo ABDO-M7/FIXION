@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { CourseEnrollment } from '../subscriptions/entities/course-enrollment.entity';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -158,7 +158,22 @@ export class VideosService {
       },
       order: { createdAt: 'DESC' },
     });
-    return Promise.all(videos.map(video => this.withCheckpointSummary(video)));
+    if (!videos.length) return [];
+    const videoIds = videos.map(video => video.id);
+    const allCheckpoints = await this.checkpointsRepo.find({
+      where: { videoId: In(videoIds) },
+      order: { orderIndex: 'ASC', timestampSeconds: 'ASC' },
+    });
+    const checkpointsByVideoId = new Map<string, VideoCheckpoint[]>();
+    for (const checkpoint of allCheckpoints) {
+      const list = checkpointsByVideoId.get(checkpoint.videoId) || [];
+      list.push(checkpoint);
+      checkpointsByVideoId.set(checkpoint.videoId, list);
+    }
+    return videos.map(video => ({
+      ...this.publicVideo(video),
+      checkpoints: checkpointsByVideoId.get(video.id) || [],
+    }));
   }
 
   async listForStudent(courseName: string, groupName: string, studentId: string) {
@@ -172,23 +187,82 @@ export class VideosService {
       ],
       async () => {
         const videos = await this.videosRepo.find({ where: { courseName, groupName }, order: { createdAt: 'DESC' } });
-        return Promise.all(videos.map(async video => {
-          const checkpoints = await this.checkpointsRepo.find({
-            where: { videoId: video.id },
+        if (!videos.length) return [];
+
+        const videoIds = videos.map(video => video.id);
+        const progressVideoIds = new Set<string>(videoIds);
+        const prereqAssignmentIds = new Set<string>();
+
+        for (const video of videos) {
+          if (video.unlockVideoId) progressVideoIds.add(video.unlockVideoId);
+          if (video.unlockAssignmentId) prereqAssignmentIds.add(video.unlockAssignmentId);
+          if (Array.isArray(video.prerequisites)) {
+            for (const prereq of video.prerequisites) {
+              if (prereq?.unlockVideoId) progressVideoIds.add(prereq.unlockVideoId);
+              if (prereq?.unlockAssignmentId) prereqAssignmentIds.add(prereq.unlockAssignmentId);
+            }
+          }
+        }
+
+        const assignmentIdList = Array.from(prereqAssignmentIds);
+        const [allCheckpoints, allProgress, allSubmissions, allPrereqAssignments] = await Promise.all([
+          this.checkpointsRepo.find({
+            where: { videoId: In(videoIds) },
             order: { orderIndex: 'ASC', timestampSeconds: 'ASC' },
-          });
-          const responses = checkpoints.length
-            ? await this.responsesRepo.find({ where: { videoId: video.id, studentId } })
-            : [];
-          const progress = await this.progressRepo.findOne({ where: { videoId: video.id, studentId } });
-          const unlock = await this.getUnlockState(
+          }),
+          this.progressRepo.find({
+            where: { videoId: In(Array.from(progressVideoIds)), studentId },
+          }),
+          assignmentIdList.length
+            ? this.submissionsRepo.find({ where: { assignmentId: In(assignmentIdList), studentId } })
+            : Promise.resolve([] as AssignmentSubmission[]),
+          assignmentIdList.length
+            ? this.assignmentsRepo.find({ where: { id: In(assignmentIdList) } })
+            : Promise.resolve([] as Assignment[]),
+        ]);
+
+        const allResponses = allCheckpoints.length
+          ? await this.responsesRepo.find({ where: { videoId: In(videoIds), studentId } })
+          : [];
+
+        const checkpointsByVideoId = new Map<string, VideoCheckpoint[]>();
+        for (const checkpoint of allCheckpoints) {
+          const list = checkpointsByVideoId.get(checkpoint.videoId) || [];
+          list.push(checkpoint);
+          checkpointsByVideoId.set(checkpoint.videoId, list);
+        }
+
+        const responsesByVideoId = new Map<string, VideoResponse[]>();
+        for (const response of allResponses) {
+          const list = responsesByVideoId.get(response.videoId) || [];
+          list.push(response);
+          responsesByVideoId.set(response.videoId, list);
+        }
+
+        const progressMap = new Map<string, VideoProgress>(
+          allProgress.map(progress => [progress.videoId, progress]),
+        );
+        const submissionMap = new Map<string, AssignmentSubmission>(
+          allSubmissions.map(submission => [submission.assignmentId, submission]),
+        );
+        const assignmentMap = new Map<string, Assignment>(
+          allPrereqAssignments.map(assignment => [assignment.id, assignment]),
+        );
+
+        return videos.map(video => {
+          const checkpoints = checkpointsByVideoId.get(video.id) || [];
+          const responses = checkpoints.length ? (responsesByVideoId.get(video.id) || []) : [];
+          const progress = progressMap.get(video.id);
+          const unlock = this.getUnlockStateWithLookup(
             video.unlockRule,
             video.unlockAssignmentId,
             video.unlockScore,
             video.unlockVideoId,
             video.unlockPercent,
-            studentId,
             video.prerequisites,
+            progressMap,
+            submissionMap,
+            assignmentMap,
           );
           return {
             ...this.publicVideo(video),
@@ -200,7 +274,7 @@ export class VideosService {
             checkpointCount: checkpoints.length,
             completedCheckpointCount: responses.filter(response => response.isCorrect).length,
           };
-        }));
+        });
       },
     );
     return videos
@@ -524,6 +598,80 @@ export class VideosService {
       createdAt: video.createdAt,
       updatedAt: video.updatedAt,
     };
+  }
+
+  private evaluateSingleConditionWithLookup(
+    rule: string,
+    prerequisiteId: string | null | undefined,
+    requiredScore: number | null | undefined,
+    prerequisiteVideoId: string | null | undefined,
+    requiredPercent: number | null | undefined,
+    progressMap: Map<string, VideoProgress>,
+    submissionMap: Map<string, AssignmentSubmission>,
+    assignmentMap: Map<string, Assignment>,
+  ): { isLocked: boolean; lockReason: string | null } {
+    if (!rule || rule === UnlockRuleType.NONE) return { isLocked: false, lockReason: null };
+    if (rule === UnlockRuleType.WATCH_VIDEO) {
+      if (!prerequisiteVideoId) return { isLocked: false, lockReason: null };
+      const progress = progressMap.get(prerequisiteVideoId);
+      const threshold = requiredPercent != null ? requiredPercent : 100;
+      if (!progress || progress.watchedPercent < threshold) {
+        return { isLocked: true, lockReason: `Watch at least ${threshold}% of the previous video` };
+      }
+      return { isLocked: false, lockReason: null };
+    }
+    if (!prerequisiteId) return { isLocked: false, lockReason: null };
+    const submission = submissionMap.get(prerequisiteId);
+    if (!submission) {
+      return { isLocked: true, lockReason: rule === UnlockRuleType.PASS_QUIZ ? 'Complete the previous quiz first' : 'Submit the previous assignment first' };
+    }
+    const prerequisite = assignmentMap.get(prerequisiteId);
+    const percentage = submission.grade === null || submission.grade === undefined
+      ? 0
+      : (submission.grade / Math.max(prerequisite?.maxGrade ?? 100, 1)) * 100;
+    if (rule === UnlockRuleType.PASS_QUIZ && (submission.grade === null || submission.grade === undefined || percentage < (requiredScore ?? 50))) {
+      return { isLocked: true, lockReason: `You need at least ${requiredScore ?? 50}% in the previous quiz` };
+    }
+    return { isLocked: false, lockReason: null };
+  }
+
+  private getUnlockStateWithLookup(
+    rule: UnlockRuleType,
+    prerequisiteId: string | null,
+    requiredScore: number | null,
+    prerequisiteVideoId: string | null,
+    requiredPercent: number | null,
+    prerequisites: Array<{ unlockRule: string; unlockVideoId?: string | null; unlockPercent?: number | null; unlockAssignmentId?: string | null; unlockScore?: number | null }> | null | undefined,
+    progressMap: Map<string, VideoProgress>,
+    submissionMap: Map<string, AssignmentSubmission>,
+    assignmentMap: Map<string, Assignment>,
+  ) {
+    if (prerequisites && prerequisites.length > 0) {
+      for (const p of prerequisites) {
+        const result = this.evaluateSingleConditionWithLookup(
+          p.unlockRule,
+          p.unlockAssignmentId,
+          p.unlockScore,
+          p.unlockVideoId,
+          p.unlockPercent,
+          progressMap,
+          submissionMap,
+          assignmentMap,
+        );
+        if (result.isLocked) return result;
+      }
+      return { isLocked: false, lockReason: null };
+    }
+    return this.evaluateSingleConditionWithLookup(
+      rule,
+      prerequisiteId,
+      requiredScore,
+      prerequisiteVideoId,
+      requiredPercent,
+      progressMap,
+      submissionMap,
+      assignmentMap,
+    );
   }
 
   private async evaluateSingleCondition(
