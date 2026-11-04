@@ -581,9 +581,11 @@ export class AiService implements OnModuleInit {
     );
 
     if (!result) {
+      const isStudent = user?.role === 'student';
       return {
-        reply:
-          'عذراً، لم يتم تفعيل مفاتيح الذكاء الاصطناعي (API Keys) حالياً أو انتهت الكوتا اليومية لجميع المفاتيح. يرجى إبلاغ الأدمن بإضافة مفتاح API جديد من لوحة التحكم.',
+        reply: isStudent
+          ? 'المساعد الذكي غير متاح حالياً، يرجى المحاولة لاحقاً.'
+          : 'عذراً، لم يتم تفعيل مفاتيح الذكاء الاصطناعي (API Keys) حالياً أو انتهت الكوتا اليومية لجميع المفاتيح. يرجى إضافة مفتاح API جديد من لوحة التحكم.',
         provider: 'fallback',
         model: 'offline',
       };

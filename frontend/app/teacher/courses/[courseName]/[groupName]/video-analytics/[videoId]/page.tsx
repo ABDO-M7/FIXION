@@ -231,7 +231,7 @@ export default function VideoAnalyticsPage() {
                 )}
               </div>
               <h1 style={{ fontSize: 21, fontWeight: 800, margin: '6px 0 0', color: '#fff' }}>
-                📊 إحصائيات الحصة وخريطة الفهم الحرارية (Heatmap): {data?.video?.title || '...'}
+                إحصائيات الحصة وخريطة الفهم الحرارية (Heatmap): {data?.video?.title || '...'}
               </h1>
             </div>
           </div>
@@ -454,7 +454,7 @@ export default function VideoAnalyticsPage() {
                     />
                     <Legend
                       formatter={(value: string) =>
-                        value === 'count' ? '🔥 عدد الطلاب غير الفاهمين للجزئية' : '👁️ عدد الطلاب المشاهدين لهذه الدقيقة'
+                        value === 'count' ? 'عدد الطلاب غير الفاهمين للجزئية' : 'عدد الطلاب المشاهدين لهذه الدقيقة'
                       }
                     />
                     <Area
@@ -474,8 +474,8 @@ export default function VideoAnalyticsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
                   <h3 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: '#fbbf24' }}>
                     {selectedBucket
-                      ? `📌 الطلاب الذين لم يفهموا الجزئية (${selectedBucket.rangeLabel}) — ${displayedMarks.length} بلاغ`
-                      : `📋 جميع الأجزاء التي حددها الطلاب كغير مفهومة (${marks.length})`}
+                      ? `الطلاب الذين لم يفهموا الجزئية (${selectedBucket.rangeLabel}) — ${displayedMarks.length} بلاغ`
+                      : `جميع الأجزاء التي حددها الطلاب كغير مفهومة (${marks.length})`}
                   </h3>
                 </div>
 
@@ -515,7 +515,7 @@ export default function VideoAnalyticsPage() {
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>كود الطالب: #{mark.studentId}</div>
                         {mark.note ? (
                           <div style={{ fontSize: 13, color: '#fde68a', background: 'rgba(0,0,0,.25)', padding: '7px 10px', borderRadius: 8 }}>
-                            💬 &ldquo;{mark.note}&rdquo;
+                            &ldquo;{mark.note}&rdquo;
                           </div>
                         ) : (
                           <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
@@ -644,7 +644,7 @@ export default function VideoAnalyticsPage() {
                               fontSize: 11,
                             }}
                           >
-                            {a.type === 'QUIZ' ? '⚡ كويز' : '📘 واجب'}
+                            {a.type === 'QUIZ' ? 'كويز' : 'واجب'}
                           </span>
                           {a.isSameLesson && (
                             <span className="badge" style={{ background: 'rgba(16,185,129,.18)', color: '#6ee7b7', fontSize: 11 }}>
@@ -703,7 +703,7 @@ export default function VideoAnalyticsPage() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
                 <div>
                   <h2 style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>
-                    👨‍🎓 جدول متابعة الطلاب التفصيلي للحصة ({filteredStudents.length} طالب)
+                    جدول متابعة الطلاب التفصيلي للحصة ({filteredStudents.length} طالب)
                   </h2>
                   <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
                     تفاصيل كل طالب: هل فتح الحصة، كم دقيقة شاهد، الأجزاء التي لم يفهمها، ودرجاته في الكويز والواجب.

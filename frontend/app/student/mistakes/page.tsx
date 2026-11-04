@@ -276,7 +276,7 @@ export default function StudentMistakesPage() {
                   const sevColor =
                     wt.severity === 'HIGH' ? '#ef4444' : wt.severity === 'MEDIUM' ? '#f59e0b' : '#38bdf8';
                   const sevLabel =
-                    wt.severity === 'HIGH' ? 'أولوية قصوى 🔥' : wt.severity === 'MEDIUM' ? 'أولوية متوسطة ⚠️' : 'مراجعة سريعة 💡';
+                    wt.severity === 'HIGH' ? 'أولوية قصوى' : wt.severity === 'MEDIUM' ? 'أولوية متوسطة' : 'مراجعة سريعة';
 
                   return (
                     <div
@@ -520,7 +520,7 @@ export default function StudentMistakesPage() {
           >
             <CheckCircle size={36} />
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>لا توجد أخطاء مسجلة حتى الآن! 🎉</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>لا توجد أخطاء مسجلة حتى الآن</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14, maxWidth: 460, margin: '0 auto 20px' }}>
             عندما تحل أي كويز أو امتحان أو سؤال تفاعلي داخل الحصص وتخطئ في أي سؤال، سيظهر هنا تلقائياً مع الإجابة الصحيحة لتراجعه في أي وقت.
           </p>
@@ -700,7 +700,7 @@ export default function StudentMistakesPage() {
                 ✓ الإجابة الصحيحة: ({practiceItem.correctAnswer}) {practiceItem.correctAnswerText}
                 {practiceItem.explanation && (
                   <div style={{ marginTop: 6, fontSize: 12.5, fontWeight: 500, color: '#d1fae5' }}>
-                    💡 التوضيح: {practiceItem.explanation}
+                    التوضيح: {practiceItem.explanation}
                   </div>
                 )}
               </div>
@@ -900,7 +900,7 @@ export default function StudentMistakesPage() {
                       color: '#c7d2fe',
                     }}
                   >
-                    💡 <strong>التوضيح والشرح:</strong> {m.explanation}
+                    <strong>التوضيح والشرح:</strong> {m.explanation}
                   </div>
                 )}
               </div>

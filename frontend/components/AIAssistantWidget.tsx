@@ -93,10 +93,15 @@ export default function AIAssistantWidget({
         'عذراً، لم أتمكن من توليد الرد حالياً. حاول مرة أخرى.';
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
     } catch (err: any) {
+      const isStudent = user?.role === 'student';
+      const rawMsg = err?.response?.data?.message;
       const msg =
-        err?.response?.data?.message ||
-        'تعذر الاتصال بالمساعد الذكي حالياً. يرجى التأكد من تفعيل مفتاح الـ API من لوحة التحكم.';
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${msg}` }]);
+        rawMsg && !rawMsg.includes('API') && !rawMsg.includes('لوحة التحكم')
+          ? rawMsg
+          : isStudent
+          ? 'المساعد الذكي غير متاح حالياً، يرجى المحاولة لاحقاً.'
+          : 'تعذر الاتصال بالمساعد الذكي حالياً. يرجى التأكد من تفعيل مفتاح الـ API من لوحة التحكم.';
+      setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
     } finally {
       setSending(false);
     }
@@ -379,7 +384,7 @@ export default function AIAssistantWidget({
                       cursor: 'pointer',
                     }}
                   >
-                    ✨ {qp}
+                    {qp}
                   </button>
                 ))}
               </div>

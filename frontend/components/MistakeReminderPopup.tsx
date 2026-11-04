@@ -444,7 +444,7 @@ export default function MistakeReminderPopup() {
             </div>
             {currentMistake.explanation && (
               <div style={{ fontSize: 11.5, color: '#d1fae5', marginTop: 2 }}>
-                💡 الشرح: {currentMistake.explanation}
+                الشرح: {currentMistake.explanation}
               </div>
             )}
           </div>

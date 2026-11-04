@@ -472,29 +472,29 @@ export default function HomePage() {
                 </div>
                 <h2 style={{ fontSize: 'clamp(1.55rem, 2.6vw, 2.25rem)', fontWeight: 900, margin: 0, lineHeight: 1.3, color: '#ffffff' }}>
                   {lang === 'ar'
-                    ? 'مساعد ذكي يشرح لك في أي وقت، ويخبر المدرس بأكثر دقيقة غير مفهومة في الحصة'
-                    : 'An AI companion that explains lessons 24/7 & maps exact video confusion spikes'}
+                    ? 'مساعد تعليمي ذكي للطلاب، ونظام تحليلي متقدم يوضح للمدرس أكثر أجزاء الحصة صعوبة'
+                    : 'Smart AI learning companion for students, plus advanced video analytics and confusion heatmaps for teachers'}
                 </h2>
                 <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.75, color: 'rgba(241, 245, 249, 0.85)' }}>
                   {lang === 'ar'
-                    ? 'يستطيع الطالب بضغطة زر أثناء مشاهدة الحصة تحديد الدقيقة التي لم يفهمها، ليحصل المدرس والـ Assistant على Heatmap تفاعلية توضح أكثر أجزاء الفيديو صعوبة وأسماء الطلاب الذين يحتاجون متابعة، بجانب تصحيح الأسئلة المقالية وتشخيص نقاط الضعف بالذكاء الاصطناعي.'
-                    : 'Students can mark any timestamp range they did not understand while watching, giving teachers and assistants an interactive Heatmap of confusion spikes alongside AI essay grading and mistake diagnostics.'}
+                    ? 'توفر المنصة رفيقاً ذكياً لمساعدة الطالب في حل المسائل وتصحيح الأسئلة المقالية وتشخيص نقاط الضعف، إلى جانب خريطة حرارية تحليلية (Heatmap) توضح للمدرس والـ Assistant الدقائق الزمنية التي وجد الطلاب صعوبة فيها وقائمة بالطلاب لمتابعتهم.'
+                    : 'An integrated learning system featuring an AI tutor for instant explanations, essay grading, and mistake diagnostics, alongside an interactive video heatmap that pinpoints exact timestamps students struggled with.'}
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 4 }}>
                   <div style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
                     <strong style={{ display: 'block', color: '#38bdf8', fontSize: 14, marginBottom: 4 }}>
-                      {lang === 'ar' ? '🤖 شات بوت وتصحيح مقالي بالـ AI' : '🤖 AI Tutor & Essay Grading'}
+                      {lang === 'ar' ? 'مساعد تعليمي وتصحيح مقالي بالذكاء الاصطناعي' : 'AI Learning Companion & Essay Grading'}
                     </strong>
                     <span style={{ fontSize: 12.5, color: 'rgba(241,245,249,0.75)' }}>
-                      {lang === 'ar' ? 'شرح فوري وتحليل ذكي لأخطاء كل طالب في الكويزات' : 'Instant step-by-step explanations & mistake analysis'}
+                      {lang === 'ar' ? 'شرح فوري خطوة بخطوة وتحليل لأخطاء الكويزات والامتحانات' : 'Step-by-step explanations and diagnostic mistake analysis'}
                     </span>
                   </div>
                   <div style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
                     <strong style={{ display: 'block', color: '#fbbf24', fontSize: 14, marginBottom: 4 }}>
-                      {lang === 'ar' ? '🔥 Video Confusion Heatmap' : '🔥 Video Confusion Heatmap'}
+                      {lang === 'ar' ? 'خريطة الفهم الحرارية (Confusion Heatmap)' : 'Video Confusion Heatmap'}
                     </strong>
                     <span style={{ fontSize: 12.5, color: 'rgba(241,245,249,0.75)' }}>
-                      {lang === 'ar' ? 'معرفة أكثر جزئية غير مفهومة في الفيديو ومين الطلاب اللي حددوها' : 'Pinpoint the exact minute students struggled with'}
+                      {lang === 'ar' ? 'رصد زمني لأكثر الدقائق غير المفهومة في الفيديو وقائمة بالطلاب' : 'Data-driven timeline pinpointing exact timestamps students flagged'}
                     </span>
                   </div>
                 </div>
