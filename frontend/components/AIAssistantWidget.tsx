@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles, X, Send, Bot, User, GraduationCap, AlertTriangle, Trash2, Image as ImageIcon,
+  Maximize2, Minimize2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -28,6 +29,7 @@ export default function AIAssistantWidget({
   const { user } = useAuthStore();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [isFullScreen, setIsFullScreen] = useState(false);
   const [showSpeechBubble, setShowSpeechBubble] = useState(true);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -236,22 +238,45 @@ export default function AIAssistantWidget({
       {/* Expanded AI Chatbot Window */}
       {isOpen && (
         <div
-          style={{
-            pointerEvents: 'auto',
-            width: 360,
-            maxWidth: 'calc(100vw - 32px)',
-            height: 500,
-            maxHeight: 'calc(100vh - 120px)',
-            background: 'rgba(15, 23, 42, 0.98)',
-            backdropFilter: 'blur(16px)',
-            border: '1px solid rgba(99, 102, 241, 0.45)',
-            borderRadius: 20,
-            boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.75)',
-            marginBottom: 12,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}
+          style={
+            isFullScreen
+              ? {
+                  pointerEvents: 'auto',
+                  position: 'fixed',
+                  inset: '16px',
+                  zIndex: 9999,
+                  width: 'auto',
+                  maxWidth: 'none',
+                  height: 'auto',
+                  maxHeight: 'none',
+                  background: 'rgba(15, 23, 42, 0.98)',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(99, 102, 241, 0.55)',
+                  borderRadius: 20,
+                  boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  transition: 'all 0.22s ease',
+                }
+              : {
+                  pointerEvents: 'auto',
+                  width: 380,
+                  maxWidth: 'calc(100vw - 32px)',
+                  height: 520,
+                  maxHeight: 'calc(100vh - 120px)',
+                  background: 'rgba(15, 23, 42, 0.98)',
+                  backdropFilter: 'blur(16px)',
+                  border: '1px solid rgba(99, 102, 241, 0.45)',
+                  borderRadius: 20,
+                  boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.75)',
+                  marginBottom: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  transition: 'all 0.22s ease',
+                }
+          }
         >
           {/* Header */}
           <div
@@ -282,12 +307,21 @@ export default function AIAssistantWidget({
                   المعلم الذكي (Fixion AI Companion)
                 </strong>
                 <span style={{ fontSize: 10.5, color: '#34d399' }}>
-                  ● متصل وجاهز للشرح وحل الأسئلة
+                  متصل وجاهز للشرح وحل الأسئلة
                 </span>
               </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button
+                type="button"
+                className="icon-btn"
+                title={isFullScreen ? 'تصغير النافذة' : 'تكبير الشاشة (Full Screen)'}
+                onClick={() => setIsFullScreen(prev => !prev)}
+                style={{ color: '#94a3b8', width: 28, height: 28 }}
+              >
+                {isFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </button>
               <button
                 type="button"
                 className="icon-btn"
@@ -302,7 +336,10 @@ export default function AIAssistantWidget({
               <button
                 type="button"
                 className="icon-btn"
-                onClick={() => setIsOpen(false)}
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsFullScreen(false);
+                }}
                 style={{ color: '#94a3b8', width: 28, height: 28 }}
               >
                 <X size={16} />
@@ -618,6 +655,21 @@ export default function AIAssistantWidget({
               <Send size={15} />
             </button>
           </div>
+
+          {/* AI Accuracy Disclaimer */}
+          <div
+            style={{
+              padding: '6px 14px 7px',
+              background: '#070b12',
+              textAlign: 'center',
+              fontSize: 10.5,
+              color: '#94a3b8',
+              lineHeight: 1.4,
+              borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+            }}
+          >
+            تنبيه: إجابات المساعد الذكي للاسترشاد والمساعدة وليست دقيقة بنسبة 100% دائماً؛ يرجى التأكد ومراجعة المعلومات والقوانين مع معلمك.
+          </div>
         </div>
       )}
 
@@ -635,7 +687,7 @@ export default function AIAssistantWidget({
           boxShadow: '0 10px 28px rgba(99, 102, 241, 0.55)',
           color: '#fff',
           cursor: 'pointer',
-          display: 'flex',
+          display: (isOpen && isFullScreen) ? 'none' : 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
