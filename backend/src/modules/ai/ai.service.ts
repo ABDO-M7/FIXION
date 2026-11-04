@@ -46,7 +46,7 @@ export interface MistakeAnalysisReport {
 }
 
 const DEFAULT_PROVIDER_MODELS: Record<AiProviderType, string> = {
-  groq: 'llama-3.3-70b-versatile',
+  groq: 'openai/gpt-oss-120b',
   gemini: 'gemini-2.0-flash',
   openrouter: 'meta-llama/llama-3.3-70b-instruct:free',
 };
@@ -470,6 +470,37 @@ export class AiService implements OnModuleInit {
 
         if (!response.ok) {
           const errBody = await response.text();
+          // If Groq fails because a model is decommissioned or not found, try active alternatives
+          if (provider === 'groq' && (response.status === 404 || response.status === 400)) {
+            const groqFallbacks = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'llama-3.3-70b-versatile'].filter(m => m !== model);
+            for (const fbModel of groqFallbacks) {
+              try {
+                const fbResp = await fetch(baseUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${key.apiKey}`,
+                  },
+                  body: JSON.stringify({
+                    model: fbModel,
+                    messages,
+                    temperature,
+                    max_tokens: maxTokens,
+                  }),
+                });
+                if (fbResp.ok) {
+                  const fbData: any = await fbResp.json();
+                  const fbText = fbData?.choices?.[0]?.message?.content || '';
+                  const fbTokens = Number(fbData?.usage?.total_tokens) || Math.ceil(fbText.length / 3) + 60;
+                  key.model = fbModel;
+                  if (this.keysRepo.save) await this.keysRepo.save(key).catch(() => {});
+                  return { text: fbText.trim(), provider, model: fbModel };
+                }
+              } catch {
+                // continue to next fallback
+              }
+            }
+          }
           const error: any = new Error(`${provider.toUpperCase()} HTTP ${response.status}: ${errBody.slice(0, 200)}`);
           error.status = response.status;
           throw error;

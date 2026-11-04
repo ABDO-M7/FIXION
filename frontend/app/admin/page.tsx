@@ -18,10 +18,10 @@ const CHART_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444'];
 
 const DEFAULT_PROVIDER_MODELS: Record<string, { model: string; reqLimit: number; tokLimit: number; hint: string }> = {
   groq: {
-    model: 'llama-3.3-70b-versatile',
-    reqLimit: 1000,
-    tokLimit: 100000,
-    hint: 'مجاني وسريع جداً (console.groq.com) — يدعم Llama 3.3 70B',
+    model: 'openai/gpt-oss-120b',
+    reqLimit: 14400,
+    tokLimit: 500000,
+    hint: 'مجاني وسريع جداً (console.groq.com) — يدعم openai/gpt-oss-120b و qwen/qwen3.8-27b',
   },
   gemini: {
     model: 'gemini-2.0-flash',
@@ -60,9 +60,9 @@ export default function AdminDashboard() {
     label: '',
     provider: 'groq',
     apiKey: '',
-    model: 'llama-3.3-70b-versatile',
-    dailyRequestLimit: 1000,
-    dailyTokenLimit: 100000,
+    model: 'openai/gpt-oss-120b',
+    dailyRequestLimit: 14400,
+    dailyTokenLimit: 500000,
   });
 
   const loadAiKeys = useCallback(async () => {
@@ -420,6 +420,26 @@ export default function AdminDashboard() {
                   value={keyForm.model}
                   onChange={e => setKeyForm(prev => ({ ...prev, model: e.target.value }))}
                 />
+                {keyForm.provider === 'groq' && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => setKeyForm(prev => ({ ...prev, model: 'openai/gpt-oss-120b' }))}
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: 10.5, padding: '2px 7px' }}
+                    >
+                      openai/gpt-oss-120b
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setKeyForm(prev => ({ ...prev, model: 'qwen/qwen3.8-27b' }))}
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: 10.5, padding: '2px 7px' }}
+                    >
+                      qwen/qwen3.8-27b
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
