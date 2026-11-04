@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, FileUp, Pause, Play, Send, Volume2 } from 'lucide-react';
+import { CheckCircle2, Clock, FileUp, HelpCircle, Pause, Play, Send, Trash2, Volume2 } from 'lucide-react';
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { uploadsApi, videosApi } from '@/lib/api';
@@ -19,6 +19,15 @@ export type VideoCheckpoint = {
   response?: { isCorrect: boolean; attempts: number } | null;
 };
 
+export type VideoConfusionMarkItem = {
+  id: string;
+  startSeconds: number;
+  endSeconds: number;
+  note?: string | null;
+  resolved?: boolean;
+  createdAt?: string;
+};
+
 export type InteractiveCourseVideo = {
   id: string;
   title: string;
@@ -31,7 +40,18 @@ export type InteractiveCourseVideo = {
   attachments?: string[];
 };
 
-type Experience = { video: InteractiveCourseVideo; checkpoints: VideoCheckpoint[] };
+type Experience = {
+  video: InteractiveCourseVideo;
+  checkpoints: VideoCheckpoint[];
+  confusionMarks?: VideoConfusionMarkItem[];
+};
+
+function formatTimeLabel(seconds: number): string {
+  const s = Math.max(0, Math.floor(Number(seconds) || 0));
+  const mins = Math.floor(s / 60);
+  const secs = s % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
 
 function providerUrl(video: InteractiveCourseVideo) {
   if (video.embedUrl) return video.embedUrl;
@@ -81,11 +101,86 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
   const [feedback, setFeedback] = useState('');
   const [solution, setSolution] = useState<{ text?: string | null; url?: string | null } | null>(null);
   const [playerError, setPlayerError] = useState<string | null>(null);
+  const [showConfusionModal, setShowConfusionModal] = useState(false);
+  const [confStartMin, setConfStartMin] = useState(0);
+  const [confStartSec, setConfStartSec] = useState(0);
+  const [confEndMin, setConfEndMin] = useState(1);
+  const [confEndSec, setConfEndSec] = useState(0);
+  const [confNote, setConfNote] = useState('');
+  const [savingConfusion, setSavingConfusion] = useState(false);
   const lastProgressReportRef = useRef(0);
   const experienceLoadedForRef = useRef<string | null>(null);
 
   const checkpoints = experience?.checkpoints || [];
+  const confusionMarks = experience?.confusionMarks || [];
   const solvedIds = useMemo(() => new Set(checkpoints.filter(item => item.response?.isCorrect).map(item => item.id)), [checkpoints]);
+
+  const openConfusionForm = () => {
+    if (!experienceLoadedForRef.current && !preview) {
+      void loadExperience();
+    }
+    const nowSec = Math.max(0, Math.floor(currentTimeRef.current || currentTime || 0));
+    const startTotal = Math.max(0, nowSec - 60);
+    const endTotal = Math.max(startTotal + 60, nowSec > 0 ? nowSec : 60);
+    setConfStartMin(Math.floor(startTotal / 60));
+    setConfStartSec(startTotal % 60);
+    setConfEndMin(Math.floor(endTotal / 60));
+    setConfEndSec(endTotal % 60);
+    setShowConfusionModal(prev => !prev);
+  };
+
+  const applyConfusionPreset = (presetMinutesBack: number) => {
+    const nowSec = Math.max(0, Math.floor(currentTimeRef.current || currentTime || 0));
+    const endTotal = nowSec > 0 ? nowSec : presetMinutesBack * 60;
+    const startTotal = Math.max(0, endTotal - presetMinutesBack * 60);
+    setConfStartMin(Math.floor(startTotal / 60));
+    setConfStartSec(startTotal % 60);
+    setConfEndMin(Math.floor(endTotal / 60));
+    setConfEndSec(endTotal % 60);
+  };
+
+  const submitConfusionMark = async () => {
+    const startSeconds = Math.max(0, (Number(confStartMin) || 0) * 60 + (Number(confStartSec) || 0));
+    const rawEnd = Math.max(0, (Number(confEndMin) || 0) * 60 + (Number(confEndSec) || 0));
+    const endSeconds = Math.max(startSeconds + 10, rawEnd);
+    setSavingConfusion(true);
+    try {
+      const res = await videosApi.addConfusionMark(video.id, {
+        startSeconds,
+        endSeconds,
+        note: confNote.trim() || undefined,
+      });
+      const created: VideoConfusionMarkItem = res.data;
+      setExperience(prev => prev ? {
+        ...prev,
+        confusionMarks: [...(prev.confusionMarks || []), created].sort((a, b) => a.startSeconds - b.startSeconds),
+      } : {
+        video,
+        checkpoints: [],
+        confusionMarks: [created],
+      });
+      setConfNote('');
+      setShowConfusionModal(false);
+      toast.success(`تم تسجيل الجزئية (${formatTimeLabel(startSeconds)} - ${formatTimeLabel(endSeconds)}) لإبلاغ المدرس والـ Assistant!`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'تعذر حفظ الجزئية غير المفهومة');
+    } finally {
+      setSavingConfusion(false);
+    }
+  };
+
+  const handleRemoveConfusionMark = async (markId: string) => {
+    try {
+      await videosApi.removeConfusionMark(video.id, markId);
+      setExperience(prev => prev ? {
+        ...prev,
+        confusionMarks: (prev.confusionMarks || []).filter(m => m.id !== markId),
+      } : prev);
+      toast.success('تم حذف الجزئية المسجلة');
+    } catch {
+      toast.error('تعذر حذف الجزئية');
+    }
+  };
 
   const sendPlayerCommand = useCallback((command: string) => {
     if (provider === 'hls') {
@@ -738,8 +833,201 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
             </span>
           )}
           {checkpoints.length > 0 && <span className="badge badge-pending">{solvedIds.size}/{checkpoints.length} checkpoints</span>}
+          {!preview && (
+            <button
+              type="button"
+              onClick={openConfusionForm}
+              className="btn btn-sm"
+              style={{
+                marginInlineStart: 'auto',
+                background: showConfusionModal ? 'rgba(245,158,11,.22)' : 'rgba(245,158,11,.12)',
+                color: '#fbbf24',
+                border: '1px solid rgba(245,158,11,.35)',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                borderRadius: 999,
+                padding: '6px 14px',
+              }}
+            >
+              <HelpCircle size={15} />
+              مش فاهم الجزئية دي؟ حدّد الدقيقة
+              {confusionMarks.length > 0 && (
+                <span style={{ background: '#f59e0b', color: '#09090b', borderRadius: 999, padding: '1px 7px', fontSize: 11, fontWeight: 800 }}>
+                  {confusionMarks.length}
+                </span>
+              )}
+            </button>
+          )}
         </div>
         {video.description && <p style={{ margin: '7px 0 0', color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.5 }}>{video.description}</p>}
+        {!preview && showConfusionModal && (
+          <div
+            style={{
+              marginTop: 14,
+              padding: 16,
+              borderRadius: 12,
+              background: 'rgba(245,158,11,.07)',
+              border: '1px solid rgba(245,158,11,.28)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <HelpCircle size={16} />
+                حدّد الجزئية اللي محتاجة شرح أو إعادة (من الدقيقة كام لكام)
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => applyConfusionPreset(1)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: 11, padding: '3px 9px' }}
+                >
+                  آخر دقيقة
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyConfusionPreset(2)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: 11, padding: '3px 9px' }}
+                >
+                  آخر دقيقتين
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyConfusionPreset(5)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: 11, padding: '3px 9px' }}
+                >
+                  آخر 5 دقائق
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 12 }}>
+              <div style={{ background: 'var(--bg-elevated, rgba(0,0,0,.2))', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 600 }}>من الدقيقة : الثانية</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="number"
+                    min={0}
+                    max={600}
+                    value={confStartMin}
+                    onChange={e => setConfStartMin(Math.max(0, Number(e.target.value) || 0))}
+                    className="form-input"
+                    aria-label="من الدقيقة"
+                    style={{ textAlign: 'center', fontWeight: 700 }}
+                  />
+                  <span style={{ fontWeight: 800 }}>:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={confStartSec}
+                    onChange={e => setConfStartSec(Math.min(59, Math.max(0, Number(e.target.value) || 0)))}
+                    className="form-input"
+                    aria-label="من الثانية"
+                    style={{ textAlign: 'center', fontWeight: 700 }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ background: 'var(--bg-elevated, rgba(0,0,0,.2))', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 600 }}>إلى الدقيقة : الثانية</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="number"
+                    min={0}
+                    max={600}
+                    value={confEndMin}
+                    onChange={e => setConfEndMin(Math.max(0, Number(e.target.value) || 0))}
+                    className="form-input"
+                    aria-label="إلى الدقيقة"
+                    style={{ textAlign: 'center', fontWeight: 700 }}
+                  />
+                  <span style={{ fontWeight: 800 }}>:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={confEndSec}
+                    onChange={e => setConfEndSec(Math.min(59, Math.max(0, Number(e.target.value) || 0)))}
+                    className="form-input"
+                    aria-label="إلى الثانية"
+                    style={{ textAlign: 'center', fontWeight: 700 }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <input
+                type="text"
+                value={confNote}
+                onChange={e => setConfNote(e.target.value)}
+                placeholder="ملاحظة اختيارية للمدرس أو الـ Assistant (مثال: مش فاهم خطوة التعويض في القانون ده)..."
+                className="form-input"
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                بيظهر للمدرس والـ Assistant في الـ Heatmap عشان يشرحوها ليك بالتفصيل.
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => setShowConfusionModal(false)} className="btn btn-secondary btn-sm">
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  onClick={submitConfusionMark}
+                  disabled={savingConfusion}
+                  className="btn btn-primary btn-sm"
+                  style={{ background: '#f59e0b', borderColor: '#f59e0b', color: '#09090b', fontWeight: 800 }}
+                >
+                  {savingConfusion ? 'جاري الحفظ...' : 'إرسال الجزئية غير المفهومة'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!preview && confusionMarks.length > 0 && (
+          <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
+              أجزاء حددتها كغير مفهومة:
+            </span>
+            {confusionMarks.map(mark => (
+              <span
+                key={mark.id}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  fontSize: 12,
+                  background: 'rgba(245,158,11,.12)',
+                  border: '1px solid rgba(245,158,11,.28)',
+                  color: '#fbbf24',
+                }}
+              >
+                <Clock size={12} />
+                <strong>{formatTimeLabel(mark.startSeconds)} → {formatTimeLabel(mark.endSeconds)}</strong>
+                {mark.note && <span style={{ color: 'var(--text-secondary)' }}>({mark.note})</span>}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveConfusionMark(mark.id)}
+                  title="حذف"
+                  style={{ background: 'transparent', border: 0, color: '#f87171', cursor: 'pointer', display: 'inline-flex', padding: 2 }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         {solution && (solution.text || solution.url) && <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.2)', color: 'var(--text-secondary)', fontSize: 13 }}><div style={{ color: '#86efac', fontWeight: 700, marginBottom: 4 }}><CheckCircle2 size={14} style={{ verticalAlign: 'middle', marginRight: 5 }} />Solution</div>{solution.text && <div>{solution.text}</div>}{solution.url && <a href={solution.url} target="_blank" rel="noreferrer" style={{ color: '#67e8f9', display: 'inline-block', marginTop: 5 }}>Open solution file</a>}</div>}
       </div>
     </article>

@@ -56,6 +56,33 @@ export class VideosController {
     return this.videosService.markDocumentOpened(videoId, studentId, dto?.attachmentIndex);
   }
 
+  @Post('student/video/:id/confusion')
+  @Roles(UserRole.STUDENT)
+  addConfusionMark(
+    @Param('id') videoId: string,
+    @Body() dto: { startSeconds: number; endSeconds: number; note?: string },
+    @CurrentUser('id') studentId: string,
+  ) {
+    return this.videosService.addConfusionMark(videoId, studentId, dto);
+  }
+
+  @Delete('student/video/:id/confusion/:markId')
+  @Roles(UserRole.STUDENT)
+  removeConfusionMark(
+    @Param('id') videoId: string,
+    @Param('markId') markId: string,
+    @CurrentUser('id') studentId: string,
+  ) {
+    return this.videosService.removeConfusionMark(videoId, markId, studentId);
+  }
+
+  @Get(':id/analytics')
+  @Header('Cache-Control', 'no-store')
+  @Roles(...STAFF_AND_ADMIN)
+  videoAnalytics(@Param('id') videoId: string, @CurrentUser() actor: any) {
+    return this.videosService.getVideoAnalytics(videoId, actor);
+  }
+
   @Post(':id/checkpoints/:checkpointId/answer')
   @Roles(UserRole.STUDENT)
   answerCheckpoint(

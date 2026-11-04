@@ -133,6 +133,7 @@ type Question = {
   correctAnswer: string;
   points: number;
   orderIndex: number;
+  aiGrading?: boolean;
 };
 
 const blankQuestion = (index: number): Question => ({
@@ -143,6 +144,7 @@ const blankQuestion = (index: number): Question => ({
   correctAnswer: '',
   points: 1,
   orderIndex: index,
+  aiGrading: true,
 });
 
 export default function QuizBuilderPage() {
@@ -172,6 +174,9 @@ export default function QuizBuilderPage() {
       setAssignment(found || null);
       const loaded: Question[] = (qRes.data as any[]).map((q: any) => ({
         ...q,
+        aiGrading: q.type === 'TEXT'
+          ? Array.isArray(q.options) && q.options.some((o: any) => o?.id === '__AI_GRADING__' && String(o.text) === 'true')
+          : true,
         options: q.options?.length === 4 ? q.options : OPTION_IDS.map(oid => ({ id: oid, text: '', imageUrl: '' })),
       }));
       if (loaded.length > 0) setQuestions(loaded);
@@ -251,7 +256,9 @@ export default function QuizBuilderPage() {
           questionText: q.questionText,
           questionImageUrl: q.questionImageUrl || null,
           type: q.type,
-          options: q.type === 'MULTIPLE_CHOICE' ? q.options : [],
+          options: q.type === 'MULTIPLE_CHOICE'
+            ? q.options
+            : (q.aiGrading ? [{ id: '__AI_GRADING__', text: 'true', imageUrl: '' }] : []),
           correctAnswer: q.correctAnswer || null,
           points: q.points,
           orderIndex: q.orderIndex,
@@ -599,18 +606,73 @@ export default function QuizBuilderPage() {
               </div>
             )}
 
-            {/* TEXT type hint */}
+            {/* TEXT type hint + AI Auto-Grading Toggle */}
             {current.type === 'TEXT' && (
-              <div className="form-group">
-                <label className="form-label">Model Answer (for auto-grading)</label>
-                <input
-                  className="form-input"
-                  value={current.correctAnswer}
-                  onChange={e => updateCurrent({ correctAnswer: e.target.value })}
-                  placeholder="Enter expected answer (exact match required)"
-                />
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                  Student's answer must match exactly (case-insensitive). Leave blank to skip auto-grading for this question.
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div
+                  onClick={() => updateCurrent({ aiGrading: !current.aiGrading })}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    border: `1.5px solid ${current.aiGrading ? 'rgba(16,185,129,0.5)' : 'var(--border)'}`,
+                    background: current.aiGrading ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.02)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    transition: 'var(--transition)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(current.aiGrading)}
+                      onChange={e => updateCurrent({ aiGrading: e.target.checked })}
+                      onClick={e => e.stopPropagation()}
+                      style={{ width: 18, height: 18, accentColor: '#10b981', cursor: 'pointer' }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: current.aiGrading ? '#34d399' : 'var(--text-primary)' }}>
+                        🤖 تصحيح السؤال المقالي تلقائياً بالذكاء الاصطناعي (AI Auto-Grading)
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        يقوم الـ AI بتقييم إجابة الطالب المقالية حسب الفهم والمعنى مقارنةً بنموذج الإجابة وإعطاء الدرجة والتعليق فوراً عند تسليم الامتحان.
+                      </div>
+                    </div>
+                  </div>
+                  <span style={{
+                    padding: '3px 9px', borderRadius: 99, fontSize: 11, fontWeight: 800,
+                    background: current.aiGrading ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)',
+                    color: current.aiGrading ? '#34d399' : 'var(--text-muted)',
+                    flexShrink: 0,
+                  }}>
+                    {current.aiGrading ? 'مفعّل ✓' : 'يدوي فقط'}
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    {current.aiGrading
+                      ? 'نموذج الإجابة / النقاط الأساسية المطلوبة (Model Answer for AI Grading)'
+                      : 'Model Answer (for exact-match or teacher reference)'}
+                  </label>
+                  <textarea
+                    className="form-input"
+                    rows={2}
+                    value={current.correctAnswer}
+                    onChange={e => updateCurrent({ correctAnswer: e.target.value })}
+                    placeholder={
+                      current.aiGrading
+                        ? 'اكتب الإجابة النموذجية أو المفاهيم الأساسية التي يجب أن يذكرها الطالب ليعتمد عليها الـ AI في التصحيح...'
+                        : 'Enter expected answer (optional)'
+                    }
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {current.aiGrading
+                      ? 'سيعتمد الذكاء الاصطناعي على هذا النموذج (أو سياق السؤال العلمي إذا تُرك فارغاً) لتقدير درجة الطالب وكتابة ملاحظات التصحيح.'
+                      : 'يمكن للمدرس مراجعة الإجابة وتعديل الدرجة يدوياً في أي وقت من صفحة التسليمات.'}
+                  </div>
                 </div>
               </div>
             )}

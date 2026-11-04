@@ -270,4 +270,155 @@ describe('AssignmentsService staff access', () => {
     expect(student.documentOpens['vid-1:attachment:0']).toBe(true);
     expect(student.documentOpens['doc-1:attachment:0']).toBe(true);
   });
+
+  it('returns student mistakes from quizzes and video checkpoints with correct answers', async () => {
+    const submissionsRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'sub-quiz-1',
+          assignmentId: 'quiz-1',
+          studentId: 'student-1',
+          content: JSON.stringify({
+            'q-right': 'A',
+            'q-wrong': 'B',
+            __proctoring: { totalViolations: 2, tabSwitches: 2 },
+          }),
+          submittedAt: new Date('2026-04-20T12:00:00.000Z'),
+        },
+      ]),
+    };
+    const enrollmentsRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'enr-1',
+          studentId: 'student-1',
+          courseName: 'Physics',
+          groupName: 'Group A',
+        },
+      ]),
+    };
+    const assignmentsRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'quiz-1',
+          title: 'Quiz 1: Mechanics',
+          type: 'QUIZ',
+          courseName: 'Physics',
+          groupName: 'Group A',
+          chapterName: 'Chapter 1',
+          lessonName: 'Lesson 1',
+        },
+      ]),
+    };
+    const questionsRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'q-right',
+          assignmentId: 'quiz-1',
+          orderIndex: 0,
+          questionText: '2 + 2 = ?',
+          type: 'MULTIPLE_CHOICE',
+          options: [
+            { id: 'A', text: '4' },
+            { id: 'B', text: '5' },
+          ],
+          correctAnswer: 'A',
+          points: 2,
+        },
+        {
+          id: 'q-wrong',
+          assignmentId: 'quiz-1',
+          orderIndex: 1,
+          questionText: 'Unit of force is?',
+          type: 'MULTIPLE_CHOICE',
+          options: [
+            { id: 'A', text: 'Newton' },
+            { id: 'B', text: 'Joule' },
+          ],
+          correctAnswer: 'A',
+          points: 3,
+        },
+      ]),
+    };
+    const videoResponsesRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'vr-1',
+          checkpointId: 'cp-1',
+          videoId: 'vid-1',
+          studentId: 'student-1',
+          answerText: 'B',
+          isCorrect: false,
+          attempts: 1,
+          submittedAt: new Date('2026-04-20T13:00:00.000Z'),
+        },
+      ]),
+    };
+    const checkpointsRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'cp-1',
+          videoId: 'vid-1',
+          prompt: 'What is acceleration?',
+          type: 'MCQ',
+          options: [
+            { id: 'A', text: 'Rate of change of velocity' },
+            { id: 'B', text: 'Force times distance' },
+          ],
+          correctAnswer: 'A',
+          solutionText: 'a = dv/dt',
+        },
+      ]),
+    };
+    const videosRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 'vid-1',
+          title: 'Lecture 1',
+          courseName: 'Physics',
+          groupName: 'Group A',
+        },
+      ]),
+    };
+
+    const service = new AssignmentsService(
+      assignmentsRepo as any,
+      submissionsRepo as any,
+      questionsRepo as any,
+      enrollmentsRepo as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      videosRepo as any,
+      { bumpVersion: jest.fn() } as any,
+      checkpointsRepo as any,
+      videoResponsesRepo as any,
+    );
+
+    const mistakes = await service.getStudentMistakes('student-1');
+
+    expect(mistakes).toHaveLength(2);
+    const quizMistake = mistakes.find(m => m.sourceType === 'QUIZ');
+    const cpMistake = mistakes.find(m => m.sourceType === 'VIDEO_CHECKPOINT');
+
+    expect(quizMistake).toMatchObject({
+      sourceId: 'quiz-1',
+      questionId: 'q-wrong',
+      studentAnswer: 'B',
+      studentAnswerText: 'Joule',
+      correctAnswer: 'A',
+      correctAnswerText: 'Newton',
+      enrollmentId: 'enr-1',
+    });
+    expect(cpMistake).toMatchObject({
+      sourceId: 'vid-1',
+      questionId: 'cp-1',
+      studentAnswer: 'B',
+      studentAnswerText: 'Force times distance',
+      correctAnswer: 'A',
+      correctAnswerText: 'Rate of change of velocity',
+      explanation: 'a = dv/dt',
+    });
+  });
 });

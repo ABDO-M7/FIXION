@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import * as crypto from 'crypto';
@@ -13,6 +13,7 @@ import { CourseGroup } from '../assignments/entities/course-group.entity';
 import { AssignmentSubmission } from '../assignments/entities/assignment-submission.entity';
 import { UnlockRuleType } from '../learning/unlock-rule';
 import { VideoProgress } from './entities/video-progress.entity';
+import { VideoConfusionMark } from './entities/video-confusion.entity';
 import { RedisCacheService } from '../../common/cache/redis-cache.service';
 import { courseContentVersionKey, studentCourseCacheKey, studentCourseVersionKey } from '../../common/cache/course-cache-keys';
 import {
@@ -73,7 +74,7 @@ type ParsedSource = {
 };
 
 @Injectable()
-export class VideosService {
+export class VideosService implements OnModuleInit {
   constructor(
     @InjectRepository(CourseVideo) private readonly videosRepo: Repository<CourseVideo>,
     @InjectRepository(CourseEnrollment) private readonly enrollmentsRepo: Repository<CourseEnrollment>,
@@ -85,7 +86,35 @@ export class VideosService {
     @InjectRepository(AssignmentSubmission) private readonly submissionsRepo: Repository<AssignmentSubmission>,
     @InjectRepository(VideoProgress) private readonly progressRepo: Repository<VideoProgress>,
     private readonly cache: RedisCacheService,
+    @Optional() @InjectRepository(VideoConfusionMark) private readonly confusionRepo?: Repository<VideoConfusionMark>,
   ) {}
+
+  async onModuleInit() {
+    if (!this.confusionRepo?.query) return;
+    try {
+      await this.confusionRepo.query(`
+        CREATE TABLE IF NOT EXISTS "video_confusion_marks" (
+          "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+          "video_id" uuid NOT NULL,
+          "student_id" uuid NOT NULL,
+          "startSeconds" integer NOT NULL DEFAULT 0,
+          "endSeconds" integer NOT NULL DEFAULT 0,
+          "note" text,
+          "resolved" boolean NOT NULL DEFAULT false,
+          "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
+          CONSTRAINT "PK_video_confusion_marks_id" PRIMARY KEY ("id")
+        );
+      `);
+      await this.confusionRepo.query(`
+        CREATE INDEX IF NOT EXISTS "IDX_video_confusion_video_id" ON "video_confusion_marks" ("video_id");
+      `);
+      await this.confusionRepo.query(`
+        CREATE INDEX IF NOT EXISTS "IDX_video_confusion_student_id" ON "video_confusion_marks" ("student_id");
+      `);
+    } catch {
+      // ignore if table creation not supported in test mock
+    }
+  }
 
   async create(dto: CreateVideoDto, teacher: User) {
     const title = dto.title?.trim();
@@ -358,8 +387,22 @@ export class VideosService {
     });
     const responses = checkpoints.length ? await this.responsesRepo.find({ where: { videoId, studentId: student.id } }) : [];
     const responseMap = new Map(responses.map(response => [response.checkpointId, response]));
+    const confusionMarks = this.confusionRepo?.find
+      ? await this.confusionRepo.find({
+          where: { videoId, studentId: student.id },
+          order: { startSeconds: 'ASC', createdAt: 'DESC' },
+        })
+      : [];
     return {
       video: this.publicVideo(video),
+      confusionMarks: confusionMarks.map(m => ({
+        id: m.id,
+        startSeconds: m.startSeconds,
+        endSeconds: m.endSeconds,
+        note: m.note,
+        resolved: m.resolved,
+        createdAt: m.createdAt,
+      })),
       checkpoints: checkpoints.map(checkpoint => {
         const response = responseMap.get(checkpoint.id);
         const solved = Boolean(response?.isCorrect);
@@ -464,6 +507,486 @@ export class VideosService {
     const saved = await this.progressRepo.save(progress);
     await this.cache.bumpVersion(studentCourseVersionKey(video.courseName, video.groupName, studentId));
     return saved;
+  }
+
+  async addConfusionMark(
+    videoId: string,
+    studentId: string,
+    dto: { startSeconds: number; endSeconds: number; note?: string },
+  ) {
+    const video = await this.videosRepo.findOne({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+    await this.assertEnrollment(video.courseName, video.groupName, studentId, video.chapterName, video.lessonName);
+    if (!this.confusionRepo) {
+      throw new BadRequestException('Confusion repository not initialized');
+    }
+
+    const rawStart = Math.max(0, Math.floor(Number(dto?.startSeconds) || 0));
+    const rawEnd = Math.max(rawStart + 5, Math.floor(Number(dto?.endSeconds) || rawStart + 60));
+    const startSeconds = Math.min(rawStart, rawEnd - 1);
+    const endSeconds = Math.max(startSeconds + 5, rawEnd);
+    const note = dto?.note ? String(dto.note).trim().slice(0, 500) : null;
+
+    const created = this.confusionRepo.create({
+      videoId,
+      studentId,
+      startSeconds,
+      endSeconds,
+      note,
+      resolved: false,
+    });
+    const saved = await this.confusionRepo.save(created);
+    const allMarks = await this.confusionRepo.find({
+      where: { videoId, studentId },
+      order: { startSeconds: 'ASC', createdAt: 'DESC' },
+    });
+
+    return {
+      mark: saved,
+      confusionMarks: allMarks,
+    };
+  }
+
+  async removeConfusionMark(videoId: string, markId: string, studentId: string) {
+    if (!this.confusionRepo) {
+      throw new BadRequestException('Confusion repository not initialized');
+    }
+    const existing = await this.confusionRepo.findOne({ where: { id: markId, videoId, studentId } });
+    if (!existing) throw new NotFoundException('Confusion mark not found');
+    await this.confusionRepo.delete(existing.id);
+    const allMarks = await this.confusionRepo.find({
+      where: { videoId, studentId },
+      order: { startSeconds: 'ASC', createdAt: 'DESC' },
+    });
+    return {
+      deletedId: markId,
+      confusionMarks: allMarks,
+    };
+  }
+
+  private formatTimestampLabel(seconds: number): string {
+    const safe = Math.max(0, Math.floor(seconds));
+    const mins = Math.floor(safe / 60);
+    const secs = safe % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  async getVideoAnalytics(videoId: string, actor: User) {
+    const video = await this.videosRepo.findOne({ where: { id: videoId } });
+    if (!video) throw new NotFoundException('Video not found');
+
+    const scope = await resolveStaffScope(this.usersRepo, actor);
+    if (scope.type === 'subjects' && !scope.subjects.includes(video.courseName)) {
+      throw new ForbiddenException('This course is not in your subject');
+    }
+    if (scope.type === 'teacher' && scope.teacherId) {
+      if (video.teacherId && video.teacherId !== scope.teacherId) {
+        const groupRecord = await this.courseGroupsRepo.findOne({
+          where: { courseName: video.courseName, groupName: video.groupName },
+        });
+        if (groupRecord?.teacherId && groupRecord.teacherId !== scope.teacherId) {
+          throw new ForbiddenException('You do not have access to this video analytics');
+        }
+      }
+    }
+
+    const [
+      rawEnrollments,
+      allProgress,
+      allConfusionMarks,
+      checkpoints,
+      checkpointResponses,
+      groupAssignments,
+    ] = await Promise.all([
+      this.enrollmentsRepo.find({
+        where: { courseName: video.courseName, groupName: video.groupName },
+        relations: ['student'],
+        order: { createdAt: 'ASC' },
+      }),
+      this.progressRepo.find({ where: { videoId } }),
+      this.confusionRepo?.find
+        ? this.confusionRepo.find({
+            where: { videoId },
+            order: { startSeconds: 'ASC', createdAt: 'DESC' },
+          })
+        : Promise.resolve([] as VideoConfusionMark[]),
+      this.checkpointsRepo.find({
+        where: { videoId },
+        order: { orderIndex: 'ASC', timestampSeconds: 'ASC' },
+      }),
+      this.responsesRepo.find({ where: { videoId } }),
+      this.assignmentsRepo.find({
+        where: { courseName: video.courseName, groupName: video.groupName },
+        order: { contentOrder: 'ASC', createdAt: 'ASC' },
+      }),
+    ]);
+
+    // Group active enrollments per unique student who can access this video's chapter/lesson
+    const enrollmentsByStudent = new Map<string, CourseEnrollment[]>();
+    const studentUserMap = new Map<string, User>();
+    for (const enr of rawEnrollments) {
+      if (!enr.studentId) continue;
+      const list = enrollmentsByStudent.get(enr.studentId) || [];
+      list.push(enr);
+      enrollmentsByStudent.set(enr.studentId, list);
+      if (enr.student) studentUserMap.set(enr.studentId, enr.student);
+    }
+
+    // Also ensure any student who has progress or confusion marks is loaded in studentUserMap
+    const extraStudentIds = new Set<string>();
+    for (const p of allProgress) {
+      if (p.studentId && !studentUserMap.has(p.studentId)) extraStudentIds.add(p.studentId);
+    }
+    for (const cm of allConfusionMarks) {
+      if (cm.studentId && !studentUserMap.has(cm.studentId)) extraStudentIds.add(cm.studentId);
+    }
+    if (extraStudentIds.size > 0 && this.usersRepo?.find) {
+      const extraUsers = await this.usersRepo.find({ where: { id: In(Array.from(extraStudentIds)) } });
+      for (const u of extraUsers) studentUserMap.set(u.id, u);
+    }
+
+    const eligibleStudentIds = new Set<string>();
+    for (const [studentId, enrs] of enrollmentsByStudent.entries()) {
+      const activeEnrs = enrs.filter(e => !isEnrollmentExpired(e));
+      const checkList = activeEnrs.length > 0 ? activeEnrs : enrs;
+      if (canAccessCourseContentAcrossEnrollments(checkList, video.chapterName, video.lessonName)) {
+        eligibleStudentIds.add(studentId);
+      }
+    }
+    for (const p of allProgress) if (p.studentId) eligibleStudentIds.add(p.studentId);
+    for (const cm of allConfusionMarks) if (cm.studentId) eligibleStudentIds.add(cm.studentId);
+
+    const studentIdsList = Array.from(eligibleStudentIds);
+    const totalEnrolledStudents = studentIdsList.length;
+
+    // Fetch submissions for groupAssignments
+    const assignmentIds = groupAssignments.map(a => a.id);
+    const allSubmissions = assignmentIds.length > 0
+      ? await this.submissionsRepo.find({ where: { assignmentId: In(assignmentIds) } })
+      : [];
+
+    // Determine video duration in seconds
+    let maxDuration = 0;
+    for (const p of allProgress) {
+      if (p.durationSeconds > maxDuration) maxDuration = p.durationSeconds;
+      if (p.watchedSeconds > maxDuration) maxDuration = p.watchedSeconds;
+    }
+    for (const cm of allConfusionMarks) {
+      if (cm.endSeconds > maxDuration) maxDuration = cm.endSeconds;
+    }
+    for (const cp of checkpoints) {
+      if (cp.timestampSeconds + 60 > maxDuration) maxDuration = cp.timestampSeconds + 60;
+    }
+    const durationSeconds = maxDuration >= 60 ? maxDuration : 1200; // Default 20 mins (1200s) if no student has reported duration yet
+
+    // Watch Summary
+    const progressByStudent = new Map<string, VideoProgress>(allProgress.map(p => [p.studentId, p]));
+    let openedCount = 0;
+    let watchedAnyCount = 0;
+    let completedCount = 0;
+    let sumWatchPercent = 0;
+    let sumWatchedSeconds = 0;
+    const dist = {
+      notWatched: 0,
+      low: 0,       // 1 - 49%
+      medium: 0,    // 50 - 84%
+      completed: 0, // 85 - 100%
+    };
+
+    for (const sid of studentIdsList) {
+      const p = progressByStudent.get(sid);
+      const pct = p?.watchedPercent || 0;
+      const opened = Boolean(p?.opened || pct > 0);
+      if (opened) openedCount++;
+      if (pct > 0) watchedAnyCount++;
+      if (pct >= 85) completedCount++;
+      sumWatchPercent += pct;
+      sumWatchedSeconds += p?.watchedSeconds || 0;
+
+      if (pct === 0) dist.notWatched++;
+      else if (pct < 50) dist.low++;
+      else if (pct < 85) dist.medium++;
+      else dist.completed++;
+    }
+
+    const averageWatchPercent = totalEnrolledStudents > 0
+      ? Math.round(sumWatchPercent / totalEnrolledStudents)
+      : 0;
+    const averageActiveWatchPercent = watchedAnyCount > 0
+      ? Math.round(sumWatchPercent / watchedAnyCount)
+      : 0;
+    const averageWatchedMinutes = watchedAnyCount > 0
+      ? Math.round((sumWatchedSeconds / watchedAnyCount / 60) * 10) / 10
+      : 0;
+
+    // Build Timeline Heatmap & Graph Buckets (e.g. 15 to 24 buckets across video duration)
+    const bucketCount = Math.min(24, Math.max(12, Math.ceil(durationSeconds / 60)));
+    const bucketSize = Math.max(15, Math.ceil(durationSeconds / bucketCount));
+    const actualBucketCount = Math.ceil(durationSeconds / bucketSize);
+
+    const timelineBuckets: Array<{
+      bucketIndex: number;
+      startSeconds: number;
+      endSeconds: number;
+      timeLabel: string;
+      shortLabel: string;
+      confusionCount: number;
+      studentCount: number;
+      watchedCount: number;
+      intensityPercent: number;
+      students: Array<{
+        markId: string;
+        studentId: string;
+        name: string;
+        studentCode: string | null;
+        email: string;
+        phone: string | null;
+        startSeconds: number;
+        endSeconds: number;
+        rangeLabel: string;
+        note: string | null;
+        createdAt: Date;
+      }>;
+    }> = [];
+
+    for (let i = 0; i < actualBucketCount; i++) {
+      const bStart = i * bucketSize;
+      const bEnd = Math.min(durationSeconds, (i + 1) * bucketSize);
+      const overlappingMarks = allConfusionMarks.filter(
+        m => m.startSeconds < bEnd && m.endSeconds > bStart,
+      );
+      const uniqueStudentIdsInBucket = new Set(overlappingMarks.map(m => m.studentId));
+
+      // How many students actually watched this time slice?
+      let watchedInSlice = 0;
+      for (const p of allProgress) {
+        const ranges = Array.isArray(p.watchedRanges) ? p.watchedRanges : [];
+        if (ranges.some(([rStart, rEnd]) => rStart < bEnd && rEnd > bStart)) {
+          watchedInSlice++;
+        } else if (ranges.length === 0 && p.watchedSeconds >= bEnd) {
+          watchedInSlice++;
+        }
+      }
+
+      const studentsInBucket = overlappingMarks.map(m => {
+        const u = studentUserMap.get(m.studentId);
+        return {
+          markId: m.id,
+          studentId: m.studentId,
+          name: u?.name || 'طالب',
+          studentCode: u?.studentId || null,
+          email: u?.email || '',
+          phone: u?.phone || null,
+          startSeconds: m.startSeconds,
+          endSeconds: m.endSeconds,
+          rangeLabel: `${this.formatTimestampLabel(m.startSeconds)} - ${this.formatTimestampLabel(m.endSeconds)}`,
+          note: m.note,
+          createdAt: m.createdAt,
+        };
+      });
+
+      timelineBuckets.push({
+        bucketIndex: i,
+        startSeconds: bStart,
+        endSeconds: bEnd,
+        timeLabel: `${this.formatTimestampLabel(bStart)} - ${this.formatTimestampLabel(bEnd)}`,
+        shortLabel: this.formatTimestampLabel(bStart),
+        confusionCount: overlappingMarks.length,
+        studentCount: uniqueStudentIdsInBucket.size,
+        watchedCount: watchedInSlice,
+        intensityPercent: 0, // computed after max is known
+        students: studentsInBucket,
+      });
+    }
+
+    const maxBucketConfusion = Math.max(1, ...timelineBuckets.map(b => b.confusionCount));
+    for (const b of timelineBuckets) {
+      b.intensityPercent = b.confusionCount > 0
+        ? Math.max(15, Math.round((b.confusionCount / maxBucketConfusion) * 100))
+        : 0;
+    }
+
+    const peakBucketCandidate = [...timelineBuckets].sort(
+      (a, b) => b.confusionCount - a.confusionCount || b.studentCount - a.studentCount,
+    )[0];
+    const peakBucket = peakBucketCandidate && peakBucketCandidate.confusionCount > 0
+      ? {
+          startSeconds: peakBucketCandidate.startSeconds,
+          endSeconds: peakBucketCandidate.endSeconds,
+          timeLabel: peakBucketCandidate.timeLabel,
+          confusionCount: peakBucketCandidate.confusionCount,
+          studentCount: peakBucketCandidate.studentCount,
+        }
+      : null;
+
+    const allMarksDetailed = allConfusionMarks.map(m => {
+      const u = studentUserMap.get(m.studentId);
+      return {
+        id: m.id,
+        studentId: m.studentId,
+        studentName: u?.name || 'طالب',
+        studentCode: u?.studentId || null,
+        email: u?.email || '',
+        phone: u?.phone || null,
+        startSeconds: m.startSeconds,
+        endSeconds: m.endSeconds,
+        rangeLabel: `${this.formatTimestampLabel(m.startSeconds)} → ${this.formatTimestampLabel(m.endSeconds)}`,
+        note: m.note,
+        createdAt: m.createdAt,
+      };
+    });
+
+    // Checkpoint Analytics
+    const checkpointAnalytics = checkpoints.map(cp => {
+      const resps = checkpointResponses.filter(r => r.checkpointId === cp.id);
+      const solvedCount = resps.filter(r => r.isCorrect).length;
+      const totalAttempts = resps.reduce((acc, r) => acc + (r.attempts || 1), 0);
+      const avgAttempts = resps.length > 0 ? Math.round((totalAttempts / resps.length) * 10) / 10 : 0;
+      const passRate = resps.length > 0 ? Math.round((solvedCount / resps.length) * 100) : 0;
+      return {
+        id: cp.id,
+        prompt: cp.prompt,
+        type: cp.type,
+        timestampSeconds: cp.timestampSeconds,
+        timeLabel: this.formatTimestampLabel(cp.timestampSeconds),
+        attemptedCount: resps.length,
+        solvedCount,
+        avgAttempts,
+        passRate,
+      };
+    });
+
+    // Lesson & Group Assignments (Quizzes + Homework) Analytics
+    const sameLessonAssignments = groupAssignments.filter(
+      a =>
+        (video.chapterName ? a.chapterName === video.chapterName : true) &&
+        (video.lessonName ? a.lessonName === video.lessonName : true),
+    );
+    const targetAssignments = sameLessonAssignments.length > 0 ? sameLessonAssignments : groupAssignments;
+
+    const lessonAssignmentsAnalytics = targetAssignments.map(a => {
+      const subs = allSubmissions.filter(s => s.assignmentId === a.id && eligibleStudentIds.has(s.studentId));
+      const submittedCount = subs.length;
+      const notSubmittedCount = Math.max(0, totalEnrolledStudents - submittedCount);
+      const submissionRate = totalEnrolledStudents > 0
+        ? Math.round((submittedCount / totalEnrolledStudents) * 100)
+        : 0;
+      const gradedSubs = subs.filter(s => s.grade !== null && s.grade !== undefined);
+      const maxGrade = a.maxGrade || 100;
+      const gradesList = gradedSubs.map(s => Number(s.grade));
+      const averageGrade = gradesList.length > 0
+        ? Math.round((gradesList.reduce((acc, g) => acc + g, 0) / gradesList.length) * 10) / 10
+        : null;
+      const averagePercent = averageGrade !== null && maxGrade > 0
+        ? Math.round((averageGrade / maxGrade) * 100)
+        : null;
+      const highestGrade = gradesList.length > 0 ? Math.max(...gradesList) : null;
+      const lowestGrade = gradesList.length > 0 ? Math.min(...gradesList) : null;
+      const passCount = gradedSubs.filter(s => (Number(s.grade) / Math.max(1, maxGrade)) * 100 >= 50).length;
+      const passRate = gradedSubs.length > 0 ? Math.round((passCount / gradedSubs.length) * 100) : null;
+
+      return {
+        id: a.id,
+        title: a.title,
+        type: a.type,
+        chapterName: a.chapterName,
+        lessonName: a.lessonName,
+        isSameLesson: a.chapterName === video.chapterName && a.lessonName === video.lessonName,
+        maxGrade,
+        submittedCount,
+        notSubmittedCount,
+        submissionRate,
+        gradedCount: gradedSubs.length,
+        averageGrade,
+        averagePercent,
+        highestGrade,
+        lowestGrade,
+        passCount,
+        passRate,
+      };
+    });
+
+    // Per-Student Comprehensive Breakdown Table
+    const studentsTable = studentIdsList.map(sid => {
+      const u = studentUserMap.get(sid);
+      const p = progressByStudent.get(sid);
+      const studentCheckpoints = checkpointResponses.filter(r => r.studentId === sid && r.isCorrect).length;
+      const studentMarks = allConfusionMarks
+        .filter(m => m.studentId === sid)
+        .map(m => ({
+          id: m.id,
+          startSeconds: m.startSeconds,
+          endSeconds: m.endSeconds,
+          rangeLabel: `${this.formatTimestampLabel(m.startSeconds)} - ${this.formatTimestampLabel(m.endSeconds)}`,
+          note: m.note,
+          createdAt: m.createdAt,
+        }));
+
+      const studentAssignments = targetAssignments.map(a => {
+        const sub = allSubmissions.find(s => s.assignmentId === a.id && s.studentId === sid);
+        return {
+          assignmentId: a.id,
+          title: a.title,
+          type: a.type,
+          maxGrade: a.maxGrade || 100,
+          submitted: Boolean(sub),
+          grade: sub?.grade ?? null,
+          submittedAt: sub?.submittedAt ?? null,
+        };
+      });
+
+      return {
+        studentId: sid,
+        name: u?.name || 'طالب',
+        studentCode: u?.studentId || null,
+        email: u?.email || '',
+        phone: u?.phone || null,
+        opened: Boolean(p?.opened || (p?.watchedPercent || 0) > 0),
+        watchedPercent: p?.watchedPercent || 0,
+        watchedSeconds: p?.watchedSeconds || 0,
+        watchedMinutes: Math.round(((p?.watchedSeconds || 0) / 60) * 10) / 10,
+        lastPositionSeconds: p?.lastPositionSeconds ?? null,
+        updatedAt: p?.updatedAt ?? null,
+        completedCheckpoints: studentCheckpoints,
+        totalCheckpoints: checkpoints.length,
+        confusionMarksCount: studentMarks.length,
+        confusionMarks: studentMarks,
+        assignments: studentAssignments,
+      };
+    }).sort((a, b) => b.confusionMarksCount - a.confusionMarksCount || b.watchedPercent - a.watchedPercent);
+
+    return {
+      video: {
+        ...this.publicVideo(video),
+        durationSeconds,
+      },
+      watchSummary: {
+        totalEnrolledStudents,
+        openedCount,
+        watchedAnyCount,
+        completedCount,
+        notWatchedCount: dist.notWatched,
+        averageWatchPercent,
+        averageActiveWatchPercent,
+        averageWatchedMinutes,
+        watchDistribution: [
+          { label: 'لم يشاهد (0%)', count: dist.notWatched, color: '#ef4444' },
+          { label: 'مشاهدة ضعيفة (1-49%)', count: dist.low, color: '#f59e0b' },
+          { label: 'مشاهدة متوسطة (50-84%)', count: dist.medium, color: '#38bdf8' },
+          { label: 'أتم المشاهدة (85-100%)', count: dist.completed, color: '#10b981' },
+        ],
+      },
+      confusionAnalytics: {
+        totalConfusionMarks: allConfusionMarks.length,
+        uniqueConfusedStudents: new Set(allConfusionMarks.map(m => m.studentId)).size,
+        peakBucket,
+        timelineBuckets,
+        allMarks: allMarksDetailed,
+      },
+      checkpointAnalytics,
+      lessonAssignmentsAnalytics,
+      studentsTable,
+    };
   }
 
   async answerCheckpoint(videoId: string, checkpointId: string, student: User, dto: AnswerDto) {

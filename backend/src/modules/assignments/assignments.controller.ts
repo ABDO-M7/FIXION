@@ -174,8 +174,17 @@ export class AssignmentsController {
     @Param('id') id: string,
     @Body('answers') answers: Record<string, string>,
     @CurrentUser() student: any,
+    @Body('proctoring') proctoring?: any,
   ) {
-    return this.assignmentsService.submitQuiz(id, student, answers);
+    return this.assignmentsService.submitQuiz(id, student, answers, proctoring);
+  }
+
+  // ── Student: view all their mistakes across quizzes & video checkpoints ────
+  @Get('student/mistakes')
+  @Header('Cache-Control', 'no-store')
+  @Roles(UserRole.STUDENT)
+  getStudentMistakes(@CurrentUser('id') studentId: string) {
+    return this.assignmentsService.getStudentMistakes(studentId);
   }
 
   // ── Teacher: grade a submission (manual override) ─────────────────────────
@@ -188,6 +197,16 @@ export class AssignmentsController {
     @Body('feedback') feedback?: string,
   ) {
     return this.assignmentsService.gradeSubmission(submissionId, grade, feedback, actor);
+  }
+
+  // ── Teacher: AI-grade essay questions in a quiz submission ────────────────
+  @Post('submissions/:submissionId/ai-grade')
+  @Roles(...STAFF_AND_ADMIN)
+  aiGradeSubmission(
+    @Param('submissionId') submissionId: string,
+    @CurrentUser() actor: any,
+  ) {
+    return this.assignmentsService.aiGradeSubmission(submissionId, actor);
   }
 
   // ── Teacher: grade matrix ─────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Assignment } from './entities/assignment.entity';
 import { AssignmentSubmission } from './entities/assignment-submission.entity';
@@ -13,6 +13,7 @@ import { VideoCheckpoint } from '../videos/entities/video-checkpoint.entity';
 import { VideoResponse } from '../videos/entities/video-response.entity';
 import { AssignmentsService } from './assignments.service';
 import { AssignmentsController } from './assignments.controller';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AssignmentsController } from './assignments.controller';
       VideoCheckpoint,
       VideoResponse,
     ]),
+    forwardRef(() => AiModule),
   ],
   controllers: [AssignmentsController],
   providers: [AssignmentsService],

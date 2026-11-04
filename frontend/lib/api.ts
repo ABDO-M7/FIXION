@@ -235,6 +235,8 @@ export const assignmentsApi = {
     api.get(`/assignments/${id}/submissions`, { params: { courseName, groupName } }),
   grade: (submissionId: string, grade: number, feedback?: string) =>
     api.patch(`/assignments/submissions/${submissionId}/grade`, { grade, feedback }),
+  aiGrade: (submissionId: string) =>
+    api.post(`/assignments/submissions/${submissionId}/ai-grade`),
   gradeMatrix: (courseName: string, groupName: string) =>
     api.get(`/assignments/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}/grades`),
   groupAnalytics: (courseName: string, groupName: string) =>
@@ -245,10 +247,11 @@ export const assignmentsApi = {
   // Student
   myAssignments: (courseName: string, groupName: string) =>
     api.get(`/assignments/student/courses/${encodeURIComponent(courseName)}/groups/${encodeURIComponent(groupName)}`),
+  myMistakes: () => api.get('/assignments/student/mistakes'),
   mySubmission: (id: string) => api.get(`/assignments/${id}/my-submission`),
   submit: (id: string, data: any) => api.post(`/assignments/${id}/submissions`, data),
-  quizSubmit: (id: string, answers: Record<string, string>) =>
-    api.post(`/assignments/${id}/quiz-submit`, { answers }),
+  quizSubmit: (id: string, answers: Record<string, string>, proctoring?: any) =>
+    api.post(`/assignments/${id}/quiz-submit`, { answers, proctoring }),
   // Quiz questions
   getQuestions: (id: string) => api.get(`/assignments/${id}/questions`),
   createQuestion: (id: string, data: any) => api.post(`/assignments/${id}/questions`, data),
@@ -276,6 +279,12 @@ export const videosApi = {
   teacherList: (courseName: string, groupName: string, teacherId?: string) =>
     api.get(`/videos/teacher/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`, { params: teacherId ? { teacherId } : {} }),
   studentList: (courseName: string, groupName: string) => api.get(`/videos/student/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}`),
+  addConfusionMark: (videoId: string, data: { startSeconds: number; endSeconds: number; note?: string }) =>
+    api.post(`/videos/student/video/${encodeURIComponent(videoId)}/confusion`, data),
+  removeConfusionMark: (videoId: string, markId: string) =>
+    api.delete(`/videos/student/video/${encodeURIComponent(videoId)}/confusion/${encodeURIComponent(markId)}`),
+  analytics: (videoId: string) =>
+    api.get(`/videos/${encodeURIComponent(videoId)}/analytics`),
   delete: (id: string) => api.delete(`/videos/${id}`),
 };
 
@@ -339,4 +348,28 @@ export const appointmentsApi = {
   teacherList: () => api.get('/appointments/teacher'),
   reply: (id: string, dto: { status: string; teacherReply?: string; scheduledTime?: string }) =>
     api.patch(`/appointments/${id}/reply`, dto),
+};
+
+export const aiApi = {
+  // Admin API Keys & Quota management
+  listKeys: () => api.get('/ai/admin/keys'),
+  addKey: (data: {
+    label?: string;
+    provider?: 'groq' | 'gemini' | 'openrouter';
+    apiKey: string;
+    model?: string;
+    dailyRequestLimit?: number;
+    dailyTokenLimit?: number;
+  }) => api.post('/ai/admin/keys', data),
+  updateKey: (id: string, data: any) => api.patch(`/ai/admin/keys/${id}`, data),
+  resetKeyQuota: (id: string) => api.post(`/ai/admin/keys/${id}/reset-quota`),
+  testKey: (id: string) => api.post(`/ai/admin/keys/${id}/test`),
+  deleteKey: (id: string) => api.delete(`/ai/admin/keys/${id}`),
+  // Student & Teacher AI tools
+  chat: (
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    courseContext?: string,
+  ) => api.post('/ai/chat', { messages, courseContext }),
+  analyzeMistakes: (courseName?: string) =>
+    api.post('/ai/student/analyze-mistakes', { courseName }),
 };

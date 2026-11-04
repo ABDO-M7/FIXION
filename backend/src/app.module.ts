@@ -27,6 +27,7 @@ import { HealthModule } from './health/health.module';
 import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { VideosModule } from './modules/videos/videos.module';
+import { AiModule } from './modules/ai/ai.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Question } from './modules/questions/entities/question.entity';
@@ -46,6 +47,8 @@ import { CourseVideo } from './modules/videos/entities/course-video.entity';
 import { VideoCheckpoint } from './modules/videos/entities/video-checkpoint.entity';
 import { VideoResponse } from './modules/videos/entities/video-response.entity';
 import { VideoProgress } from './modules/videos/entities/video-progress.entity';
+import { VideoConfusionMark } from './modules/videos/entities/video-confusion.entity';
+import { AiApiKey } from './modules/ai/entities/ai-api-key.entity';
 
 @Module({
   imports: [
@@ -90,6 +93,8 @@ import { VideoProgress } from './modules/videos/entities/video-progress.entity';
           VideoCheckpoint,
           VideoResponse,
           VideoProgress,
+          VideoConfusionMark,
+          AiApiKey,
         ],
         synchronize: !config.get<boolean>('app.isProduction'), // Never synchronize on hosted production services
         migrations: [__dirname + '/migrations/*{.js,.ts}'],
@@ -122,6 +127,7 @@ import { VideoProgress } from './modules/videos/entities/video-progress.entity';
     AssignmentsModule,
     AppointmentsModule,
     VideosModule,
+    AiModule,
     HealthModule,
   ],
 })

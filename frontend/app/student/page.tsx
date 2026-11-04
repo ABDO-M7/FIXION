@@ -4,7 +4,7 @@ import AppShell from '@/components/AppShell';
 import { assignmentsApi, enrollmentsApi, questionsApi, subscriptionsApi, videosApi } from '@/lib/api';
 import { useAuthStore } from '@/store';
 import { useTranslation } from '@/hooks/useTranslation';
-import { BookOpen, CheckCircle, FileText, Key, PlayCircle, Plus, ArrowRight } from 'lucide-react';
+import { BookOpen, CheckCircle, FileText, Key, PlayCircle, Plus, ArrowRight, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -87,6 +87,7 @@ export default function StudentDashboard() {
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Link href="/student/courses" className="btn btn-primary"><BookOpen size={16} /> {t('nav.courses')}</Link>
+          <Link href="/student/mistakes" className="btn btn-secondary"><AlertTriangle size={16} style={{ color: '#f59e0b' }} /> {t('nav.mistakes')}</Link>
           <Link href="/student/questions/new" className="btn btn-ghost"><Plus size={16} /> {t('common.askQuestion')}</Link>
         </div>
       </div>

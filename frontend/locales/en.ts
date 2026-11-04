@@ -4,6 +4,7 @@ export const en = {
     questions: 'My Questions',
     allQuestions: 'Questions',
     courses: 'Courses',
+    mistakes: 'My Mistakes',
     appointments: 'Appointments',
     subscription: 'Subscription',
     profile: 'Profile',

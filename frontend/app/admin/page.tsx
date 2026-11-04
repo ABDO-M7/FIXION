@@ -1,8 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import AppShell from '@/components/AppShell';
-import { adminApi, codesApi } from '@/lib/api';
-import { Users, HelpCircle, CheckCircle, Key, BarChart2, TrendingUp, GraduationCap, ArrowRight, Layers } from 'lucide-react';
+import { adminApi, codesApi, aiApi } from '@/lib/api';
+import {
+  Users, HelpCircle, CheckCircle, Key, BarChart2, TrendingUp,
+  GraduationCap, ArrowRight, Layers, Sparkles, Plus, Trash2,
+  RefreshCw, Play, Power, ShieldAlert, Cpu,
+} from 'lucide-react';
 import Link from 'next/link';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -12,15 +16,153 @@ import toast from 'react-hot-toast';
 
 const CHART_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444'];
 
+const DEFAULT_PROVIDER_MODELS: Record<string, { model: string; reqLimit: number; tokLimit: number; hint: string }> = {
+  groq: {
+    model: 'llama-3.3-70b-versatile',
+    reqLimit: 1000,
+    tokLimit: 100000,
+    hint: 'مجاني وسريع جداً (console.groq.com) — يدعم Llama 3.3 70B',
+  },
+  gemini: {
+    model: 'gemini-2.0-flash',
+    reqLimit: 1500,
+    tokLimit: 1000000,
+    hint: 'مجاني من Google AI Studio (aistudio.google.com) — 1500 طلب/يوم للمفتاح الواحد',
+  },
+  openrouter: {
+    model: 'meta-llama/llama-3.3-70b-instruct:free',
+    reqLimit: 200,
+    tokLimit: 100000,
+    hint: 'موديلات مجانية متعددة (openrouter.ai)',
+  },
+};
+
 export default function AdminDashboard() {
   const [overview, setOverview] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [generatingCodes, setGeneratingCodes] = useState(false);
   const [codeForm, setCodeForm] = useState({ plan: 'monthly', quantity: 10 });
 
-  useEffect(() => {
-    adminApi.overview().then(r => setOverview(r.data)).catch(() => {}).finally(() => setLoading(false));
+  // AI Keys & Quota state
+  const [aiQuotaData, setAiQuotaData] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [addingKey, setAddingKey] = useState(false);
+  const [testingKeyId, setTestingKeyId] = useState<string | null>(null);
+  const [showAddKeyForm, setShowAddKeyForm] = useState(false);
+  const [keyForm, setKeyForm] = useState<{
+    label: string;
+    provider: 'groq' | 'gemini' | 'openrouter';
+    apiKey: string;
+    model: string;
+    dailyRequestLimit: number;
+    dailyTokenLimit: number;
+  }>({
+    label: '',
+    provider: 'groq',
+    apiKey: '',
+    model: 'llama-3.3-70b-versatile',
+    dailyRequestLimit: 1000,
+    dailyTokenLimit: 100000,
+  });
+
+  const loadAiKeys = useCallback(async () => {
+    setAiLoading(true);
+    try {
+      const res = await aiApi.listKeys();
+      setAiQuotaData(res.data);
+    } catch {
+      // ignore if initial load fails
+    } finally {
+      setAiLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    Promise.all([
+      adminApi.overview().then(r => setOverview(r.data)).catch(() => {}),
+      loadAiKeys(),
+    ]).finally(() => setLoading(false));
+  }, [loadAiKeys]);
+
+  const handleProviderChange = (provider: 'groq' | 'gemini' | 'openrouter') => {
+    const defaults = DEFAULT_PROVIDER_MODELS[provider] || DEFAULT_PROVIDER_MODELS.groq;
+    setKeyForm(prev => ({
+      ...prev,
+      provider,
+      model: defaults.model,
+      dailyRequestLimit: defaults.reqLimit,
+      dailyTokenLimit: defaults.tokLimit,
+    }));
+  };
+
+  const handleAddKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!keyForm.apiKey.trim()) {
+      toast.error('يرجى إدخال مفتاح API واحد على الأقل');
+      return;
+    }
+    setAddingKey(true);
+    try {
+      const res = await aiApi.addKey(keyForm);
+      const count = res.data?.addedCount || 1;
+      toast.success(`تمت إضافة ${count} مفتاح API بنجاح!`);
+      setKeyForm(prev => ({ ...prev, label: '', apiKey: '' }));
+      setShowAddKeyForm(false);
+      await loadAiKeys();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'فشل إضافة مفتاح الـ API');
+    } finally {
+      setAddingKey(false);
+    }
+  };
+
+  const handleToggleKey = async (keyItem: any) => {
+    try {
+      await aiApi.updateKey(keyItem.id, { isActive: !keyItem.isActive });
+      toast.success(keyItem.isActive ? 'تم إيقاف المفتاح مؤقتاً' : 'تم تفعيل المفتاح');
+      await loadAiKeys();
+    } catch {
+      toast.error('فشل تحديث حالة المفتاح');
+    }
+  };
+
+  const handleResetQuota = async (id: string) => {
+    try {
+      await aiApi.resetKeyQuota(id);
+      toast.success('تم تصفير استهلاك الكوتا اليومية للمفتاح');
+      await loadAiKeys();
+    } catch {
+      toast.error('فشل تصفير الكوتا');
+    }
+  };
+
+  const handleTestKey = async (id: string) => {
+    setTestingKeyId(id);
+    try {
+      const res = await aiApi.testKey(id);
+      if (res.data?.ok) {
+        toast.success(`المفتاح يعمل بنجاح! (${res.data.latencyMs}ms)`);
+      } else {
+        toast.error(`فشل اختبار المفتاح: ${res.data?.error || 'خطأ غير معروف'}`);
+      }
+      await loadAiKeys();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'فشل اختبار المفتاح');
+    } finally {
+      setTestingKeyId(null);
+    }
+  };
+
+  const handleDeleteKey = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف مفتاح الـ API هذا؟')) return;
+    try {
+      await aiApi.deleteKey(id);
+      toast.success('تم حذف المفتاح');
+      await loadAiKeys();
+    } catch {
+      toast.error('فشل حذف المفتاح');
+    }
+  };
 
   const generateCodes = async () => {
     setGeneratingCodes(true);
@@ -120,6 +262,384 @@ export default function AdminDashboard() {
         <Link href="/admin/courses" className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Layers size={15} /> Open Workflows <ArrowRight size={15} />
         </Link>
+      </div>
+
+      {/* ── AI Multi-API Keys & Quota Monitor ─────────────────────────────────── */}
+      <div className="card" style={{
+        marginBottom: 24,
+        border: '1px solid rgba(16,185,129,0.28)',
+        background: 'linear-gradient(145deg, rgba(15,23,42,0.96), rgba(16,185,129,0.05))',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 18,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 12,
+              background: 'rgba(16,185,129,0.18)',
+              border: '1px solid rgba(16,185,129,0.35)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Cpu size={24} style={{ color: '#34d399' }} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>إدارة مفاتيح الذكاء الاصطناعي ومراقبة الكوتا (LLM Multi-API Quota)</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                  background: 'rgba(16,185,129,0.16)', color: '#34d399',
+                }}>
+                  مجاني 100% + تبديل تلقائي
+                </span>
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                أضف عدة مفاتيح API مجانية (Groq / Google Gemini / OpenRouter) ليتم توزيع الشات بوت وتصحيح المقالي وتحليل أخطاء الطلاب عليها تلقائياً مع عرض المتبقي في الكوتا لكل مفتاح.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={loadAiKeys}
+              className="btn btn-secondary btn-sm"
+              disabled={aiLoading}
+            >
+              <RefreshCw size={14} /> تحديث الكوتا
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddKeyForm(v => !v)}
+              className="btn btn-primary btn-sm"
+            >
+              <Plus size={14} /> {showAddKeyForm ? 'إغلاق النموذج' : 'إضافة مفاتيح API جديدة'}
+            </button>
+          </div>
+        </div>
+
+        {/* Summary Quota Bar */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+          gap: 12,
+        }}>
+          <div style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>المفاتيح النشطة / الإجمالي</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#34d399', marginTop: 4 }}>
+              {aiQuotaData?.summary?.activeKeys ?? 0} <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>/ {aiQuotaData?.summary?.totalKeys ?? 0}</span>
+            </div>
+          </div>
+          <div style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>الطلبات المتبقية اليوم (Requests)</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#38bdf8', marginTop: 4 }}>
+              {(aiQuotaData?.summary?.totalRemainingRequests ?? 0).toLocaleString()}{' '}
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
+                / {(aiQuotaData?.summary?.totalRequestLimit ?? 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+          <div style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>التوكنز المتبقية اليوم (Tokens)</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#a5b4fc', marginTop: 4 }}>
+              {(aiQuotaData?.summary?.totalRemainingTokens ?? 0).toLocaleString()}{' '}
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
+                / {(aiQuotaData?.summary?.totalTokenLimit ?? 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+          <div style={{ background: 'rgba(15,23,42,0.75)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>نسبة الكوتا المتبقية الإجمالية</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+              <span style={{ fontSize: 20, fontWeight: 800, color: (aiQuotaData?.summary?.overallRemainingRequestsPercent ?? 0) > 25 ? '#10b981' : '#f59e0b' }}>
+                {aiQuotaData?.summary?.overallRemainingRequestsPercent ?? 0}%
+              </span>
+              <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${aiQuotaData?.summary?.overallRemainingRequestsPercent ?? 0}%`,
+                  background: (aiQuotaData?.summary?.overallRemainingRequestsPercent ?? 0) > 25 ? '#10b981' : '#f59e0b',
+                  borderRadius: 99,
+                }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Add Key Form */}
+        {showAddKeyForm && (
+          <form
+            onSubmit={handleAddKey}
+            style={{
+              background: 'rgba(15,23,42,0.85)',
+              border: '1px solid rgba(99,102,241,0.35)',
+              borderRadius: 12,
+              padding: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>
+              إضافة مفتاح أو مجموعة مفاتيح API مجانية (يدعم إدخال عدة مفاتيح كل مفتاح في سطر مستقل)
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">المزوّد المجاني (Provider)</label>
+                <select
+                  className="form-input"
+                  value={keyForm.provider}
+                  onChange={e => handleProviderChange(e.target.value as 'groq' | 'gemini' | 'openrouter')}
+                  style={{ appearance: 'auto' }}
+                >
+                  <option value="groq">Groq Cloud (Llama 3.3 70B - سريع ومجاني)</option>
+                  <option value="gemini">Google Gemini (Gemini 2.0 Flash - مجاني)</option>
+                  <option value="openrouter">OpenRouter (Free Models)</option>
+                </select>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                  {DEFAULT_PROVIDER_MODELS[keyForm.provider]?.hint}
+                </span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">اسم تعريفي للمفتاح (Label)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="مثال: حساب Groq الأول"
+                  value={keyForm.label}
+                  onChange={e => setKeyForm(prev => ({ ...prev, label: e.target.value }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">اسم الموديل (Model)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={keyForm.model}
+                  onChange={e => setKeyForm(prev => ({ ...prev, model: e.target.value }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">الحد اليومي للطلبات (Requests/Day)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  min={10}
+                  value={keyForm.dailyRequestLimit}
+                  onChange={e => setKeyForm(prev => ({ ...prev, dailyRequestLimit: +e.target.value }))}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">الحد اليومي للتوكنز (Tokens/Day)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  min={1000}
+                  value={keyForm.dailyTokenLimit}
+                  onChange={e => setKeyForm(prev => ({ ...prev, dailyTokenLimit: +e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">
+                مفتاح الـ API (يمكنك لصق مفتاح واحد أو عدة مفاتيح كل مفتاح في سطر جديد)
+              </label>
+              <textarea
+                className="form-input"
+                rows={3}
+                placeholder="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxx&#10;أو AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={keyForm.apiKey}
+                onChange={e => setKeyForm(prev => ({ ...prev, apiKey: e.target.value }))}
+                style={{ fontFamily: 'monospace', fontSize: 12.5 }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" onClick={() => setShowAddKeyForm(false)} className="btn btn-ghost btn-sm">
+                إلغاء
+              </button>
+              <button type="submit" disabled={addingKey} className="btn btn-primary btn-sm">
+                {addingKey ? 'جاري الحفظ...' : 'حفظ وتفعيل المفتاح'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Keys Table / Cards */}
+        {(!aiQuotaData?.keys || aiQuotaData.keys.length === 0) ? (
+          <div style={{
+            padding: '20px',
+            borderRadius: 12,
+            background: 'rgba(245,158,11,0.08)',
+            border: '1px dashed rgba(245,158,11,0.35)',
+            color: '#fbbf24',
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ShieldAlert size={18} />
+              <span>
+                لم تتم إضافة مفاتيح API خارجية بعد (يعمل النظام حالياً بالمحلل الذكي المحلي الاحتياطي). اضغط على <strong>&quot;إضافة مفاتيح API جديدة&quot;</strong> لإضافة مفاتيح Groq أو Gemini المجانية!
+              </span>
+            </div>
+            <button type="button" onClick={() => setShowAddKeyForm(true)} className="btn btn-primary btn-sm">
+              <Plus size={14} /> أضف أول مفتاح مجاني الآن
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {aiQuotaData.keys.map((k: any) => {
+              const reqPct = k.remainingRequestsPercent ?? 0;
+              const tokPct = k.remainingTokensPercent ?? 0;
+              const statusColor =
+                k.status === 'ACTIVE'
+                  ? '#10b981'
+                  : k.status === 'COOLDOWN'
+                    ? '#f59e0b'
+                    : k.status === 'EXHAUSTED'
+                      ? '#ef4444'
+                      : '#94a3b8';
+              const statusLabel =
+                k.status === 'ACTIVE'
+                  ? 'نشط وجاهز'
+                  : k.status === 'COOLDOWN'
+                    ? 'تهدئة مؤقتة (429)'
+                    : k.status === 'EXHAUSTED'
+                      ? 'نفدت كوتا اليوم'
+                      : 'متوقف يدوياً';
+
+              return (
+                <div
+                  key={k.id}
+                  style={{
+                    background: 'rgba(15,23,42,0.8)',
+                    border: `1px solid ${k.status === 'ACTIVE' ? 'rgba(16,185,129,0.28)' : 'var(--border)'}`,
+                    borderRadius: 12,
+                    padding: '14px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <span style={{
+                        padding: '3px 9px', borderRadius: 6, fontSize: 11, fontWeight: 800,
+                        background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55`,
+                      }}>
+                        ● {statusLabel}
+                      </span>
+                      <strong style={{ fontSize: 14, color: '#f8fafc' }}>{k.label}</strong>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        background: 'rgba(99,102,241,0.16)', color: '#a5b4fc', textTransform: 'uppercase',
+                      }}>
+                        {k.provider} · {k.model}
+                      </span>
+                      <code style={{ fontSize: 11.5, color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: 4 }}>
+                        {k.maskedKey}
+                      </code>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleTestKey(k.id)}
+                        disabled={testingKeyId === k.id}
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '4px 10px', fontSize: 11.5 }}
+                        title="اختبار الاتصال بالمفتاح"
+                      >
+                        <Play size={12} /> {testingKeyId === k.id ? 'جاري الاختبار...' : 'اختبار'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleResetQuota(k.id)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '4px 10px', fontSize: 11.5 }}
+                        title="تصفير عداد الكوتا اليومي"
+                      >
+                        <RefreshCw size={12} /> تصفير الكوتا
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleKey(k)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '4px 10px', fontSize: 11.5, color: k.isActive ? '#fbbf24' : '#34d399' }}
+                      >
+                        <Power size={12} /> {k.isActive ? 'إيقاف' : 'تفعيل'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteKey(k.id)}
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '4px 8px', color: '#f87171' }}
+                        title="حذف المفتاح"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quota Progress Bars */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+                    {/* Remaining Requests */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>الطلبات المتبقية اليوم (Requests):</span>
+                        <strong style={{ color: reqPct > 20 ? '#38bdf8' : '#f87171' }}>
+                          {(k.remainingRequests ?? 0).toLocaleString()} متبقي من {(k.dailyRequestLimit ?? 0).toLocaleString()} ({reqPct}%)
+                        </strong>
+                      </div>
+                      <div style={{ height: 7, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${reqPct}%`,
+                          background: reqPct > 20 ? 'linear-gradient(90deg, #0ea5e9, #38bdf8)' : '#ef4444',
+                          borderRadius: 99,
+                        }} />
+                      </div>
+                    </div>
+
+                    {/* Remaining Tokens */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>التوكنز المتبقية اليوم (Tokens):</span>
+                        <strong style={{ color: tokPct > 20 ? '#a5b4fc' : '#f87171' }}>
+                          {(k.remainingTokens ?? 0).toLocaleString()} متبقي من {(k.dailyTokenLimit ?? 0).toLocaleString()} ({tokPct}%)
+                        </strong>
+                      </div>
+                      <div style={{ height: 7, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%',
+                          width: `${tokPct}%`,
+                          background: tokPct > 20 ? 'linear-gradient(90deg, #6366f1, #a855f7)' : '#ef4444',
+                          borderRadius: 99,
+                        }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {k.lastError && (
+                    <div style={{ fontSize: 11, color: '#fca5a5', background: 'rgba(239,68,68,0.1)', padding: '5px 10px', borderRadius: 6 }}>
+                      آخر تنبيه من المزود: {k.lastError}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Charts Row */}

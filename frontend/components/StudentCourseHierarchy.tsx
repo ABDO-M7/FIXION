@@ -59,6 +59,7 @@ export default function StudentCourseHierarchy({
   assignments,
   videos,
   renderAssignment,
+  renderVideoActions,
   onVideoClick,
   onDocumentOpen,
 }: {
@@ -66,6 +67,7 @@ export default function StudentCourseHierarchy({
   assignments: Assignment[];
   videos: VideoItem[];
   renderAssignment: (assignment: Assignment) => React.ReactNode;
+  renderVideoActions?: (video: VideoItem) => React.ReactNode;
   onVideoClick?: (video: VideoItem) => void;
   onDocumentOpen?: (videoId: string, attachmentIndex?: number) => void;
 }) {
@@ -125,6 +127,7 @@ export default function StudentCourseHierarchy({
               items={items}
               enrollmentId={enrollmentId}
               renderAssignment={renderAssignment}
+              renderVideoActions={renderVideoActions}
               onVideoClick={onVideoClick}
               onDocumentOpen={onDocumentOpen}
             />
@@ -236,6 +239,7 @@ function LessonSection({
   items,
   enrollmentId,
   renderAssignment,
+  renderVideoActions,
   onVideoClick,
   onDocumentOpen,
 }: {
@@ -243,6 +247,7 @@ function LessonSection({
   items: Lesson['items'];
   enrollmentId: string;
   renderAssignment: (assignment: Assignment) => React.ReactNode;
+  renderVideoActions?: (video: VideoItem) => React.ReactNode;
   onVideoClick?: (video: VideoItem) => void;
   onDocumentOpen?: (videoId: string, attachmentIndex?: number) => void;
 }) {
@@ -282,6 +287,7 @@ function LessonSection({
             key={`video-${item.value.id}`}
             video={item.value}
             enrollmentId={enrollmentId}
+            renderVideoActions={renderVideoActions}
             onVideoClick={onVideoClick}
             onDocumentOpen={onDocumentOpen}
           />
@@ -298,11 +304,13 @@ function LessonSection({
 function VideoRow({
   video,
   enrollmentId,
+  renderVideoActions,
   onVideoClick,
   onDocumentOpen,
 }: {
   video: VideoItem;
   enrollmentId: string;
+  renderVideoActions?: (video: VideoItem) => React.ReactNode;
   onVideoClick?: (video: VideoItem) => void;
   onDocumentOpen?: (videoId: string, attachmentIndex?: number) => void;
 }) {
@@ -472,7 +480,8 @@ function VideoRow({
 
       {/* Action button */}
       {!video.isLocked && (
-        <div style={{ flexShrink: 0, paddingLeft: 6 }}>
+        <div style={{ flexShrink: 0, paddingLeft: 6, display: 'flex', alignItems: 'center', gap: 8 }} onClick={e => e.stopPropagation()}>
+          {renderVideoActions?.(video)}
           <span style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -484,7 +493,7 @@ function VideoRow({
             background: isDoc ? 'rgba(14,165,233,0.12)' : 'rgba(99,102,241,0.12)',
             color: isDoc ? '#38bdf8' : 'var(--primary-light)',
             border: `1px solid ${isDoc ? 'rgba(14,165,233,0.25)' : 'rgba(99,102,241,0.25)'}`,
-          }}>
+          }} onClick={() => onVideoClick?.(video)}>
             {isDoc ? 'عرض الملف' : 'مشاهدة الحصة'}
             <ChevronRight size={13} />
           </span>

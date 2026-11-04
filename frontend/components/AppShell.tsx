@@ -7,6 +7,7 @@ import {
   Search, Menu, X, Globe, BookOpen, User,
   Users, BarChart2, Key, MessageSquare, GraduationCap, Calendar,
   Activity, ChevronLeft, ChevronRight, Sparkles, SlidersHorizontal,
+  AlertTriangle,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -15,10 +16,13 @@ import toast from 'react-hot-toast';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useTranslation } from '@/hooks/useTranslation';
 import { dashboardPath, isStaffRole } from '@/lib/roles';
+import MistakeReminderPopup from '@/components/MistakeReminderPopup';
+import AIAssistantWidget from '@/components/AIAssistantWidget';
 
 const studentNav = [
   { key: 'nav.dashboard',      href: '/student',                icon: LayoutDashboard },
   { key: 'nav.courses',        href: '/student/courses',        icon: GraduationCap },
+  { key: 'nav.mistakes',       href: '/student/mistakes',       icon: AlertTriangle },
   { key: 'nav.questions',      href: '/student/questions',      icon: HelpCircle },
   { key: 'nav.subscription',   href: '/student/subscription',  icon: Key },
   { key: 'nav.profile',        href: '/student/profile',        icon: User },
@@ -230,6 +234,12 @@ export default function AppShell({ children }: AppShellProps) {
           {children}
         </main>
       </div>
+
+      {/* Random Mistake Reminder Popup for Students */}
+      <MistakeReminderPopup />
+
+      {/* Interactive AI Tutor Chatbot Widget */}
+      <AIAssistantWidget />
     </div>
   );
 }

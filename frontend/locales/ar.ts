@@ -6,6 +6,7 @@ export const ar: Dictionary = {
     questions: 'أسئلتي',
     allQuestions: 'الأسئلة',
     courses: 'الدورات',
+    mistakes: 'بنك أخطائي',
     appointments: 'المواعيد',
     subscription: 'الاشتراك',
     profile: 'الملف الشخصي',

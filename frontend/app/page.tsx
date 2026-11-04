@@ -447,6 +447,70 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Fixion AI Companion & Smart Video Heatmap Showcase */}
+        <section className="lp-section" id="ai-companion" style={{ paddingTop: 12 }}>
+          <div className="lp-container">
+            <div
+              className="lp-reveal"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))',
+                gap: 28,
+                alignItems: 'center',
+                padding: '32px 28px',
+                borderRadius: 28,
+                background: 'linear-gradient(135deg, #0b132b 0%, #1d2d50 55%, #133b5c 100%)',
+                color: '#f8fafc',
+                boxShadow: '0 24px 60px rgba(11, 19, 43, 0.22)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, width: 'fit-content', padding: '6px 14px', borderRadius: 999, background: 'rgba(56, 189, 248, 0.14)', border: '1px solid rgba(56, 189, 248, 0.35)', color: '#7dd3fc', fontSize: 13, fontWeight: 800 }}>
+                  <img src="/brand/fixion-mascot-avatar.png" alt="Fixion AI" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }} />
+                  <span>{lang === 'ar' ? 'رفيق التعلم الذكي Fixion AI + خريطة الفهم الحرارية' : 'Fixion AI Learning Companion & Confusion Heatmap'}</span>
+                </div>
+                <h2 style={{ fontSize: 'clamp(1.55rem, 2.6vw, 2.25rem)', fontWeight: 900, margin: 0, lineHeight: 1.3, color: '#ffffff' }}>
+                  {lang === 'ar'
+                    ? 'مساعد ذكي يشرح لك في أي وقت، ويخبر المدرس بأكثر دقيقة غير مفهومة في الحصة'
+                    : 'An AI companion that explains lessons 24/7 & maps exact video confusion spikes'}
+                </h2>
+                <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.75, color: 'rgba(241, 245, 249, 0.85)' }}>
+                  {lang === 'ar'
+                    ? 'يستطيع الطالب بضغطة زر أثناء مشاهدة الحصة تحديد الدقيقة التي لم يفهمها، ليحصل المدرس والـ Assistant على Heatmap تفاعلية توضح أكثر أجزاء الفيديو صعوبة وأسماء الطلاب الذين يحتاجون متابعة، بجانب تصحيح الأسئلة المقالية وتشخيص نقاط الضعف بالذكاء الاصطناعي.'
+                    : 'Students can mark any timestamp range they did not understand while watching, giving teachers and assistants an interactive Heatmap of confusion spikes alongside AI essay grading and mistake diagnostics.'}
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 4 }}>
+                  <div style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <strong style={{ display: 'block', color: '#38bdf8', fontSize: 14, marginBottom: 4 }}>
+                      {lang === 'ar' ? '🤖 شات بوت وتصحيح مقالي بالـ AI' : '🤖 AI Tutor & Essay Grading'}
+                    </strong>
+                    <span style={{ fontSize: 12.5, color: 'rgba(241,245,249,0.75)' }}>
+                      {lang === 'ar' ? 'شرح فوري وتحليل ذكي لأخطاء كل طالب في الكويزات' : 'Instant step-by-step explanations & mistake analysis'}
+                    </span>
+                  </div>
+                  <div style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <strong style={{ display: 'block', color: '#fbbf24', fontSize: 14, marginBottom: 4 }}>
+                      {lang === 'ar' ? '🔥 Video Confusion Heatmap' : '🔥 Video Confusion Heatmap'}
+                    </strong>
+                    <span style={{ fontSize: 12.5, color: 'rgba(241,245,249,0.75)' }}>
+                      {lang === 'ar' ? 'معرفة أكثر جزئية غير مفهومة في الفيديو ومين الطلاب اللي حددوها' : 'Pinpoint the exact minute students struggled with'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ position: 'relative', borderRadius: 22, overflow: 'hidden', border: '2px solid rgba(56, 189, 248, 0.35)', boxShadow: '0 20px 50px rgba(0, 0, 0, 0.45)' }}>
+                <img
+                  src="/brand/fixion-ai-companion.jpg"
+                  alt="Fixion AI Companion"
+                  style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'cover' }}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Comparison */}
         <section className="lp-section lp-compare" id="compare">
           <div className="lp-container">

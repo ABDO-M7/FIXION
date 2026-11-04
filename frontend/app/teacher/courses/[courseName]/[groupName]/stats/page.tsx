@@ -8,7 +8,7 @@ import { assignmentsApi } from '@/lib/api';
 import {
   ArrowLeft, BookOpen, ClipboardList, Clock3, FileText, Search,
   TrendingUp, Users, Video, ChevronDown, ChevronUp, CheckCircle2,
-  XCircle, Eye, ExternalLink,
+  XCircle, Eye, ExternalLink, ShieldAlert,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -43,6 +43,9 @@ type StudentAssignmentDetail = {
   grade: number | null;
   submittedAt: string | null;
   submissionId: string | null;
+  proctoringViolations?: number;
+  tabSwitches?: number;
+  autoSubmitted?: boolean;
 };
 
 type StudentVideoDetail = {
@@ -74,6 +77,7 @@ type StudentStat = {
   videoProgressPercent: number | null;
   openedDocumentsCount?: number;
   totalDocuments?: number;
+  totalExamViolations?: number;
   lastActivityAt: string | null;
   assignmentGrades: Record<string, number | null>;
   assignmentDetails?: Record<string, StudentAssignmentDetail>;
@@ -462,6 +466,11 @@ function StudentRows({
                 بانتظار التصحيح: {pendingGradingCount}
               </span>
             )}
+            {(student.totalExamViolations ?? 0) > 0 && (
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 6, background: 'rgba(239,68,68,0.18)', color: '#f87171', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <ShieldAlert size={10} /> مخالفات امتحان: {student.totalExamViolations}
+              </span>
+            )}
           </div>
         </td>
         <td style={{ ...tdStyle, color: gradeColor, fontWeight: 700 }}>{percentage(student.averageGradePercent)}</td>
@@ -538,6 +547,11 @@ function StudentRows({
                               <span style={{ color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {assignment.title}
                               </span>
+                              {(detail?.proctoringViolations ?? 0) > 0 && (
+                                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.16)', color: '#f87171', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                  <ShieldAlert size={10} /> {detail?.proctoringViolations} مخالفة خروج
+                                </span>
+                              )}
                             </div>
                             {(assignment.chapterName || assignment.lessonName || detail?.submittedAt) && (
                               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>

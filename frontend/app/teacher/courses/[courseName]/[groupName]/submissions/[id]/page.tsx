@@ -8,7 +8,7 @@ import {
   ArrowLeft, CheckCircle, Clock, Search, Edit3, Award,
   MessageSquare, BookOpen, ClipboardList, Check, X, FileText,
   Download, ExternalLink, HelpCircle, Users, CheckCircle2,
-  AlertCircle, ChevronRight
+  AlertCircle, ChevronRight, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -70,6 +70,7 @@ export default function TeacherSubmissionsPage() {
   // Grade state per student: studentId -> { grade, feedback }
   const [grades, setGrades] = useState<Record<string, { grade: string; feedback: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [aiGradingId, setAiGradingId] = useState<string | null>(null);
 
   // Filters & Search
   const [filter, setFilter] = useState<FilterStatus>('ALL');
@@ -154,6 +155,42 @@ export default function TeacherSubmissionsPage() {
       toast.error('Failed to save grade');
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleAiGrade = async (submissionId: string, studentId: string) => {
+    setAiGradingId(submissionId);
+    try {
+      const res = await assignmentsApi.aiGrade(submissionId);
+      const updatedSub = res.data;
+      toast.success('تم تصحيح الأسئلة المقالية بالذكاء الاصطناعي بنجاح!');
+
+      setGrades(prev => ({
+        ...prev,
+        [studentId]: {
+          grade: updatedSub?.grade !== null && updatedSub?.grade !== undefined ? String(updatedSub.grade) : prev[studentId]?.grade || '',
+          feedback: updatedSub?.feedback || prev[studentId]?.feedback || '',
+        },
+      }));
+
+      setStudentRows(prevRows =>
+        prevRows.map(r => {
+          if (r.student.id === studentId && r.submission) {
+            return {
+              ...r,
+              submission: {
+                ...r.submission,
+                ...updatedSub,
+              },
+            };
+          }
+          return r;
+        }),
+      );
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'فشل تصحيح المقالي بالذكاء الاصطناعي');
+    } finally {
+      setAiGradingId(null);
     }
   };
 
@@ -440,13 +477,29 @@ export default function TeacherSubmissionsPage() {
 
               // Parse quiz answers if quiz
               let parsedAnswers: Record<string, string> = {};
+              let proctoring: any = submission?.proctoring || null;
+              let aiGrades: Record<string, any> = submission?.aiGrades || {};
               if (isQuiz && submission?.content) {
                 try {
-                  parsedAnswers = JSON.parse(submission.content);
+                  const rawParsed = JSON.parse(submission.content);
+                  if (rawParsed && typeof rawParsed === 'object') {
+                    if (rawParsed.__proctoring && !proctoring) {
+                      proctoring = rawParsed.__proctoring;
+                    }
+                    if (rawParsed.__aiGrades && typeof rawParsed.__aiGrades === 'object') {
+                      aiGrades = { ...rawParsed.__aiGrades, ...aiGrades };
+                    }
+                    for (const [k, v] of Object.entries(rawParsed)) {
+                      if (k !== '__proctoring' && k !== '__aiGrades' && typeof v === 'string') {
+                        parsedAnswers[k] = v;
+                      }
+                    }
+                  }
                 } catch {
                   parsedAnswers = {};
                 }
               }
+              const violationCount = Number(proctoring?.totalViolations || 0);
 
               return (
                 <div
@@ -562,6 +615,43 @@ export default function TeacherSubmissionsPage() {
                               <Clock size={13} /> Needs Grading
                             </span>
                           )}
+
+                          {isQuiz && (
+                            violationCount > 0 ? (
+                              <span style={{
+                                background: 'rgba(239,68,68,0.16)',
+                                color: '#f87171',
+                                border: '1px solid rgba(239,68,68,0.4)',
+                                padding: '4px 10px',
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                              }}>
+                                <ShieldAlert size={13} />
+                                {violationCount} مخالفة خروج من الامتحان
+                                {proctoring?.autoSubmitted ? ' (تسليم تلقائي)' : ''}
+                              </span>
+                            ) : (
+                              <span style={{
+                                background: 'rgba(16,185,129,0.12)',
+                                color: '#34d399',
+                                border: '1px solid rgba(16,185,129,0.28)',
+                                padding: '4px 10px',
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                              }}>
+                                <ShieldCheck size={13} />
+                                ملتزم بشاشة الامتحان (0 مخالفات)
+                              </span>
+                            )
+                          )}
                         </>
                       ) : (
                         <span style={{
@@ -665,6 +755,35 @@ export default function TeacherSubmissionsPage() {
                               }}
                             />
 
+                            {isQuiz && questions.some(q => q.type === 'TEXT') && (
+                              <button
+                                type="button"
+                                onClick={() => handleAiGrade(submission.id, student.id)}
+                                disabled={aiGradingId === submission.id}
+                                style={{
+                                  background: 'rgba(139,92,246,0.2)',
+                                  color: '#c4b5fd',
+                                  border: '1px solid rgba(139,92,246,0.45)',
+                                  borderRadius: 8,
+                                  padding: '7px 14px',
+                                  fontSize: 12.5,
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                }}
+                                title="تصحيح جميع الأسئلة المقالية لهذا الطالب تلقائياً بالذكاء الاصطناعي"
+                              >
+                                {aiGradingId === submission.id ? (
+                                  <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
+                                ) : (
+                                  <span>🤖</span>
+                                )}
+                                <span>{aiGradingId === submission.id ? 'جاري التصحيح...' : 'تصحيح المقالي بالـ AI'}</span>
+                              </button>
+                            )}
+
                             <button
                               onClick={() => handleSaveGrade(submission.id, student.id)}
                               disabled={savingId === submission.id}
@@ -698,6 +817,76 @@ export default function TeacherSubmissionsPage() {
                         {/* QUIZ STUDENT ANSWERS: ALWAYS VISIBLE ALL THE TIME (BEFORE & AFTER GRADING) */}
                         {isQuiz && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {/* Proctoring / Anti-Cheat Report Card */}
+                            {proctoring && violationCount > 0 && (
+                              <div style={{
+                                background: 'rgba(239,68,68,0.08)',
+                                border: '1px solid rgba(239,68,68,0.35)',
+                                borderRadius: 12,
+                                padding: '14px 16px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 10,
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#f87171', fontWeight: 700, fontSize: 13.5 }}>
+                                    <ShieldAlert size={17} />
+                                    <span>تقرير مراقبة الامتحان — تم رصد {violationCount} مخالفة أمنية للطالب أثناء الحل</span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11.5 }}>
+                                    {proctoring.tabSwitches > 0 && (
+                                      <span style={{ background: 'rgba(239,68,68,0.18)', color: '#fca5a5', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                                        تبديل التاب: {proctoring.tabSwitches}
+                                      </span>
+                                    )}
+                                    {proctoring.windowBlurs > 0 && (
+                                      <span style={{ background: 'rgba(245,158,11,0.18)', color: '#fcd34d', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                                        الخروج من النافذة: {proctoring.windowBlurs}
+                                      </span>
+                                    )}
+                                    {proctoring.windowResizes > 0 && (
+                                      <span style={{ background: 'rgba(245,158,11,0.18)', color: '#fcd34d', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                                        تصغير النافذة: {proctoring.windowResizes}
+                                      </span>
+                                    )}
+                                    {proctoring.fullscreenExits > 0 && (
+                                      <span style={{ background: 'rgba(99,102,241,0.2)', color: '#c7d2fe', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                                        إلغاء ملء الشاشة: {proctoring.fullscreenExits}
+                                      </span>
+                                    )}
+                                    {proctoring.copyAttempts > 0 && (
+                                      <span style={{ background: 'rgba(239,68,68,0.18)', color: '#fca5a5', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>
+                                        محاولات نسخ/اختصارات: {proctoring.copyAttempts}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {Array.isArray(proctoring.events) && proctoring.events.length > 0 && (
+                                  <div style={{
+                                    maxHeight: 150,
+                                    overflowY: 'auto',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 5,
+                                    background: '#090d16',
+                                    border: '1px solid rgba(239,68,68,0.25)',
+                                    borderRadius: 8,
+                                    padding: '8px 12px',
+                                  }}>
+                                    {proctoring.events.map((ev: any, idx: number) => (
+                                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 12, color: '#e2e8f0' }}>
+                                        <span>• {ev.detail || ev.type}</span>
+                                        <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>
+                                          {ev.timestamp ? format(new Date(ev.timestamp), 'HH:mm:ss') : ''}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
                             <div style={{
                               display: 'flex',
                               alignItems: 'center',
@@ -897,24 +1086,48 @@ export default function TeacherSubmissionsPage() {
 
                                     {/* Text Question Answer Box */}
                                     {!isMCQ && (
-                                      <div style={{ marginTop: 10 }}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#818cf8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                          Student Answer:
+                                      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                        <div>
+                                          <div style={{ fontSize: 11, fontWeight: 700, color: '#818cf8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            Student Answer:
+                                          </div>
+                                          <div style={{
+                                            background: '#090d16',
+                                            border: '1px solid #1e293b',
+                                            borderRadius: 8,
+                                            padding: '12px 14px',
+                                            fontSize: 13,
+                                            color: studentAns ? '#f8fafc' : '#64748b',
+                                            whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-word',
+                                            lineHeight: 1.6,
+                                            fontStyle: studentAns ? 'normal' : 'italic',
+                                          }}>
+                                            {studentAns || 'No answer submitted by student.'}
+                                          </div>
                                         </div>
-                                        <div style={{
-                                          background: '#090d16',
-                                          border: '1px solid #1e293b',
-                                          borderRadius: 8,
-                                          padding: '12px 14px',
-                                          fontSize: 13,
-                                          color: studentAns ? '#f8fafc' : '#64748b',
-                                          whiteSpace: 'pre-wrap',
-                                          wordBreak: 'break-word',
-                                          lineHeight: 1.6,
-                                          fontStyle: studentAns ? 'normal' : 'italic',
-                                        }}>
-                                          {studentAns || 'No answer submitted by student.'}
-                                        </div>
+
+                                        {aiGrades[q.id] && (
+                                          <div style={{
+                                            background: 'rgba(16,185,129,0.08)',
+                                            border: '1px solid rgba(16,185,129,0.35)',
+                                            borderRadius: 8,
+                                            padding: '10px 14px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: 4,
+                                          }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, fontWeight: 800, color: '#34d399' }}>
+                                              <span>🤖 تصحيح الذكاء الاصطناعي (AI Essay Evaluation)</span>
+                                              <span>{aiGrades[q.id].score} / {aiGrades[q.id].maxPoints} pts</span>
+                                            </div>
+                                            {aiGrades[q.id].feedback && (
+                                              <div style={{ fontSize: 12.5, color: '#d1fae5', lineHeight: 1.5 }}>
+                                                {aiGrades[q.id].feedback}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                   </div>

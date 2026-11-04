@@ -5,7 +5,7 @@ import {
   BookOpen, Video as VideoIcon, ClipboardList, Plus, Trash2, Edit3,
   ArrowUp, ArrowDown, ExternalLink, Sparkles, CheckCircle2,
   Lock, Unlock, Clock, FileText, ChevronDown, ChevronRight, X, AlertCircle,
-  Paperclip, FileUp, Link2, Loader2, Download
+  Paperclip, FileUp, Link2, Loader2, Download, BarChart2
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -667,6 +667,26 @@ function WorkflowItemRow({
         </button>
 
         {/* Specialized Builders */}
+        {isVideo && !isDoc && (
+          <Link
+            href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/video-analytics/${item.id}`}
+            className="btn btn-ghost btn-sm"
+            style={{
+              fontSize: 11,
+              padding: '4px 9px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              background: 'rgba(245,158,11,.14)',
+              color: '#fbbf24',
+              border: '1px solid rgba(245,158,11,.3)',
+              fontWeight: 700,
+            }}
+            title="عرض إحصائيات الفيديو وخريطة الفهم الحرارية (Heatmap)"
+          >
+            <BarChart2 size={12} /> إحصائيات الحصة والـ Heatmap
+          </Link>
+        )}
         {isQuiz && (
           <Link
             href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/quiz/${item.id}`}

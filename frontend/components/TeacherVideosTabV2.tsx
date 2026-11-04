@@ -1,6 +1,7 @@
 'use client';
 
-import { ListChecks, Plus, Trash2, Video, X } from 'lucide-react';
+import { BarChart2, ListChecks, Plus, Trash2, Video, X } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { videosApi } from '@/lib/api';
@@ -74,7 +75,14 @@ export default function TeacherVideosTabV2({ courseName, groupName, prerequisite
           {videos.map(video => (
             <div key={video.id}>
               <InteractiveCourseVideoPlayer video={video} preview />
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                <Link
+                  href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/video-analytics/${video.id}`}
+                  className="btn btn-secondary btn-sm"
+                  style={{ background: 'rgba(245,158,11,.15)', color: '#fbbf24', borderColor: 'rgba(245,158,11,.35)', fontWeight: 700 }}
+                >
+                  <BarChart2 size={13} /> إحصائيات الحصة والـ Heatmap
+                </Link>
                 <button className="btn btn-secondary btn-sm" onClick={() => setEditingVideoId(video.id)}><ListChecks size={13} /> Questions</button>
                 <button className="btn btn-danger btn-sm" onClick={() => remove(video.id)}><Trash2 size={13} /> Delete</button>
               </div>

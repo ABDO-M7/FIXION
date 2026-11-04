@@ -1,29 +1,59 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Sparkles, X, HelpCircle, GraduationCap,
+  Sparkles, X, Send, Bot, User, GraduationCap, AlertTriangle, Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store';
+import { aiApi } from '@/lib/api';
 
-const BlueBuddyModel = dynamic(() => import('./BlueBuddyModel'), { ssr: false });
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 interface AIAssistantWidgetProps {
   initialGreeting?: string;
   defaultOpen?: boolean;
 }
 
+const QUICK_PROMPTS = [
+  'اشرح لي فكرة علمية أو مسألة خطوة بخطوة',
+  'كيف أراجع أخطائي قبل الامتحان بفعالية؟',
+  'لخّص لي أهم القوانين والمفاهيم',
+];
+
 export default function AIAssistantWidget({
   initialGreeting,
   defaultOpen = false,
 }: AIAssistantWidgetProps) {
   const { user } = useAuthStore();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [showSpeechBubble, setShowSpeechBubble] = useState(true);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
 
-  // Periodic speech bubble prompt
+  const studentName = user?.name ? user.name.split(' ')[0] : 'يا بطل';
+  const greeting =
+    initialGreeting ||
+    `مرحباً ${studentName}! أنا المساعد الذكي  اسألني في أي درس أو مسألة وسأشرحها لك فوراً.`;
+
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      role: 'assistant',
+      content: greeting,
+    },
+  ]);
+
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isOpen]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSpeechBubble(true);
@@ -31,7 +61,7 @@ export default function AIAssistantWidget({
 
     const hideTimer = setTimeout(() => {
       if (!isOpen) setShowSpeechBubble(false);
-    }, 12000);
+    }, 10000);
 
     return () => {
       clearTimeout(timer);
@@ -39,54 +69,91 @@ export default function AIAssistantWidget({
     };
   }, [isOpen]);
 
-  const studentName = user?.name ? user.name.split(' ')[0] : 'يا بطل';
-  const greeting = initialGreeting || `مرحباً ${studentName}! أنا مرشدك الذكي 🤖 جاهز لمساعدتك في أي وقت.`;
+  // Hide completely during active student quiz attempts so proctoring is undisturbed
+  if (!user || (pathname && pathname.includes('/student/') && pathname.includes('/quiz/'))) {
+    return null;
+  }
+
+  const sendMessage = async (textToSend?: string) => {
+    const trimmed = (textToSend ?? input).trim();
+    if (!trimmed || sending) return;
+
+    const updatedMessages: ChatMessage[] = [
+      ...messages,
+      { role: 'user', content: trimmed },
+    ];
+    setMessages(updatedMessages);
+    if (!textToSend) setInput('');
+    setSending(true);
+
+    try {
+      const res = await aiApi.chat(updatedMessages, pathname || undefined);
+      const reply =
+        res.data?.reply ||
+        'عذراً، لم أتمكن من توليد الرد حالياً. حاول مرة أخرى.';
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        'تعذر الاتصال بالمساعد الذكي حالياً. يرجى التأكد من تفعيل مفتاح الـ API من لوحة التحكم.';
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${msg}` }]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
   return (
     <div
       style={{
         position: 'fixed',
-        bottom: 24,
-        right: 24,
-        zIndex: 9999,
+        bottom: 22,
+        right: 22,
+        zIndex: 9990,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'flex-end',
         pointerEvents: 'none',
       }}
     >
-      {/* Speech Bubble / Mini Prompt (when collapsed) */}
+      {/* Speech Bubble Prompt (when collapsed) */}
       {!isOpen && showSpeechBubble && (
         <div
           style={{
             pointerEvents: 'auto',
-            background: 'rgba(11, 30, 59, 0.94)',
+            background: 'rgba(15, 23, 42, 0.96)',
             backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(0, 209, 255, 0.4)',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 209, 255, 0.3)',
+            border: '1px solid rgba(99, 102, 241, 0.45)',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.6)',
             borderRadius: '16px 16px 4px 16px',
             padding: '10px 14px',
-            maxWidth: 240,
-            marginBottom: 8,
+            maxWidth: 260,
+            marginBottom: 10,
             fontSize: 12,
             lineHeight: 1.5,
             color: '#f8fafc',
-            position: 'relative',
-            animation: 'fadeInUp 0.3s ease-out',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
             cursor: 'pointer',
           }}
-          onClick={() => {
-            setIsOpen(true);
-          }}
+          onClick={() => setIsOpen(true)}
         >
-          <Sparkles size={16} style={{ color: '#00D1FF', flexShrink: 0 }} />
-          <span>{greeting}</span>
+          <img
+            src="/brand/fixion-mascot-avatar.png"
+            alt="Fixion AI"
+            style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(99,102,241,0.5)' }}
+          />
+          <span>اسأل مساعدك الذكي Fixion في أي درس أو مسألة!</span>
           <button
             type="button"
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
               setShowSpeechBubble(false);
             }}
@@ -104,193 +171,381 @@ export default function AIAssistantWidget({
         </div>
       )}
 
-      {/* Expanded Assistant Card */}
+      {/* Expanded AI Chatbot Window */}
       {isOpen && (
         <div
           style={{
             pointerEvents: 'auto',
-            width: 320,
-            background: 'rgba(11, 30, 59, 0.96)',
+            width: 360,
+            maxWidth: 'calc(100vw - 32px)',
+            height: 500,
+            maxHeight: 'calc(100vh - 120px)',
+            background: 'rgba(15, 23, 42, 0.98)',
             backdropFilter: 'blur(16px)',
-            border: '1px solid rgba(0, 209, 255, 0.35)',
+            border: '1px solid rgba(99, 102, 241, 0.45)',
             borderRadius: 20,
-            boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 209, 255, 0.25)',
-            padding: 16,
+            boxShadow: '0 24px 48px -12px rgba(0, 0, 0, 0.75)',
             marginBottom: 12,
-            animation: 'scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
             display: 'flex',
             flexDirection: 'column',
-            gap: 12,
+            overflow: 'hidden',
           }}
         >
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #00D1FF, #FF4ED8)',
-                  display: 'grid',
-                  placeItems: 'center',
-                }}
-              >
-                <Sparkles size={14} color="#fff" />
-              </div>
-              <div>
-                <strong style={{ fontSize: 13, color: '#f8fafc', display: 'block' }}>Fixion Learning Buddy</strong>
-                <span style={{ fontSize: 10, color: '#00D1FF' }}>متصل وتفاعلي 3D 🟢</span>
-              </div>
-            </div>
-            <button
-              className="icon-btn"
-              onClick={() => setIsOpen(false)}
-              style={{ color: '#94a3b8', padding: 4 }}
-            >
-              <X size={16} />
-            </button>
-          </div>
-
-          {/* 3D Showcase Window inside Expanded Card */}
           <div
             style={{
-              height: 195,
-              width: '100%',
-              borderRadius: 14,
-              background: 'radial-gradient(circle at 50% 60%, rgba(0, 209, 255, 0.16) 0%, rgba(11, 30, 59, 0.6) 70%)',
-              border: '1px solid rgba(0, 209, 255, 0.18)',
-              overflow: 'hidden',
-              position: 'relative',
+              padding: '12px 16px',
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.22), rgba(16,185,129,0.12))',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
           >
-            <BlueBuddyModel
-              compact
-              interactive={true}
-              enableTracking={true}
-              enableFloating={true}
-              loadingLabel="جاري تحميل المجسم"
-              errorLabel="تعذر تحميل المجسم ثلاثي الأبعاد."
-              accessibleLabel="رفيق FIXION ثلاثي الأبعاد"
-            />
-            <span
-              style={{
-                position: 'absolute',
-                bottom: 8,
-                left: 10,
-                fontSize: 10,
-                color: 'rgba(255,255,255,0.6)',
-                pointerEvents: 'none',
-              }}
-            >
-              اضغط للقفز والترحيب! 🚀
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <img
+                src="/brand/fixion-mascot-avatar.png"
+                alt="Fixion Mascot"
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  objectFit: 'cover',
+                  border: '2px solid rgba(99,102,241,0.55)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+                }}
+              />
+              <div>
+                <strong style={{ fontSize: 13.5, color: '#f8fafc', display: 'block' }}>
+                  المعلم الذكي (Fixion AI Companion)
+                </strong>
+                <span style={{ fontSize: 10.5, color: '#34d399' }}>
+                  ● متصل وجاهز للشرح وحل الأسئلة
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button
+                type="button"
+                className="icon-btn"
+                title="مسح المحادثة"
+                onClick={() =>
+                  setMessages([{ role: 'assistant', content: greeting }])
+                }
+                style={{ color: '#94a3b8', width: 28, height: 28 }}
+              >
+                <Trash2 size={14} />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => setIsOpen(false)}
+                style={{ color: '#94a3b8', width: 28, height: 28 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
 
-          {/* Quick Guidance Actions */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8' }}>
-              اختصارات سريعة للمنصة:
-            </span>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          {/* Messages Container */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
+            {messages.map((m, i) => {
+              const isUser = m.role === 'user';
+              return (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    flexDirection: isUser ? 'row-reverse' : 'row',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                  }}
+                >
+                  {isUser ? (
+                    <div
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        background: 'rgba(99,102,241,0.25)',
+                        color: '#a5b4fc',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <User size={13} />
+                    </div>
+                  ) : (
+                    <img
+                      src="/brand/fixion-mascot-avatar.png"
+                      alt="Fixion AI"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        objectFit: 'cover',
+                        border: '1px solid rgba(99,102,241,0.45)',
+                      }}
+                    />
+                  )}
+                  <div
+                    style={{
+                      maxWidth: '80%',
+                      padding: '9px 12px',
+                      borderRadius: isUser
+                        ? '14px 4px 14px 14px'
+                        : '4px 14px 14px 14px',
+                      background: isUser
+                        ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
+                        : 'rgba(30, 41, 59, 0.9)',
+                      border: isUser
+                        ? 'none'
+                        : '1px solid rgba(255, 255, 255, 0.08)',
+                      color: '#f8fafc',
+                      fontSize: 12.5,
+                      lineHeight: 1.6,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {m.content}
+                  </div>
+                </div>
+              );
+            })}
+
+            {sending && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: '50%',
+                    background: 'rgba(16,185,129,0.2)',
+                    color: '#34d399',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Bot size={14} />
+                </div>
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 12,
+                    background: 'rgba(30, 41, 59, 0.9)',
+                    color: '#94a3b8',
+                    fontSize: 12,
+                  }}
+                >
+                  جاري التفكير وكتابة الشرح...
+                </div>
+              </div>
+            )}
+
+            {/* Quick Starter Prompts when only initial greeting exists */}
+            {messages.length === 1 && !sending && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>
+                  جرّب أن تسألني:
+                </span>
+                {QUICK_PROMPTS.map((qp, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => sendMessage(qp)}
+                    style={{
+                      textAlign: 'right',
+                      padding: '7px 10px',
+                      borderRadius: 10,
+                      background: 'rgba(99,102,241,0.1)',
+                      border: '1px solid rgba(99,102,241,0.28)',
+                      color: '#c7d2fe',
+                      fontSize: 11.5,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ✨ {qp}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Quick Shortcuts Footer for Students */}
+          {user.role === 'student' && (
+            <div
+              style={{
+                padding: '6px 12px',
+                borderTop: '1px solid rgba(255,255,255,0.06)',
+                display: 'flex',
+                gap: 6,
+                background: 'rgba(15,23,42,0.7)',
+              }}
+            >
+              <Link
+                href="/student/mistakes"
+                onClick={() => setIsOpen(false)}
+                style={{
+                  flex: 1,
+                  padding: '5px 8px',
+                  borderRadius: 8,
+                  background: 'rgba(245,158,11,0.12)',
+                  border: '1px solid rgba(245,158,11,0.3)',
+                  color: '#fbbf24',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 5,
+                }}
+              >
+                <AlertTriangle size={12} /> بنك أخطائي وتحليل الـ AI
+              </Link>
               <Link
                 href="/student/courses"
                 onClick={() => setIsOpen(false)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: 10,
-                  padding: '8px 10px',
+                  flex: 1,
+                  padding: '5px 8px',
+                  borderRadius: 8,
+                  background: 'rgba(99,102,241,0.12)',
+                  border: '1px solid rgba(99,102,241,0.3)',
+                  color: '#a5b4fc',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textDecoration: 'none',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 8,
-                  fontSize: 11,
-                  color: '#f8fafc',
-                  textDecoration: 'none',
-                  transition: 'background 0.2s',
+                  justifyContent: 'center',
+                  gap: 5,
                 }}
               >
-                <GraduationCap size={15} style={{ color: '#00D1FF' }} />
-                <span>كورساتي</span>
-              </Link>
-
-              <Link
-                href="/student/questions"
-                onClick={() => setIsOpen(false)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: 10,
-                  padding: '8px 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 11,
-                  color: '#f8fafc',
-                  textDecoration: 'none',
-                }}
-              >
-                <HelpCircle size={15} style={{ color: '#FF4ED8' }} />
-                <span>بنك الأسئلة</span>
+                <GraduationCap size={12} /> كورساتي
               </Link>
             </div>
+          )}
+
+          {/* Input Box */}
+          <div
+            style={{
+              padding: '10px 12px',
+              borderTop: '1px solid rgba(255,255,255,0.08)',
+              background: '#090d16',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <textarea
+              rows={1}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="اكتب سؤالك هنا... (اضغط Enter للإرسال)"
+              style={{
+                flex: 1,
+                background: '#131d33',
+                border: '1px solid #233454',
+                borderRadius: 10,
+                padding: '8px 10px',
+                fontSize: 12.5,
+                color: '#f8fafc',
+                resize: 'none',
+                outline: 'none',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => sendMessage()}
+              disabled={sending || !input.trim()}
+              className="btn btn-primary btn-sm"
+              style={{
+                height: 36,
+                width: 36,
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 10,
+                flexShrink: 0,
+              }}
+            >
+              <Send size={15} />
+            </button>
           </div>
         </div>
       )}
 
-      {/* Floating 3D Robot Trigger Avatar (in Corner) */}
-      <div
+      {/* Floating Trigger Button */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(v => !v)}
         style={{
           pointerEvents: 'auto',
-          width: 90,
-          height: 90,
+          width: 62,
+          height: 62,
           borderRadius: '50%',
-          background: 'radial-gradient(circle at 40% 40%, rgba(0, 209, 255, 0.35) 0%, rgba(11, 30, 59, 0.96) 75%)',
-          border: '2px solid rgba(0, 209, 255, 0.55)',
-          boxShadow: '0 8px 30px rgba(0, 209, 255, 0.45), 0 0 18px rgba(255, 78, 216, 0.35)',
+          background: 'linear-gradient(135deg, #1e1b4b, #312e81)',
+          border: '2px solid rgba(99, 102, 241, 0.7)',
+          boxShadow: '0 10px 28px rgba(99, 102, 241, 0.55)',
+          color: '#fff',
           cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           position: 'relative',
-          transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s',
+          padding: 0,
+          overflow: 'visible',
+          transition: 'transform 0.2s ease',
         }}
-        onClick={() => {
-          setIsOpen(!isOpen);
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.1)';
-          e.currentTarget.style.boxShadow = '0 12px 35px rgba(0, 209, 255, 0.65), 0 0 25px rgba(255, 78, 216, 0.5)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 8px 30px rgba(0, 209, 255, 0.45), 0 0 18px rgba(255, 78, 216, 0.35)';
-        }}
-        title="Fixion Learning Buddy — اضغط للفتح!"
+        title="فتح الشات بوت الذكي (Fixion AI Companion)"
       >
-        <div style={{ width: '100%', height: '100%', overflow: 'hidden', borderRadius: '50%' }}>
-          <BlueBuddyModel
-            compact
-            focus="head"
-            interactive={false}
-            loadingLabel="جاري التحميل"
-            errorLabel="تعذر التحميل"
-            accessibleLabel="رفيق FIXION ثلاثي الأبعاد"
+        {isOpen ? (
+          <X size={24} />
+        ) : (
+          <img
+            src="/brand/fixion-mascot-avatar.png"
+            alt="Fixion AI Companion"
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '50%',
+              objectFit: 'cover',
+            }}
           />
-        </div>
-
-        {/* Online Indicator Badge */}
+        )}
         <span
           style={{
             position: 'absolute',
-            bottom: 4,
-            right: 4,
-            width: 14,
-            height: 14,
+            bottom: 2,
+            right: 2,
+            width: 13,
+            height: 13,
             borderRadius: '50%',
             background: '#10b981',
             border: '2px solid #0f172a',
-            boxShadow: '0 0 8px #10b981',
           }}
         />
-      </div>
+      </button>
     </div>
   );
 }

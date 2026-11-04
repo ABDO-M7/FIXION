@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Assignment, AssignmentType } from './entities/assignment.entity';
@@ -27,6 +27,62 @@ import {
 import { Question } from '../questions/entities/question.entity';
 import { RedisCacheService } from '../../common/cache/redis-cache.service';
 import { courseContentVersionKey, studentCourseCacheKey, studentCourseVersionKey } from '../../common/cache/course-cache-keys';
+import { AiService } from '../ai/ai.service';
+
+export interface QuizViolationEvent {
+  type: 'TAB_SWITCH' | 'WINDOW_BLUR' | 'WINDOW_RESIZE' | 'FULLSCREEN_EXIT' | 'COPY_ATTEMPT' | 'DEVTOOLS_ATTEMPT' | string;
+  timestamp: string;
+  detail?: string;
+}
+
+export interface QuizProctoringReport {
+  totalViolations: number;
+  tabSwitches: number;
+  windowBlurs: number;
+  windowResizes: number;
+  fullscreenExits: number;
+  copyAttempts: number;
+  autoSubmitted: boolean;
+  startedAt?: string | null;
+  submittedAt?: string | null;
+  events: QuizViolationEvent[];
+}
+
+export interface AiQuestionGrade {
+  score: number;
+  maxPoints: number;
+  feedback: string;
+  gradedByAi: boolean;
+  provider?: string;
+}
+
+export interface StudentMistakeItem {
+  id: string;
+  sourceType: 'QUIZ' | 'VIDEO_CHECKPOINT';
+  courseName: string;
+  groupName: string;
+  enrollmentId: string | null;
+  sourceId: string;
+  sourceTitle: string;
+  chapterName: string | null;
+  lessonName: string | null;
+  questionId: string;
+  questionText: string;
+  questionImageUrl: string | null;
+  questionType: string;
+  options: Array<{ id: string; text: string; imageUrl?: string }>;
+  studentAnswer: string | null;
+  studentAnswerText: string | null;
+  studentAnswerImageUrl: string | null;
+  correctAnswer: string;
+  correctAnswerText: string;
+  correctAnswerImageUrl: string | null;
+  explanation: string | null;
+  points: number;
+  isUnanswered: boolean;
+  attempts: number;
+  submittedAt: string;
+}
 
 @Injectable()
 export class AssignmentsService {
@@ -56,6 +112,9 @@ export class AssignmentsService {
     @Optional()
     @InjectRepository(VideoResponse)
     private videoResponsesRepo?: Repository<VideoResponse>,
+    @Optional()
+    @Inject(forwardRef(() => AiService))
+    private readonly aiService?: AiService,
   ) {}
 
   private async invalidateCourseContent(courseName: string, groupName: string): Promise<void> {
@@ -796,6 +855,9 @@ export class AssignmentsService {
 
     const studentRows = students.map((student) => {
       const submission = submissionMap.get(student.id);
+      const parsedQuiz = assignment.type === AssignmentType.QUIZ && submission
+        ? this.parseQuizSubmissionContent(submission.content)
+        : null;
       // Merge studentId from submission.student if the enrollment row is missing it
       const mergedStudent = {
         ...student,
@@ -814,6 +876,8 @@ export class AssignmentsService {
               grade: submission.grade ?? null,
               feedback: submission.feedback ?? null,
               submittedAt: submission.submittedAt,
+              proctoring: parsedQuiz?.proctoring ?? null,
+              aiGrades: parsedQuiz?.aiGrades ?? null,
             }
           : null,
       };
@@ -826,6 +890,81 @@ export class AssignmentsService {
       },
       studentRows,
     };
+  }
+
+  private normalizeProctoringReport(raw: any): QuizProctoringReport | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const events: QuizViolationEvent[] = Array.isArray(raw.events)
+      ? raw.events
+          .filter((ev: any) => ev && typeof ev === 'object')
+          .slice(0, 100)
+          .map((ev: any) => ({
+            type: String(ev.type || 'UNKNOWN'),
+            timestamp: String(ev.timestamp || new Date().toISOString()),
+            detail: ev.detail ? String(ev.detail) : undefined,
+          }))
+      : [];
+    const tabSwitches = Math.max(0, Number(raw.tabSwitches) || 0);
+    const windowBlurs = Math.max(0, Number(raw.windowBlurs) || 0);
+    const windowResizes = Math.max(0, Number(raw.windowResizes) || 0);
+    const fullscreenExits = Math.max(0, Number(raw.fullscreenExits) || 0);
+    const copyAttempts = Math.max(0, Number(raw.copyAttempts) || 0);
+    const totalViolations = Math.max(
+      Number(raw.totalViolations) || 0,
+      tabSwitches + windowBlurs + windowResizes + fullscreenExits + copyAttempts,
+      events.length,
+    );
+    return {
+      totalViolations,
+      tabSwitches,
+      windowBlurs,
+      windowResizes,
+      fullscreenExits,
+      copyAttempts,
+      autoSubmitted: Boolean(raw.autoSubmitted),
+      startedAt: raw.startedAt ? String(raw.startedAt) : null,
+      submittedAt: raw.submittedAt ? String(raw.submittedAt) : null,
+      events,
+    };
+  }
+
+  public parseQuizSubmissionContent(content?: string | null): {
+    answers: Record<string, string>;
+    proctoring: QuizProctoringReport | null;
+    aiGrades: Record<string, AiQuestionGrade> | null;
+  } {
+    if (!content) return { answers: {}, proctoring: null, aiGrades: null };
+    try {
+      const parsed = JSON.parse(content);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { answers: {}, proctoring: null, aiGrades: null };
+      }
+      const proctoring = this.normalizeProctoringReport((parsed as any).__proctoring);
+      const aiGrades =
+        (parsed as any).__aiGrades && typeof (parsed as any).__aiGrades === 'object'
+          ? ((parsed as any).__aiGrades as Record<string, AiQuestionGrade>)
+          : null;
+      const answers: Record<string, string> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (k === '__proctoring' || k === '__aiGrades') continue;
+        if (typeof v === 'string') {
+          answers[k] = v;
+        } else if (v !== null && v !== undefined && typeof v !== 'object') {
+          answers[k] = String(v);
+        }
+      }
+      return { answers, proctoring, aiGrades };
+    } catch {
+      return { answers: {}, proctoring: null, aiGrades: null };
+    }
+  }
+
+  public isAiGradingEnabled(q: QuizQuestion): boolean {
+    if (q.type !== 'TEXT') return false;
+    return (
+      Array.isArray(q.options) &&
+      q.options.some((o: any) => o && o.id === '__AI_GRADING__' && String(o.text) === 'true')
+    );
   }
 
   // ─── STUDENT: submit assignment (homework) ────────────────────────────────
@@ -857,11 +996,12 @@ export class AssignmentsService {
     return saved;
   }
 
-  // ─── STUDENT: submit quiz (with auto-grading) ────────────────────────────
+  // ─── STUDENT: submit quiz (with auto-grading & AI essay grading) ──────────
   async submitQuiz(
     assignmentId: string,
     student: User,
     answers: Record<string, string>, // { questionId: answeredOption }
+    proctoring?: Partial<QuizProctoringReport>,
   ) {
     if (!hasPermission(student, 'student_assignments')) throw new ForbiddenException('Assignments are disabled for this account');
     const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
@@ -869,23 +1009,61 @@ export class AssignmentsService {
     if (!assignment.isPublished) throw new ForbiddenException('This quiz is not published');
     await this.assertAssignmentUnlocked(assignmentId, student.id);
 
+    const existing = await this.submissionsRepo.findOne({
+      where: { assignmentId, studentId: student.id },
+    });
+    if (existing) {
+      throw new ConflictException('You have already submitted this quiz.');
+    }
+
     const questions = await this.questionsRepo.find({
       where: { assignmentId },
       order: { orderIndex: 'ASC' },
     });
 
-    // Auto-grade
+    const safeAnswers: Record<string, string> = {};
+    if (answers && typeof answers === 'object') {
+      for (const [k, v] of Object.entries(answers)) {
+        if (k === '__proctoring' || k === '__aiGrades') continue;
+        if (typeof v === 'string') safeAnswers[k] = v;
+      }
+    }
+
+    // Auto-grade (MCQ + AI Essay Grading when enabled)
     let earnedPoints = 0;
     let totalPoints = 0;
-    let hasTextQuestion = false;
+    let hasManualTextQuestion = false;
+    const aiGrades: Record<string, AiQuestionGrade> = {};
 
     for (const q of questions) {
-      if (q.type === 'TEXT') {
-        hasTextQuestion = true;
-      }
       totalPoints += q.points;
-      if (q.correctAnswer && answers[q.id] !== undefined) {
-        const studentAns = answers[q.id].trim().toLowerCase();
+      if (q.type === 'TEXT') {
+        if (this.isAiGradingEnabled(q) && this.aiService) {
+          const aiRes = await this.aiService.gradeEssayQuestion({
+            questionText: q.questionText,
+            modelAnswer: q.correctAnswer,
+            studentAnswer: safeAnswers[q.id],
+            maxPoints: q.points,
+          });
+          if (aiRes.gradedByAi) {
+            earnedPoints += aiRes.score;
+            aiGrades[q.id] = aiRes;
+          } else {
+            hasManualTextQuestion = true;
+          }
+        } else if (q.correctAnswer && safeAnswers[q.id] !== undefined) {
+          const studentAns = safeAnswers[q.id].trim().toLowerCase();
+          const correct = q.correctAnswer.trim().toLowerCase();
+          if (studentAns === correct) {
+            earnedPoints += q.points;
+          } else {
+            hasManualTextQuestion = true;
+          }
+        } else {
+          hasManualTextQuestion = true;
+        }
+      } else if (q.correctAnswer && safeAnswers[q.id] !== undefined) {
+        const studentAns = safeAnswers[q.id].trim().toLowerCase();
         const correct = q.correctAnswer.trim().toLowerCase();
         if (studentAns === correct) earnedPoints += q.points;
       }
@@ -896,20 +1074,22 @@ export class AssignmentsService {
       ? Math.round((earnedPoints / totalPoints) * assignment.maxGrade)
       : 0;
 
-    // If there's a text question, the grade remains pending (null) until teacher manually grades it
-    if (hasTextQuestion) {
+    // If there's an ungraded manual text question, the grade remains pending (null) until teacher manually grades it
+    if (hasManualTextQuestion) {
       grade = null;
     }
 
-    const content = JSON.stringify(answers); // store answers as JSON string
-
-    const existing = await this.submissionsRepo.findOne({
-      where: { assignmentId, studentId: student.id },
-    });
-
-    if (existing) {
-      throw new ConflictException('You have already submitted this quiz.');
-    }
+    const normalizedProctoring = this.normalizeProctoringReport(
+      proctoring ?? (answers as any)?.__proctoring,
+    );
+    const hasAiGrades = Object.keys(aiGrades).length > 0;
+    const contentPayload: Record<string, any> = { ...safeAnswers };
+    if (normalizedProctoring) contentPayload.__proctoring = normalizedProctoring;
+    if (hasAiGrades) contentPayload.__aiGrades = aiGrades;
+    const content =
+      normalizedProctoring || hasAiGrades
+        ? JSON.stringify(contentPayload)
+        : JSON.stringify(safeAnswers);
 
     const saved = await this.submissionsRepo.save(
       this.submissionsRepo.create({ assignmentId, studentId: student.id, content, grade }),
@@ -919,6 +1099,63 @@ export class AssignmentsService {
     return {
       ...saved,
       maxGrade: assignment.maxGrade,
+      proctoring: normalizedProctoring,
+      aiGrades: hasAiGrades ? aiGrades : null,
+    };
+  }
+
+  // ─── TEACHER: AI-grade essay questions in an existing quiz submission ─────
+  async aiGradeSubmission(submissionId: string, actor: User) {
+    const submission = await this.submissionsRepo.findOne({ where: { id: submissionId } });
+    if (!submission) throw new NotFoundException('Submission not found');
+    const assignment = await this.assignmentsRepo.findOne({ where: { id: submission.assignmentId } });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+    const scope = await this.staffScope(actor);
+    if (!canManageOwnedWork(scope, actor, assignment.teacherId)) throw new ForbiddenException();
+    if (!this.aiService) throw new BadRequestException('AI service is not available');
+
+    const questions = await this.questionsRepo.find({
+      where: { assignmentId: assignment.id },
+      order: { orderIndex: 'ASC' },
+    });
+    const parsed = this.parseQuizSubmissionContent(submission.content);
+    const answers = parsed.answers;
+    const aiGrades: Record<string, AiQuestionGrade> = { ...(parsed.aiGrades || {}) };
+
+    let earnedPoints = 0;
+    let totalPoints = 0;
+
+    for (const q of questions) {
+      totalPoints += q.points;
+      if (q.type === 'TEXT') {
+        const aiRes = await this.aiService.gradeEssayQuestion({
+          questionText: q.questionText,
+          modelAnswer: q.correctAnswer,
+          studentAnswer: answers[q.id],
+          maxPoints: q.points,
+        });
+        aiGrades[q.id] = aiRes;
+        earnedPoints += aiRes.score;
+      } else if (q.correctAnswer && answers[q.id] !== undefined) {
+        if (answers[q.id].trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()) {
+          earnedPoints += q.points;
+        }
+      }
+    }
+
+    const grade = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * assignment.maxGrade) : 0;
+    const contentPayload: Record<string, any> = { ...answers };
+    if (parsed.proctoring) contentPayload.__proctoring = parsed.proctoring;
+    if (Object.keys(aiGrades).length > 0) contentPayload.__aiGrades = aiGrades;
+    const content = JSON.stringify(contentPayload);
+
+    await this.submissionsRepo.update(submissionId, { grade, content });
+    await this.invalidateStudentCourse(assignment.courseName, assignment.groupName, submission.studentId);
+    const updated = await this.submissionsRepo.findOne({ where: { id: submissionId } });
+    return {
+      ...updated,
+      proctoring: parsed.proctoring,
+      aiGrades,
     };
   }
 
@@ -1136,6 +1373,9 @@ export class AssignmentsService {
 
       const assignmentDetails = Object.fromEntries(assignments.map(assignment => {
         const sub = submissionByAssignment.get(assignment.id);
+        const parsedProctoring = assignment.type === AssignmentType.QUIZ && sub
+          ? this.parseQuizSubmissionContent(sub.content).proctoring
+          : null;
         return [
           assignment.id,
           {
@@ -1143,9 +1383,17 @@ export class AssignmentsService {
             grade: sub ? (sub.grade ?? null) : null,
             submittedAt: sub?.submittedAt ? new Date(sub.submittedAt).toISOString() : null,
             submissionId: sub?.id ?? null,
+            proctoringViolations: parsedProctoring?.totalViolations ?? 0,
+            tabSwitches: parsedProctoring?.tabSwitches ?? 0,
+            autoSubmitted: Boolean(parsedProctoring?.autoSubmitted),
+            proctoring: parsedProctoring,
           },
         ];
       }));
+      const totalExamViolations = Object.values(assignmentDetails).reduce(
+        (sum, d) => sum + (d.proctoringViolations || 0),
+        0,
+      );
 
       const activityDates = [
         ...studentSubmissions.map(submission => submission.submittedAt),
@@ -1167,6 +1415,7 @@ export class AssignmentsService {
         openedDocumentsCount,
         totalDocuments: documents.length,
         documentOpens,
+        totalExamViolations,
         lastActivityAt: activityDates.length
           ? new Date(Math.max(...activityDates.map(date => new Date(date).getTime()))).toISOString()
           : null,
@@ -1369,7 +1618,187 @@ export class AssignmentsService {
     const submission = await this.submissionsRepo.findOne({ where: { assignmentId, studentId } });
     if (!submission) return null;
     const assignment = await this.assignmentsRepo.findOne({ where: { id: assignmentId } });
-    return { ...submission, maxGrade: assignment?.maxGrade ?? 100 };
+    const parsedQuiz = assignment?.type === AssignmentType.QUIZ
+      ? this.parseQuizSubmissionContent(submission.content)
+      : null;
+    return {
+      ...submission,
+      maxGrade: assignment?.maxGrade ?? 100,
+      proctoring: parsedQuiz?.proctoring ?? null,
+      aiGrades: parsedQuiz?.aiGrades ?? null,
+    };
+  }
+
+  // ─── STUDENT: get all mistakes made in quizzes & video checkpoints ────────
+  async getStudentMistakes(studentId: string): Promise<StudentMistakeItem[]> {
+    const [submissions, enrollments, videoResponses] = await Promise.all([
+      this.submissionsRepo.find({
+        where: { studentId },
+        order: { submittedAt: 'DESC' },
+      }),
+      this.enrollmentsRepo.find({
+        where: { studentId },
+        order: { createdAt: 'DESC' },
+      }),
+      this.videoResponsesRepo?.find
+        ? this.videoResponsesRepo.find({
+            where: { studentId },
+            order: { submittedAt: 'DESC' },
+          })
+        : Promise.resolve([] as VideoResponse[]),
+    ]);
+
+    const enrollmentByCourseGroup = new Map<string, string>();
+    for (const enrollment of enrollments) {
+      const key = `${enrollment.courseName}:::${enrollment.groupName}`;
+      if (!enrollmentByCourseGroup.has(key)) {
+        enrollmentByCourseGroup.set(key, enrollment.id);
+      }
+    }
+
+    const mistakes: StudentMistakeItem[] = [];
+
+    // 1. Quiz mistakes
+    if (submissions.length > 0) {
+      const assignmentIds = [...new Set(submissions.map(s => s.assignmentId))];
+      const assignments = await this.assignmentsRepo.find({
+        where: { id: In(assignmentIds) },
+      });
+      const quizAssignments = assignments.filter(a => a.type === AssignmentType.QUIZ);
+      const quizAssignmentById = new Map(quizAssignments.map(a => [a.id, a]));
+      const quizIds = quizAssignments.map(a => a.id);
+
+      const questions = quizIds.length > 0
+        ? await this.questionsRepo.find({
+            where: { assignmentId: In(quizIds) },
+            order: { orderIndex: 'ASC' },
+          })
+        : [];
+      const questionsByAssignment = new Map<string, QuizQuestion[]>();
+      for (const q of questions) {
+        const list = questionsByAssignment.get(q.assignmentId) || [];
+        list.push(q);
+        questionsByAssignment.set(q.assignmentId, list);
+      }
+
+      for (const sub of submissions) {
+        const assignment = quizAssignmentById.get(sub.assignmentId);
+        if (!assignment) continue;
+        const qs = questionsByAssignment.get(assignment.id) || [];
+        const { answers } = this.parseQuizSubmissionContent(sub.content);
+
+        for (const q of qs) {
+          if (!q.correctAnswer) continue;
+          const rawStudentAns = answers[q.id];
+          const studentAnsTrimmed = typeof rawStudentAns === 'string' ? rawStudentAns.trim() : '';
+          const correctTrimmed = q.correctAnswer.trim();
+
+          const isCorrect =
+            studentAnsTrimmed.length > 0 &&
+            studentAnsTrimmed.toLowerCase() === correctTrimmed.toLowerCase();
+          if (isCorrect) continue;
+
+          const opts = Array.isArray(q.options)
+            ? q.options.filter((o: any) => o && o.id !== '__AI_GRADING__')
+            : [];
+          const studentOpt = studentAnsTrimmed
+            ? opts.find(o => o.id?.trim().toLowerCase() === studentAnsTrimmed.toLowerCase())
+            : undefined;
+          const correctOpt = opts.find(o => o.id?.trim().toLowerCase() === correctTrimmed.toLowerCase());
+
+          mistakes.push({
+            id: `quiz:${sub.id}:${q.id}`,
+            sourceType: 'QUIZ',
+            courseName: assignment.courseName,
+            groupName: assignment.groupName,
+            enrollmentId: enrollmentByCourseGroup.get(`${assignment.courseName}:::${assignment.groupName}`) ?? null,
+            sourceId: assignment.id,
+            sourceTitle: assignment.title,
+            chapterName: assignment.chapterName ?? null,
+            lessonName: assignment.lessonName ?? null,
+            questionId: q.id,
+            questionText: q.questionText,
+            questionImageUrl: q.questionImageUrl ?? null,
+            questionType: q.type,
+            options: opts,
+            studentAnswer: studentAnsTrimmed || null,
+            studentAnswerText: studentOpt?.text || studentAnsTrimmed || null,
+            studentAnswerImageUrl: studentOpt?.imageUrl || null,
+            correctAnswer: correctTrimmed,
+            correctAnswerText: correctOpt?.text || correctTrimmed,
+            correctAnswerImageUrl: correctOpt?.imageUrl || null,
+            explanation: null,
+            points: q.points ?? 1,
+            isUnanswered: !studentAnsTrimmed,
+            attempts: 1,
+            submittedAt: sub.submittedAt ? new Date(sub.submittedAt).toISOString() : new Date().toISOString(),
+          });
+        }
+      }
+    }
+
+    // 2. In-Video Checkpoint mistakes (wrong answer or needed > 1 attempt)
+    const mistakeResponses = videoResponses.filter(r => !r.isCorrect || (r.attempts ?? 0) > 1);
+    if (mistakeResponses.length > 0 && this.checkpointsRepo?.find) {
+      const checkpointIds = [...new Set(mistakeResponses.map(r => r.checkpointId))];
+      const videoIds = [...new Set(mistakeResponses.map(r => r.videoId))];
+      const [checkpoints, videos] = await Promise.all([
+        this.checkpointsRepo.find({ where: { id: In(checkpointIds) } }),
+        this.videosRepo.find({ where: { id: In(videoIds) } }),
+      ]);
+      const checkpointById = new Map(checkpoints.map(cp => [cp.id, cp]));
+      const videoById = new Map(videos.map(v => [v.id, v]));
+
+      for (const resp of mistakeResponses) {
+        const cp = checkpointById.get(resp.checkpointId);
+        const video = videoById.get(resp.videoId);
+        if (!cp || !video || !cp.correctAnswer) continue;
+
+        const opts = Array.isArray(cp.options) ? cp.options : [];
+        const studentAnsTrimmed = resp.answerText ? resp.answerText.trim() : '';
+        const correctTrimmed = cp.correctAnswer.trim();
+        const studentOpt = studentAnsTrimmed
+          ? opts.find(o => o.id?.trim().toLowerCase() === studentAnsTrimmed.toLowerCase())
+          : undefined;
+        const correctOpt = opts.find(o => o.id?.trim().toLowerCase() === correctTrimmed.toLowerCase());
+
+        const currentlyWrong = !resp.isCorrect;
+
+        mistakes.push({
+          id: `checkpoint:${resp.id}`,
+          sourceType: 'VIDEO_CHECKPOINT',
+          courseName: video.courseName,
+          groupName: video.groupName,
+          enrollmentId: enrollmentByCourseGroup.get(`${video.courseName}:::${video.groupName}`) ?? null,
+          sourceId: video.id,
+          sourceTitle: video.title,
+          chapterName: video.chapterName ?? null,
+          lessonName: video.lessonName ?? null,
+          questionId: cp.id,
+          questionText: cp.prompt,
+          questionImageUrl: null,
+          questionType: cp.type,
+          options: opts,
+          studentAnswer: currentlyWrong ? (studentAnsTrimmed || null) : null,
+          studentAnswerText: currentlyWrong
+            ? (studentOpt?.text || studentAnsTrimmed || null)
+            : `أخطأ في المحاولة الأولى (${resp.attempts} محاولات)`,
+          studentAnswerImageUrl: null,
+          correctAnswer: correctTrimmed,
+          correctAnswerText: correctOpt?.text || correctTrimmed,
+          correctAnswerImageUrl: null,
+          explanation: cp.solutionText ?? null,
+          points: 1,
+          isUnanswered: false,
+          attempts: resp.attempts || 1,
+          submittedAt: resp.submittedAt ? new Date(resp.submittedAt).toISOString() : new Date().toISOString(),
+        });
+      }
+    }
+
+    return mistakes.sort(
+      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+    );
   }
 
   private async getStudentCourseEnrollments(

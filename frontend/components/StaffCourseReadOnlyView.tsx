@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, CheckCircle2, ClipboardList, Edit3, Eye, FileText, Play, Send, X } from 'lucide-react';
+import { BarChart2, BookOpen, CheckCircle2, ClipboardList, Edit3, Eye, FileText, Play, Send, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StudentCourseHierarchy from '@/components/StudentCourseHierarchy';
 import InteractiveCourseVideoPlayer, { type InteractiveCourseVideo } from '@/components/InteractiveCourseVideoPlayer';
@@ -164,6 +164,24 @@ export default function StaffCourseReadOnlyView({
         }))}
         videos={videos}
         onVideoClick={setActiveVideo}
+        renderVideoActions={video => {
+          const isDoc = video.provider === 'document' || video.provider === 'pdf';
+          if (isDoc) return null;
+          return (
+            <Link
+              href={`/teacher/courses/${encodeURIComponent(courseName)}/${encodeURIComponent(groupName)}/video-analytics/${video.id}`}
+              className="btn btn-secondary btn-sm"
+              style={{
+                background: 'rgba(245,158,11,.14)',
+                color: '#fbbf24',
+                borderColor: 'rgba(245,158,11,.35)',
+                fontWeight: 700,
+              }}
+            >
+              <BarChart2 size={13} /> إحصائيات الحصة والـ Heatmap
+            </Link>
+          );
+        }}
         renderAssignment={assignment => (
           <ReadOnlyAssignmentCard
             key={assignment.id}
