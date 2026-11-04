@@ -2,28 +2,24 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Sparkles, X, Send, Bot, User, GraduationCap, AlertTriangle, Trash2,
+  Sparkles, X, Send, Bot, User, GraduationCap, AlertTriangle, Trash2, Image as ImageIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store';
 import { aiApi } from '@/lib/api';
+import FormattedChatMessage from './FormattedChatMessage';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  imageUrl?: string;
 }
 
 interface AIAssistantWidgetProps {
   initialGreeting?: string;
   defaultOpen?: boolean;
 }
-
-const QUICK_PROMPTS = [
-  'اشرح لي فكرة علمية أو مسألة خطوة بخطوة',
-  'كيف أراجع أخطائي قبل الامتحان بفعالية؟',
-  'لخّص لي أهم القوانين والمفاهيم',
-];
 
 export default function AIAssistantWidget({
   initialGreeting,
@@ -35,6 +31,9 @@ export default function AIAssistantWidget({
   const [showSpeechBubble, setShowSpeechBubble] = useState(true);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [pendingImageName, setPendingImageName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const studentName = user?.name ? user.name.split(' ')[0] : 'يا بطل';
   const greeting =
@@ -74,16 +73,74 @@ export default function AIAssistantWidget({
     return null;
   }
 
+  const processImageFile = (file: File) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const src = e.target?.result as string;
+      if (!src) return;
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1200;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          setPendingImage(canvas.toDataURL('image/jpeg', 0.85));
+        } else {
+          setPendingImage(src);
+        }
+        setPendingImageName(file.name || 'صورة مرفقة');
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          processImageFile(file);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
+  };
+
   const sendMessage = async (textToSend?: string) => {
     const trimmed = (textToSend ?? input).trim();
-    if (!trimmed || sending) return;
+    const imageToSend = pendingImage;
+    if ((!trimmed && !imageToSend) || sending) return;
 
-    const updatedMessages: ChatMessage[] = [
-      ...messages,
-      { role: 'user', content: trimmed },
-    ];
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: trimmed || (imageToSend ? 'اشرح هذه المسألة أو الصورة المرفقة' : ''),
+      imageUrl: imageToSend || undefined,
+    };
+
+    const updatedMessages: ChatMessage[] = [...messages, userMsg];
     setMessages(updatedMessages);
     if (!textToSend) setInput('');
+    setPendingImage(null);
+    setPendingImageName(null);
     setSending(true);
 
     try {
@@ -308,7 +365,7 @@ export default function AIAssistantWidget({
                   )}
                   <div
                     style={{
-                      maxWidth: '80%',
+                      maxWidth: '85%',
                       padding: '9px 12px',
                       borderRadius: isUser
                         ? '14px 4px 14px 14px'
@@ -322,11 +379,31 @@ export default function AIAssistantWidget({
                       color: '#f8fafc',
                       fontSize: 12.5,
                       lineHeight: 1.6,
-                      whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
                     }}
                   >
-                    {m.content}
+                    {m.imageUrl && (
+                      <div
+                        style={{
+                          marginBottom: 6,
+                          borderRadius: 8,
+                          overflow: 'hidden',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          maxWidth: 220,
+                        }}
+                      >
+                        <img
+                          src={m.imageUrl}
+                          alt="صورة السؤال"
+                          style={{ width: '100%', height: 'auto', display: 'block' }}
+                        />
+                      </div>
+                    )}
+                    {isUser ? (
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                    ) : (
+                      <FormattedChatMessage content={m.content} />
+                    )}
                   </div>
                 </div>
               );
@@ -357,36 +434,8 @@ export default function AIAssistantWidget({
                     fontSize: 12,
                   }}
                 >
-                  جاري التفكير وكتابة الشرح...
+                  جاري التفكير وتحليل السؤال...
                 </div>
-              </div>
-            )}
-
-            {/* Quick Starter Prompts when only initial greeting exists */}
-            {messages.length === 1 && !sending && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
-                <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>
-                  جرّب أن تسألني:
-                </span>
-                {QUICK_PROMPTS.map((qp, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => sendMessage(qp)}
-                    style={{
-                      textAlign: 'right',
-                      padding: '7px 10px',
-                      borderRadius: 10,
-                      background: 'rgba(99,102,241,0.1)',
-                      border: '1px solid rgba(99,102,241,0.28)',
-                      color: '#c7d2fe',
-                      fontSize: 11.5,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {qp}
-                  </button>
-                ))}
               </div>
             )}
 
@@ -449,6 +498,63 @@ export default function AIAssistantWidget({
             </div>
           )}
 
+          {/* Pending Image Preview */}
+          {pendingImage && (
+            <div
+              style={{
+                padding: '6px 12px',
+                background: 'rgba(30, 41, 59, 0.95)',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 8,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <img
+                  src={pendingImage}
+                  alt="Preview"
+                  style={{
+                    width: 34,
+                    height: 34,
+                    objectFit: 'cover',
+                    borderRadius: 6,
+                    border: '1px solid rgba(99,102,241,0.5)',
+                  }}
+                />
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                  {pendingImageName || 'تم إرفاق صورة'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingImage(null);
+                  setPendingImageName(null);
+                }}
+                className="icon-btn"
+                style={{ width: 22, height: 22, color: '#f87171' }}
+                title="إلغاء الصورة"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
+
+          {/* Hidden File Input for Image Upload */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/*"
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) processImageFile(file);
+              e.target.value = '';
+            }}
+            style={{ display: 'none' }}
+          />
+
           {/* Input Box */}
           <div
             style={{
@@ -460,12 +566,27 @@ export default function AIAssistantWidget({
               gap: 8,
             }}
           >
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="icon-btn"
+              title="إرفاق صورة مسألة أو سؤال"
+              style={{
+                color: pendingImage ? '#38bdf8' : '#94a3b8',
+                width: 34,
+                height: 34,
+                flexShrink: 0,
+              }}
+            >
+              <ImageIcon size={17} />
+            </button>
             <textarea
               rows={1}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="اكتب سؤالك هنا... (اضغط Enter للإرسال)"
+              onPaste={handlePaste}
+              placeholder="اكتب سؤالك أو الصق/ارفع صورة مسألة..."
               style={{
                 flex: 1,
                 background: '#131d33',
@@ -481,7 +602,7 @@ export default function AIAssistantWidget({
             <button
               type="button"
               onClick={() => sendMessage()}
-              disabled={sending || !input.trim()}
+              disabled={sending || (!input.trim() && !pendingImage)}
               className="btn btn-primary btn-sm"
               style={{
                 height: 36,

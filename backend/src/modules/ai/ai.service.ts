@@ -13,6 +13,7 @@ import { StudentMistakeItem } from '../assignments/assignments.service';
 export interface ChatMessageDto {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  imageUrl?: string | null;
 }
 
 export interface EssayGradeResult {
@@ -389,6 +390,30 @@ export class AiService implements OnModuleInit {
     }
   }
 
+  private async parseImageToInlineData(
+    imageUrl: string,
+  ): Promise<{ mimeType: string; data: string } | null> {
+    if (!imageUrl) return null;
+    const match = imageUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+    if (match) {
+      return { mimeType: match[1], data: match[2] };
+    }
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      try {
+        const res = await fetch(imageUrl);
+        if (res.ok) {
+          const buf = await res.arrayBuffer();
+          const data = Buffer.from(buf).toString('base64');
+          const mimeType = res.headers.get('content-type') || 'image/jpeg';
+          return { mimeType, data };
+        }
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
   // ── Core Multi-Key Execution Engine with Failover ─────────────────────────
   private async executeWithSpecificKey(
     key: AiApiKey,
@@ -406,12 +431,22 @@ export class AiService implements OnModuleInit {
     try {
       if (provider === 'gemini') {
         const systemMsg = messages.find(m => m.role === 'system')?.content || '';
-        const contents = messages
-          .filter(m => m.role !== 'system')
-          .map(m => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }],
-          }));
+        const nonSystem = messages.filter(m => m.role !== 'system');
+        const contents = await Promise.all(
+          nonSystem.map(async m => {
+            const parts: any[] = [];
+            if (m.content) parts.push({ text: m.content });
+            if (m.imageUrl) {
+              const inline = await this.parseImageToInlineData(m.imageUrl);
+              if (inline) parts.push({ inlineData: inline });
+            }
+            if (parts.length === 0) parts.push({ text: 'اشرح هذه المسألة أو الصورة المرفقة' });
+            return {
+              role: m.role === 'assistant' ? 'model' : 'user',
+              parts,
+            };
+          }),
+        );
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key.apiKey)}`;
         const response = await fetch(url, {
@@ -445,6 +480,19 @@ export class AiService implements OnModuleInit {
             ? 'https://openrouter.ai/api/v1/chat/completions'
             : 'https://api.groq.com/openai/v1/chat/completions';
 
+        const formattedMessages = messages.map(m => {
+          if (!m.imageUrl) {
+            return { role: m.role, content: m.content || ' ' };
+          }
+          return {
+            role: m.role,
+            content: [
+              { type: 'text', text: m.content || 'اشرح هذه المسألة أو الصورة المرفقة بالتفصيل' },
+              { type: 'image_url', image_url: { url: m.imageUrl } },
+            ],
+          };
+        });
+
         const response = await fetch(baseUrl, {
           method: 'POST',
           headers: {
@@ -453,7 +501,7 @@ export class AiService implements OnModuleInit {
           },
           body: JSON.stringify({
             model,
-            messages,
+            messages: formattedMessages,
             temperature,
             max_tokens: maxTokens,
           }),
@@ -548,6 +596,7 @@ export class AiService implements OnModuleInit {
     const freshKeys = await Promise.all(allKeys.map(k => this.ensureDailyQuotaFresh(k)));
 
     const now = Date.now();
+    const hasImage = messages.some(m => Boolean(m.imageUrl));
     // Filter keys that have quota and are not in cooldown, then sort by least used today (load balancing)
     const availableKeys = freshKeys
       .filter(k => {
@@ -557,6 +606,11 @@ export class AiService implements OnModuleInit {
         return true;
       })
       .sort((a, b) => {
+        // If an image is attached, prioritize providers that support vision natively (like Gemini)
+        if (hasImage && a.provider !== b.provider) {
+          if (a.provider === 'gemini') return -1;
+          if (b.provider === 'gemini') return 1;
+        }
         const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
         const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
         return aTime - bTime;
@@ -584,23 +638,52 @@ export class AiService implements OnModuleInit {
     courseContext?: string,
   ) {
     const cleanMessages = (Array.isArray(messages) ? messages : [])
-      .filter(m => m && typeof m.content === 'string' && m.content.trim())
+      .filter(m => m && ((typeof m.content === 'string' && m.content.trim()) || m.imageUrl))
       .slice(-12)
       .map(m => ({
         role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
-        content: m.content.trim().slice(0, 3000),
+        content: (m.content || '').trim().slice(0, 4000),
+        imageUrl: m.imageUrl ? String(m.imageUrl).slice(0, 4_000_000) : undefined,
       }));
 
     if (cleanMessages.length === 0) {
-      throw new BadRequestException('يرجى كتابة رسالتك أولاً');
+      throw new BadRequestException('يرجى كتابة رسالتك أو رفع صورة أولاً');
     }
 
     const systemPrompt = [
-      'أنت المساعد التعليمي الذكي لمنصة Fixion التعليمية.',
+      'أنت المساعد الذكي الرسمي والرفيق التعليمي لمنصة FIXION التعليمية (منصة تعليمية متطورة لطلاب الثانوية والشهادات العامة واللغات في مصر).',
       `تتحدث مع الطالب/المستخدم: ${user?.name || 'الطالب'}${user?.level ? ` (المستوى الدراسي: ${user.level})` : ''}.`,
-      courseContext ? `السياق الدراسي الحالي: ${courseContext}` : '',
-      'اشرح المفاهيم العلمية والرياضية بأسلوب مبسط وواضح ومنظم باللغة العربية (مع دعم المصطلحات الإنجليزية والمعادلات عند الحاجة).',
-      'شجّع الطالب على الفهم خطوة بخطوة، واستخدم نقاطاً واضحة وأمثلة عملية قصيرة.',
+      courseContext ? `السياق الدراسي الحالي للطالب: ${courseContext}` : '',
+      '',
+      'معلومات مهمة جداً عن منصة FIXION وخدماتها يجب أن تعرفها وتساعد الطالب بها إذا سألك عنها:',
+      '1. معلومات التواصل والدعم الفني:',
+      '   - رقم الهاتف وخدمة واتساب الرسمية: 01132804264',
+      '   - البريد الإلكتروني الرسمي للدعم: fixion.eg@gmail.com',
+      '   - إذا واجه الطالب أي مشكلة تقنية أو استفسار عن اشتراك أو كود أو مشكلة في حساب أو دفع، وجّهه للتواصل مباشرة عبر الواتساب على 01132804264.',
+      '',
+      '2. كيفية تفعيل وشحن كود الاشتراك في المنصة (Subscription Codes):',
+      '   - يحصل الطالب على كود الاشتراك (أسبوعي أو شهري) من سنتر المدرس أو عبر الدعم الفني على الواتساب (01132804264).',
+      '   - لتفعيل الكود: يفتح الطالب حسابه، يذهب لصفحة "تفعيل كود" أو "الاشتراكات"، ويكتب الكود المكوّن من أرقام وحروف، ثم يضغط "تفعيل".',
+      '   - يتم فتح محتوى المادة أو الخطة التعليمية فوراً وتفعيل الاشتراك.',
+      '',
+      '3. كيف تعمل الحصص ومشغل الفيديو وأسئلة التوقف (Checkpoints):',
+      '   - أثناء مشاهدة الطالب للحصة، قد تظهر له أسئلة تفاعلية (Checkpoints) توقف الفيديو وتلزم الطالب بالإجابة الصحيحة أو رفع حله لإكمال الحصة وضمان التركيز.',
+      '   - ميزة "مش فاهم الجزئية دي": يوجد زر أسفل الفيديو مخصص للطالب لتحديد أي دقيقة لم يفهمها (مثل من الدقيقة 05:20 إلى 07:10) مع كتابة ملاحظة للمدرس، لتصل للمدرس والـ Assistant في خريطة الفهم الحرارية (Heatmap) لشرحها له.',
+      '',
+      '4. نظام الامتحانات والكويزات وحماية الاختبارات (Proctoring):',
+      '   - الامتحانات مصممة بنظام مراقبة ذكي: يُمنع الطالب من مغادرة صفحة الامتحان أو تصغير النافذة أو فتح تابات أخرى، وأي محاولة ترصد لدى المدرس.',
+      '   - يتم تصحيح الأسئلة المقالية وإعطاء درجات وتغذية راجعة، كما يتم تصحيح الاختياري آلياً فوراً.',
+      '',
+      '5. بنك أخطاء الطالب (Mistakes Bank):',
+      '   - أي سؤال يخطئ فيه الطالب في أي كويز أو امتحان يتم حفظه تلقائياً في صفحته "بنك أخطائي".',
+      '   - يمكن للطالب الدخول على بنك أخطائه لتدريب نفسه عشوائياً، أو الضغط على زر "حلّل أخطائي بالـ AI" لتشخيص نقاط ضعفه والدروس التي تحتاج مراجعة وخطة مذاكرة مخصصة.',
+      '',
+      '6. أسلوبك في الشرح والتنسيق والرد:',
+      '   - اشرح المفاهيم العلمية والرياضية والمسائل بأسلوب واضح ومبسط وخطوة بخطوة باللغة العربية.',
+      '   - إذا رفع الطالب صورة لمسألة أو سؤال أو شاشة من المنصة، اقرأ الصورة بدقة واشرح وحل المسألة خطوة بخطوة واشرح له القانون المستخدم.',
+      '   - نسّق إجاباتك بتنسيق الماركداون الغني: العناوين (###)، والخط العريض (**نص**)، والقوائم النقطية، والجداول المنظمة (| عمود 1 | عمود 2 |) عند المقارنة وتلخيص القوانين.',
+      '   - اكتب المعادلات والرموز الرياضية والفيزيائية بصيغة LaTeX مثل $E = mc^2$ أو المعادلات المعقدة في سطر مستقل بين علامات $$...$$.',
+      '   - لا تستخدم أي رموز تعبيرية (إيموجيز) في إجاباتك.',
     ]
       .filter(Boolean)
       .join('\n');
