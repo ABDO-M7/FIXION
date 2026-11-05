@@ -556,13 +556,21 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
     const scriptId = 'fixion-bunny-playerjs';
     if (provider !== 'bunny') return;
 
+    let playerInstance: any = null;
+    let cancelled = false;
+
     const attach = () => {
-      if (provider === 'bunny') {
-        const playerjs = (window as any).playerjs;
-        if (!playerjs || !iframeRef.current) return;
-        const player = new playerjs.Player(iframeRef.current);
+      if (cancelled || provider !== 'bunny') return;
+      const playerjs = (window as any).playerjs;
+      const iframe = iframeRef.current;
+      if (!playerjs || !iframe || !iframe.contentWindow) return;
+
+      try {
+        const player = new playerjs.Player(iframe);
+        playerInstance = player;
         providerPlayerRef.current = player;
         player.on('ready', () => {
+          if (cancelled) return;
           try {
             player.getDuration?.((d: number) => {
               if (Number.isFinite(Number(d)) && Number(d) > 0) {
@@ -574,6 +582,7 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
           }
         });
         player.on('timeupdate', (payload: any) => {
+          if (cancelled) return;
           let data = payload;
           if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
           const time = Number(data?.seconds ?? data?.currentTime);
@@ -585,26 +594,54 @@ export default function InteractiveCourseVideoPlayer({ video, preview = false }:
             reportProgress(time, dur);
           }
         });
-        player.on('play', () => setPlaying(true));
+        player.on('play', () => { if (!cancelled) setPlaying(true); });
         player.on('pause', () => {
-          setPlaying(false);
-          reportProgress(currentTimeRef.current, durationRef.current, true);
+          if (!cancelled) {
+            setPlaying(false);
+            reportProgress(currentTimeRef.current, durationRef.current, true);
+          }
         });
         player.on('ended', () => {
-          setPlaying(false);
-          reportProgress(durationRef.current || currentTimeRef.current, durationRef.current, true);
+          if (!cancelled) {
+            setPlaying(false);
+            reportProgress(durationRef.current || currentTimeRef.current, durationRef.current, true);
+          }
         });
+      } catch {
+        // ignore attach error
       }
     };
 
     const existing = document.getElementById(scriptId);
-    if (existing) { attach(); return; }
-    const script = document.createElement('script');
-    script.id = scriptId;
-    script.async = true;
-    script.src = 'https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js';
-    script.onload = attach;
-    document.body.appendChild(script);
+    if (existing) {
+      attach();
+    } else {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.async = true;
+      script.src = 'https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js';
+      script.onload = attach;
+      document.body.appendChild(script);
+    }
+
+    return () => {
+      cancelled = true;
+      try {
+        if (playerInstance) {
+          playerInstance.off?.('timeupdate');
+          playerInstance.off?.('play');
+          playerInstance.off?.('pause');
+          playerInstance.off?.('ended');
+          playerInstance.off?.('ready');
+          playerInstance.destroy?.();
+        }
+      } catch {
+        // ignore
+      }
+      if (providerPlayerRef.current === playerInstance) {
+        providerPlayerRef.current = null;
+      }
+    };
   }, [checkForCheckpoint, mediaId, provider, reportProgress, started, video.embedUrl]);
 
   useEffect(() => {
