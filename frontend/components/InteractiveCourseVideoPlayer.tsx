@@ -59,11 +59,23 @@ function providerUrl(video: InteractiveCourseVideo) {
   const id = video.providerVideoId || video.youtubeVideoId || '';
   if (provider === 'vimeo') return 'https://player.vimeo.com/video/' + id + '?api=1&background=1&controls=0&title=0&byline=0&portrait=0&dnt=1';
   if (provider === 'bunny') {
-    let cleanId = id;
-    if (cleanId.includes('iframe.mediadelivery.net/embed/')) {
-      cleanId = cleanId.split('iframe.mediadelivery.net/embed/')[1].split('?')[0];
+    const raw = id.trim();
+    const match = raw.match(/(?:embed|play)\/([0-9]+)\/([a-f0-9-]+)/i)
+      || raw.match(/([0-9]+)\/([a-f0-9-]+)/i);
+    if (match) {
+      const libraryId = match[1];
+      const videoId = match[2];
+      let tokenParam = '';
+      const qIdx = raw.indexOf('?');
+      if (qIdx !== -1) {
+        const sp = new URLSearchParams(raw.slice(qIdx));
+        const t = sp.get('token');
+        const exp = sp.get('expires');
+        if (t && exp) tokenParam = `&token=${encodeURIComponent(t)}&expires=${encodeURIComponent(exp)}`;
+      }
+      return `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?autoplay=false&loop=false&muted=false&preload=true&responsive=true${tokenParam}`;
     }
-    return 'https://iframe.mediadelivery.net/embed/' + cleanId + '?autoplay=false&loop=false&muted=false&preload=true&responsive=true';
+    return 'https://iframe.mediadelivery.net/embed/' + raw + '?autoplay=false&loop=false&muted=false&preload=true&responsive=true';
   }
   const origin = typeof window !== 'undefined' ? '&origin=' + encodeURIComponent(window.location.origin) : '';
   return 'https://www.youtube.com/embed/' + id + '?enablejsapi=1&controls=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&fs=0' + origin;

@@ -1157,27 +1157,34 @@ export class VideosService implements OnModuleInit {
 
   private generateSignedBunnyUrl(providerVideoId: string | null): string | null {
     if (!providerVideoId) return null;
-    let cleanId = providerVideoId.trim();
-    if (cleanId.includes('iframe.mediadelivery.net/embed/')) {
-      cleanId = cleanId.split('iframe.mediadelivery.net/embed/')[1].split('?')[0];
-    }
-    const parts = cleanId.split('/').filter(Boolean);
-    if (parts.length < 2) return `https://iframe.mediadelivery.net/embed/${cleanId}`;
+    const raw = providerVideoId.trim();
 
-    const libraryId = parts[0];
-    const videoId = parts[1];
+    const match = raw.match(/(?:embed|play)\/([0-9]+)\/([a-f0-9-]+)/i)
+      || raw.match(/([0-9]+)\/([a-f0-9-]+)/i);
+    if (!match) return `https://iframe.mediadelivery.net/embed/${raw}`;
+
+    const libraryId = match[1];
+    const videoId = match[2];
     const securityKey = process.env.BUNNY_STREAM_SECURITY_KEY || process.env.BUNNY_SECURITY_KEY;
 
-    if (!securityKey) {
-      return `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?autoplay=false&loop=false&muted=false&preload=true&responsive=true`;
+    if (securityKey) {
+      // Bunny Token Authentication: SHA256(securityKey + videoId + expires)
+      const expires = Math.floor(Date.now() / 1000) + 7200; // valid for 2 hours
+      const hashable = securityKey + videoId + expires;
+      const token = crypto.createHash('sha256').update(hashable).digest('hex');
+      return `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}&autoplay=false&loop=false&muted=false&preload=true&responsive=true`;
     }
 
-    // Bunny Token Authentication: SHA256(securityKey + videoId + expires)
-    const expires = Math.floor(Date.now() / 1000) + 7200; // valid for 2 hours
-    const hashable = securityKey + videoId + expires;
-    const token = crypto.createHash('sha256').update(hashable).digest('hex');
+    let tokenParam = '';
+    const qIdx = raw.indexOf('?');
+    if (qIdx !== -1) {
+      const sp = new URLSearchParams(raw.slice(qIdx));
+      const t = sp.get('token');
+      const exp = sp.get('expires');
+      if (t && exp) tokenParam = `&token=${encodeURIComponent(t)}&expires=${encodeURIComponent(exp)}`;
+    }
 
-    return `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}&autoplay=false&loop=false&muted=false&preload=true&responsive=true`;
+    return `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?autoplay=false&loop=false&muted=false&preload=true&responsive=true${tokenParam}`;
   }
 
   private publicVideo(video: CourseVideo) {
