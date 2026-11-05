@@ -152,13 +152,126 @@ export default function VideoAnalyticsPage() {
     void loadAnalytics();
   }, [loadAnalytics]);
 
-  const buckets: HeatmapBucket[] = data?.confusionAnalytics?.heatmapBuckets || [];
-  const marks: ConfusionMarkDetail[] = data?.confusionAnalytics?.marks || [];
-  const peakSegment = data?.confusionAnalytics?.peakSegment || null;
-  const watchSummary = data?.watchSummary || {};
-  const checkpointAnalytics = data?.checkpointAnalytics || { totalCheckpoints: 0, items: [] };
-  const lessonAssignments: AssignmentAnalyticsItem[] = data?.lessonAssignmentsAnalytics || [];
-  const studentsTable: StudentRow[] = data?.studentsTable || [];
+  const buckets: HeatmapBucket[] = useMemo(() => {
+    const raw = data?.confusionAnalytics?.heatmapBuckets || data?.confusionAnalytics?.timelineBuckets;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((b: any, idx: number) => ({
+      index: typeof b.index === 'number' ? b.index : (b.bucketIndex ?? idx),
+      startSeconds: Number(b.startSeconds) || 0,
+      endSeconds: Number(b.endSeconds) || 0,
+      label: b.label || b.shortLabel || '',
+      rangeLabel: b.rangeLabel || b.timeLabel || '',
+      count: Number(b.count ?? b.confusionCount) || 0,
+      intensity: typeof b.intensity === 'number' ? b.intensity : (b.intensityPercent ? b.intensityPercent / 100 : 0),
+      viewersCount: Number(b.viewersCount ?? b.watchedCount) || 0,
+      retentionPercent: Number(b.retentionPercent) || 0,
+      students: Array.isArray(b.students) ? b.students : [],
+    }));
+  }, [data?.confusionAnalytics]);
+
+  const marks: ConfusionMarkDetail[] = useMemo(() => {
+    const raw = data?.confusionAnalytics?.marks || data?.confusionAnalytics?.allMarks;
+    if (!Array.isArray(raw)) return [];
+    return raw;
+  }, [data?.confusionAnalytics]);
+
+  const peakSegment = useMemo(() => {
+    if (data?.confusionAnalytics?.peakSegment) return data.confusionAnalytics.peakSegment;
+    const pb = data?.confusionAnalytics?.peakBucket;
+    if (pb && pb.confusionCount > 0) {
+      return {
+        label: pb.timeLabel,
+        count: pb.confusionCount,
+        startSeconds: pb.startSeconds,
+        endSeconds: pb.endSeconds,
+      };
+    }
+    return null;
+  }, [data?.confusionAnalytics]);
+
+  const watchSummary = useMemo(() => {
+    const ws = data?.watchSummary || {};
+    return {
+      totalStudents: ws.totalStudents ?? ws.totalEnrolledStudents ?? 0,
+      openedCount: ws.openedCount ?? 0,
+      neverOpenedCount: ws.neverOpenedCount ?? Math.max(0, (ws.totalStudents ?? ws.totalEnrolledStudents ?? 0) - (ws.openedCount ?? 0)),
+      watchedCount: ws.watchedCount ?? ws.watchedAnyCount ?? 0,
+      completedCount: ws.completedCount ?? 0,
+      completionRate: ws.completionRate ?? 0,
+      averageWatchedPercent: ws.averageWatchedPercent ?? ws.averageWatchPercent ?? 0,
+      averageWatchedMinutes: ws.averageWatchedMinutes ?? 0,
+      watchDistribution: Array.isArray(ws.watchDistribution) ? ws.watchDistribution : [],
+    };
+  }, [data?.watchSummary]);
+
+  const checkpointItems = useMemo(() => {
+    const raw = data?.checkpointAnalytics;
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.items)) return raw.items;
+    return [];
+  }, [data?.checkpointAnalytics]);
+
+  const totalCheckpoints = useMemo(() => {
+    if (typeof data?.checkpointAnalytics?.totalCheckpoints === 'number') {
+      return data.checkpointAnalytics.totalCheckpoints;
+    }
+    return checkpointItems.length;
+  }, [data?.checkpointAnalytics, checkpointItems]);
+
+  const lessonAssignments: AssignmentAnalyticsItem[] = useMemo(() => {
+    const raw = data?.lessonAssignmentsAnalytics;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((a: any) => ({
+      id: a.id,
+      title: a.title,
+      type: a.type,
+      chapterName: a.chapterName,
+      lessonName: a.lessonName,
+      isSameLesson: Boolean(a.isSameLesson),
+      maxGrade: a.maxGrade || 100,
+      dueDate: a.dueDate || null,
+      totalStudents: a.totalStudents ?? watchSummary.totalStudents ?? 0,
+      submittedCount: a.submittedCount ?? 0,
+      missingCount: a.missingCount ?? a.notSubmittedCount ?? 0,
+      gradedCount: a.gradedCount ?? 0,
+      submissionRate: a.submissionRate ?? 0,
+      averageScore: a.averageScore ?? a.averageGrade ?? 0,
+      averageScorePercent: a.averageScorePercent ?? a.averagePercent ?? 0,
+      highestScore: a.highestScore ?? a.highestGrade ?? 0,
+      lowestScore: a.lowestScore ?? a.lowestGrade ?? 0,
+      passCount: a.passCount ?? 0,
+      passRate: a.passRate ?? 0,
+    }));
+  }, [data?.lessonAssignmentsAnalytics, watchSummary.totalStudents]);
+
+  const studentsTable: StudentRow[] = useMemo(() => {
+    const raw = data?.studentsTable;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((st: any) => ({
+      studentId: st.studentCode || st.studentId || '',
+      studentName: st.studentName || st.name || 'طالب',
+      studentEmail: st.studentEmail || st.email || '',
+      opened: Boolean(st.opened),
+      watchedSeconds: Number(st.watchedSeconds) || 0,
+      watchedMinutes: Number(st.watchedMinutes) || 0,
+      watchedPercent: Number(st.watchedPercent) || 0,
+      completed: Boolean(st.completed ?? (st.watchedPercent >= 85)),
+      lastUpdatedAt: st.lastUpdatedAt || st.updatedAt || null,
+      checkpointsSolved: Number(st.checkpointsSolved ?? st.completedCheckpoints) || 0,
+      checkpointsTotal: Number(st.checkpointsTotal ?? st.totalCheckpoints) || 0,
+      confusionCount: Number(st.confusionCount ?? st.confusionMarksCount ?? (st.confusionRanges?.length || st.confusionMarks?.length || 0)) || 0,
+      confusionRanges: Array.isArray(st.confusionRanges) ? st.confusionRanges : (Array.isArray(st.confusionMarks) ? st.confusionMarks : []),
+      assignments: Array.isArray(st.assignments) ? st.assignments.map((a: any) => ({
+        assignmentId: a.assignmentId || a.id,
+        title: a.title || '',
+        type: a.type || 'QUIZ',
+        submitted: Boolean(a.submitted),
+        status: a.status || (a.submitted ? 'SUBMITTED' : 'NOT_SUBMITTED'),
+        score: a.score ?? a.grade ?? null,
+        maxGrade: a.maxGrade || 100,
+      })) : [],
+    }));
+  }, [data?.studentsTable]);
 
   const selectedBucket = useMemo(
     () => (selectedBucketIndex !== null ? buckets.find(b => b.index === selectedBucketIndex) || null : null),
@@ -569,13 +682,13 @@ export default function VideoAnalyticsPage() {
               <div className="card" style={{ padding: 20 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 800, margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <CheckCircle2 size={18} style={{ color: '#10b981' }} />
-                  إحصائيات أسئلة التوقف داخل الفيديو (Checkpoints: {checkpointAnalytics.totalCheckpoints})
+                  إحصائيات أسئلة التوقف داخل الفيديو (Checkpoints: {totalCheckpoints})
                 </h2>
-                {checkpointAnalytics.items?.length === 0 ? (
+                {checkpointItems.length === 0 ? (
                   <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>لا توجد أسئلة تفاعلية مضافة داخل هذا الفيديو.</p>
                 ) : (
                   <div style={{ display: 'grid', gap: 10 }}>
-                    {checkpointAnalytics.items.map((cp: any) => (
+                    {checkpointItems.map((cp: any) => (
                       <div
                         key={cp.id}
                         style={{
@@ -588,7 +701,7 @@ export default function VideoAnalyticsPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
                           <strong style={{ fontSize: 13 }}>{cp.prompt}</strong>
                           <span className="badge" style={{ background: 'rgba(56,189,248,.15)', color: '#38bdf8', fontSize: 11 }}>
-                            الدقيقة {cp.timestampLabel}
+                            الدقيقة {cp.timestampLabel || cp.timeLabel}
                           </span>
                         </div>
                         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -778,11 +891,11 @@ export default function VideoAnalyticsPage() {
                           {st.checkpointsTotal > 0 ? `${st.checkpointsSolved} / ${st.checkpointsTotal}` : '—'}
                         </td>
                         <td style={{ padding: '12px 8px', maxWidth: 280 }}>
-                          {st.confusionRanges.length === 0 ? (
+                          {(st.confusionRanges || []).length === 0 ? (
                             <span style={{ color: 'var(--text-secondary)' }}>—</span>
                           ) : (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                              {st.confusionRanges.map(r => (
+                              {(st.confusionRanges || []).map(r => (
                                 <span
                                   key={r.id}
                                   title={r.note || ''}
@@ -803,7 +916,7 @@ export default function VideoAnalyticsPage() {
                         </td>
                         <td style={{ padding: '12px 8px' }}>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {st.assignments.map(a => (
+                            {(st.assignments || []).map(a => (
                               <span
                                 key={a.assignmentId}
                                 style={{
