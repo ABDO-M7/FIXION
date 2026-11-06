@@ -10,11 +10,12 @@ import { CourseVideo } from './entities/course-video.entity';
 import { VideoCheckpoint } from './entities/video-checkpoint.entity';
 import { VideoResponse } from './entities/video-response.entity';
 import { VideoConfusionMark } from './entities/video-confusion.entity';
+import { ContentManualUnlock } from '../subscriptions/entities/content-manual-unlock.entity';
 import { VideosController } from './videos.controller';
 import { VideosService } from './videos.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CourseVideo, CourseEnrollment, VideoCheckpoint, VideoResponse, VideoProgress, VideoConfusionMark, User, Assignment, AssignmentSubmission, CourseGroup])],
+  imports: [TypeOrmModule.forFeature([CourseVideo, CourseEnrollment, VideoCheckpoint, VideoResponse, VideoProgress, VideoConfusionMark, User, Assignment, AssignmentSubmission, CourseGroup, ContentManualUnlock])],
   controllers: [VideosController],
   providers: [VideosService],
 })

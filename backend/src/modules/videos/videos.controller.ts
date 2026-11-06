@@ -83,6 +83,12 @@ export class VideosController {
     return this.videosService.getVideoAnalytics(videoId, actor);
   }
 
+  @Post('manual-unlock')
+  @Roles(...STAFF_AND_ADMIN)
+  toggleManualUnlock(@Body() dto: any, @CurrentUser() actor: any) {
+    return this.videosService.toggleManualUnlock(dto, actor);
+  }
+
   @Post(':id/checkpoints/:checkpointId/answer')
   @Roles(UserRole.STUDENT)
   answerCheckpoint(

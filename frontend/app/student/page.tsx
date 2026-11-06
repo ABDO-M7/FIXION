@@ -32,7 +32,7 @@ export default function StudentDashboard() {
     ]).then(async ([qRes, sRes, enrollmentsRes]) => {
       setQuestions(qRes.data.data || []);
       setSubscription(sRes.data);
-      const enrollments = enrollmentsRes.data || [];
+      const enrollments = Array.isArray(enrollmentsRes?.data) ? enrollmentsRes.data : [];
       const progress = await Promise.all(enrollments.map(async (enrollment: any) => {
         const [videosResult, assignmentsResult] = await Promise.allSettled([
           videosApi.studentList(enrollment.courseName, enrollment.groupName),

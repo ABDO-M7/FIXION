@@ -874,7 +874,7 @@ export default function TeacherSubmissionsPage() {
                                     borderRadius: 8,
                                     padding: '8px 12px',
                                   }}>
-                                    {proctoring.events.map((ev: any, idx: number) => (
+                                    {(proctoring.events || []).map((ev: any, idx: number) => (
                                       <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 12, color: '#e2e8f0' }}>
                                         <span>• {ev.detail || ev.type}</span>
                                         <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>

@@ -217,7 +217,7 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
   }, [courseName, groupName]);
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><span className="spinner" /></div>;
-  if (!data || data.students.length === 0) {
+  if (!data || !Array.isArray(data.students) || data.students.length === 0) {
     return (
       <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
         <div style={{ display: 'grid', placeItems: 'center', marginBottom: 12 }}>
@@ -229,8 +229,8 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
     );
   }
 
-  const quizzes   = data.assignments.filter((a: any) => a.type === 'QUIZ');
-  const homeworks  = data.assignments.filter((a: any) => a.type === 'HOMEWORK');
+  const quizzes   = (data.assignments || []).filter((a: any) => a.type === 'QUIZ');
+  const homeworks  = (data.assignments || []).filter((a: any) => a.type === 'HOMEWORK');
   // Always render in the SAME order as the header: quizzes first, then homeworks
   const orderedAssignments = [...quizzes, ...homeworks];
 
@@ -301,7 +301,7 @@ function GradesTab({ courseName, groupName }: { courseName: string; groupName: s
                 )}
               </td>
               {orderedAssignments.map((a: any, i: number) => {
-                const grade = data.gradeMap[student.id]?.[a.id];
+                const grade = data.gradeMap?.[student.id]?.[a.id];
                 const maxGrade = a.maxGrade ?? 100;
                 return (
                   <td key={a.id} style={{

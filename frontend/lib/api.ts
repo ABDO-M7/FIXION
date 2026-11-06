@@ -285,6 +285,14 @@ export const videosApi = {
     api.delete(`/videos/student/video/${encodeURIComponent(videoId)}/confusion/${encodeURIComponent(markId)}`),
   analytics: (videoId: string) =>
     api.get(`/videos/${encodeURIComponent(videoId)}/analytics`),
+  toggleManualUnlock: (data: {
+    courseName: string;
+    groupName: string;
+    studentId: string;
+    itemType: 'VIDEO' | 'ASSIGNMENT';
+    itemId: string;
+    unlock: boolean;
+  }) => api.post('/videos/manual-unlock', data),
   delete: (id: string) => api.delete(`/videos/${id}`),
 };
 

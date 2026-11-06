@@ -11,6 +11,7 @@ import { VideoProgress } from '../videos/entities/video-progress.entity';
 import { CourseVideo } from '../videos/entities/course-video.entity';
 import { VideoCheckpoint } from '../videos/entities/video-checkpoint.entity';
 import { VideoResponse } from '../videos/entities/video-response.entity';
+import { ContentManualUnlock } from '../subscriptions/entities/content-manual-unlock.entity';
 import { AssignmentsService } from './assignments.service';
 import { AssignmentsController } from './assignments.controller';
 import { AiModule } from '../ai/ai.module';
@@ -29,6 +30,7 @@ import { AiModule } from '../ai/ai.module';
       CourseVideo,
       VideoCheckpoint,
       VideoResponse,
+      ContentManualUnlock,
     ]),
     forwardRef(() => AiModule),
   ],

@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import { assignmentsApi } from '@/lib/api';
+import { assignmentsApi, videosApi } from '@/lib/api';
+import toast from 'react-hot-toast';
 import {
   ArrowLeft, BookOpen, ClipboardList, Clock3, FileText, Search,
   TrendingUp, Users, Video, ChevronDown, ChevronUp, CheckCircle2,
-  XCircle, Eye, ExternalLink, ShieldAlert,
+  XCircle, Eye, ExternalLink, ShieldAlert, Unlock, Lock,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -46,6 +47,7 @@ type StudentAssignmentDetail = {
   proctoringViolations?: number;
   tabSwitches?: number;
   autoSubmitted?: boolean;
+  isManuallyUnlocked?: boolean;
 };
 
 type StudentVideoDetail = {
@@ -56,6 +58,7 @@ type StudentVideoDetail = {
   solvedCheckpoints: number;
   totalCheckpoints: number;
   lastWatchedAt: string | null;
+  isManuallyUnlocked?: boolean;
 };
 
 type StudentStat = {
@@ -84,6 +87,7 @@ type StudentStat = {
   videoProgress: Record<string, number>;
   videoDetails?: Record<string, StudentVideoDetail>;
   documentOpens: Record<string, boolean>;
+  manualUnlocks?: { videoIds: string[]; assignmentIds: string[] };
 };
 
 type GroupAnalytics = {
@@ -158,9 +162,9 @@ export default function GroupStatsPage() {
 
   const filteredStudents = useMemo(() => {
     const list = data?.students || [];
-    const totalAssignments = data?.assignments.length || 0;
-    const totalVideos = data?.videos.length || 0;
-    const totalDocs = data?.documents.length || 0;
+    const totalAssignments = data?.assignments?.length || 0;
+    const totalVideos = data?.videos?.length || 0;
+    const totalDocs = data?.documents?.length || 0;
     const needle = search.trim().toLocaleLowerCase();
 
     return list.filter(student => {
@@ -187,7 +191,57 @@ export default function GroupStatsPage() {
     });
   }, [data, search, filter]);
 
-  const avgWatchPct = data?.summary.averageVideoWatchPercent ?? data?.summary.videoCompletionRate ?? null;
+  const handleToggleManualUnlock = async (studentId: string, itemType: 'VIDEO' | 'ASSIGNMENT', itemId: string, unlock: boolean) => {
+    try {
+      await videosApi.toggleManualUnlock({
+        courseName: course,
+        groupName: group,
+        studentId,
+        itemType,
+        itemId,
+        unlock,
+      });
+      toast.success(unlock ? 'تم فتح المحتوى وتجاوز الشروط لهذا الطالب' : 'تمت إعادة قفل المحتوى وتطبيق الشروط');
+      setData(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          students: (prev.students || []).map(s => {
+            if (s.id !== studentId) return s;
+            if (itemType === 'VIDEO') {
+              const prevDetail = s.videoDetails?.[itemId] || {
+                opened: false, watchedPercent: 0, watchedSeconds: 0, durationSeconds: 0,
+                solvedCheckpoints: 0, totalCheckpoints: 0, lastWatchedAt: null,
+              };
+              return {
+                ...s,
+                videoDetails: {
+                  ...s.videoDetails,
+                  [itemId]: { ...prevDetail, isManuallyUnlocked: unlock },
+                },
+              };
+            } else {
+              const prevDetail = s.assignmentDetails?.[itemId] || {
+                submitted: false, grade: null, submittedAt: null, submissionId: null,
+                proctoringViolations: 0, tabSwitches: 0, autoSubmitted: false, proctoring: null,
+              };
+              return {
+                ...s,
+                assignmentDetails: {
+                  ...s.assignmentDetails,
+                  [itemId]: { ...prevDetail, isManuallyUnlocked: unlock },
+                },
+              };
+            }
+          }),
+        };
+      });
+    } catch {
+      toast.error('تعذر تغيير حالة فتح المحتوى');
+    }
+  };
+
+  const avgWatchPct = data?.summary?.averageVideoWatchPercent ?? data?.summary?.videoCompletionRate ?? null;
 
   return (
     <AppShell>
@@ -342,11 +396,12 @@ export default function GroupStatsPage() {
                             courseName={course}
                             groupName={group}
                             student={student}
-                            assignments={data.assignments}
-                            videos={data.videos}
-                            documents={data.documents}
+                            assignments={data.assignments || []}
+                            videos={data.videos || []}
+                            documents={data.documents || []}
                             expanded={expanded}
                             onToggle={() => setExpandedStudent(expanded ? null : student.id)}
+                            onToggleManualUnlock={handleToggleManualUnlock}
                           />
                         );
                       })}
@@ -407,6 +462,7 @@ function StudentRows({
   documents,
   expanded,
   onToggle,
+  onToggleManualUnlock,
 }: {
   courseName: string;
   groupName: string;
@@ -416,24 +472,28 @@ function StudentRows({
   documents: DocumentStat[];
   expanded: boolean;
   onToggle: () => void;
+  onToggleManualUnlock: (studentId: string, itemType: 'VIDEO' | 'ASSIGNMENT', itemId: string, unlock: boolean) => void;
 }) {
+  const safeAssignments = assignments || [];
+  const safeVideos = videos || [];
+  const safeDocuments = documents || [];
   const gradeColor = progressColor(student.averageGradePercent);
-  const missingAssignmentsCount = student.unsubmittedAssignments ?? Math.max(0, assignments.length - student.submittedAssignments);
+  const missingAssignmentsCount = student.unsubmittedAssignments ?? Math.max(0, safeAssignments.length - student.submittedAssignments);
   const pendingGradingCount = student.pendingGradingAssignments ?? Math.max(0, student.submittedAssignments - student.gradedAssignments);
 
   const openedVideosCount = useMemo(() => {
     if (typeof student.openedVideos === 'number') return student.openedVideos;
-    return videos.filter(v => {
+    return safeVideos.filter(v => {
       const detail = student.videoDetails?.[v.id];
-      const pct = student.videoProgress[v.id] || 0;
+      const pct = student.videoProgress?.[v.id] || 0;
       return Boolean(detail?.opened || pct > 0);
     }).length;
-  }, [student, videos]);
+  }, [student, safeVideos]);
 
   const openedDocsCount = useMemo(() => {
     if (typeof student.openedDocumentsCount === 'number') return student.openedDocumentsCount;
-    return documents.filter(d => student.documentOpens[d.id]).length;
-  }, [student, documents]);
+    return safeDocuments.filter(d => student.documentOpens?.[d.id]).length;
+  }, [student, safeDocuments]);
 
   return (
     <>
@@ -529,13 +589,14 @@ function StudentRows({
                     </span>
                   </div>
                 </div>
-                {assignments.length ? (
+                {safeAssignments.length ? (
                   <div style={{ display: 'grid', gap: 8 }}>
-                    {assignments.map(assignment => {
+                    {safeAssignments.map(assignment => {
                       const detail = student.assignmentDetails?.[assignment.id];
-                      const hasKey = Object.prototype.hasOwnProperty.call(student.assignmentGrades, assignment.id);
+                      const hasKey = student.assignmentGrades ? Object.prototype.hasOwnProperty.call(student.assignmentGrades, assignment.id) : false;
                       const submitted = detail ? detail.submitted : hasKey;
-                      const grade = detail ? detail.grade : student.assignmentGrades[assignment.id];
+                      const grade = detail ? detail.grade : (student.assignmentGrades?.[assignment.id] ?? null);
+                      const isManuallyUnlocked = Boolean(detail?.isManuallyUnlocked);
                       return (
                         <div key={assignment.id} style={detailRowStyle}>
                           <div style={{ minWidth: 0, flex: 1 }}>
@@ -547,6 +608,11 @@ function StudentRows({
                               <span style={{ color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {assignment.title}
                               </span>
+                              {isManuallyUnlocked && (
+                                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(34,197,94,0.18)', color: '#4ade80', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                  <Unlock size={10} /> مفتوح يدوياً
+                                </span>
+                              )}
                               {(detail?.proctoringViolations ?? 0) > 0 && (
                                 <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.16)', color: '#f87171', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                                   <ShieldAlert size={10} /> {detail?.proctoringViolations} مخالفة خروج
@@ -565,6 +631,27 @@ function StudentRows({
                             )}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => onToggleManualUnlock(student.id, 'ASSIGNMENT', assignment.id, !isManuallyUnlocked)}
+                              className="btn btn-ghost btn-sm"
+                              style={{
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                borderRadius: 6,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                background: isManuallyUnlocked ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)',
+                                color: isManuallyUnlocked ? '#4ade80' : 'var(--text-muted)',
+                                border: '1px solid ' + (isManuallyUnlocked ? 'rgba(34,197,94,0.3)' : 'var(--border)'),
+                                cursor: 'pointer',
+                              }}
+                              title={isManuallyUnlocked ? 'مفتوح يدوياً بتجاوز الشروط - اضغط لإعادة تطبيق الشروط' : 'فتح وتجاوز أي شروط لهذا الطالب'}
+                            >
+                              {isManuallyUnlocked ? <Unlock size={11} /> : <Lock size={11} />}
+                              <span>{isManuallyUnlocked ? 'مفتوح يدوياً' : 'تجاوز الشروط وفتح'}</span>
+                            </button>
                             {!submitted ? (
                               <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#fb7185', whiteSpace: 'nowrap', fontSize: 12 }}>
                                 <XCircle size={13} /> لم يسلّم
@@ -603,23 +690,24 @@ function StudentRows({
                   </h3>
                   <div style={{ display: 'flex', gap: 6, fontSize: 11 }}>
                     <span style={{ padding: '2px 8px', borderRadius: 99, background: 'rgba(52,211,153,0.12)', color: '#34d399', fontWeight: 700 }}>
-                      فتح: {openedVideosCount} / {videos.length}
+                      فتح: {openedVideosCount} / {safeVideos.length}
                     </span>
                     <span style={{ padding: '2px 8px', borderRadius: 99, background: 'rgba(251,113,133,0.12)', color: '#fb7185', fontWeight: 700 }}>
-                      لم يفتح: {Math.max(0, videos.length - openedVideosCount)}
+                      لم يفتح: {Math.max(0, safeVideos.length - openedVideosCount)}
                     </span>
                   </div>
                 </div>
-                {videos.length ? (
+                {safeVideos.length ? (
                   <div style={{ display: 'grid', gap: 8 }}>
-                    {videos.map(video => {
+                    {safeVideos.map(video => {
                       const detail = student.videoDetails?.[video.id];
-                      const watched = detail?.watchedPercent ?? student.videoProgress[video.id] ?? 0;
+                      const watched = detail?.watchedPercent ?? student.videoProgress?.[video.id] ?? 0;
                       const opened = detail ? detail.opened : watched > 0;
                       const watchedSec = detail?.watchedSeconds ?? 0;
                       const durationSec = detail?.durationSeconds ?? 0;
                       const totalCp = detail?.totalCheckpoints ?? video.checkpointCount ?? 0;
                       const solvedCp = detail?.solvedCheckpoints ?? 0;
+                      const isManuallyUnlocked = Boolean(detail?.isManuallyUnlocked);
 
                       return (
                         <div key={video.id} style={detailRowStyle}>
@@ -628,6 +716,11 @@ function StudentRows({
                               <span style={{ color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {video.title}
                               </span>
+                              {isManuallyUnlocked && (
+                                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(34,197,94,0.18)', color: '#4ade80', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                  <Unlock size={10} /> مفتوح يدوياً
+                                </span>
+                              )}
                               <span
                                 style={{
                                   fontSize: 10,
@@ -664,6 +757,27 @@ function StudentRows({
                             </div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => onToggleManualUnlock(student.id, 'VIDEO', video.id, !isManuallyUnlocked)}
+                              className="btn btn-ghost btn-sm"
+                              style={{
+                                padding: '3px 8px',
+                                fontSize: 11,
+                                borderRadius: 6,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                background: isManuallyUnlocked ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)',
+                                color: isManuallyUnlocked ? '#4ade80' : 'var(--text-muted)',
+                                border: '1px solid ' + (isManuallyUnlocked ? 'rgba(34,197,94,0.3)' : 'var(--border)'),
+                                cursor: 'pointer',
+                              }}
+                              title={isManuallyUnlocked ? 'مفتوح يدوياً بتجاوز الشروط - اضغط لإعادة تطبيق الشروط' : 'فتح وتجاوز أي شروط لهذا الطالب'}
+                            >
+                              {isManuallyUnlocked ? <Unlock size={11} /> : <Lock size={11} />}
+                              <span>{isManuallyUnlocked ? 'مفتوح يدوياً' : 'تجاوز الشروط وفتح'}</span>
+                            </button>
                             <div style={{ width: 64, height: 6, background: 'rgba(255,255,255,.08)', borderRadius: 99, overflow: 'hidden' }}>
                               <div style={{ width: `${watched}%`, height: '100%', background: progressColor(watched), borderRadius: 99 }} />
                             </div>

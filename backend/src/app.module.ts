@@ -49,6 +49,7 @@ import { VideoResponse } from './modules/videos/entities/video-response.entity';
 import { VideoProgress } from './modules/videos/entities/video-progress.entity';
 import { VideoConfusionMark } from './modules/videos/entities/video-confusion.entity';
 import { AiApiKey } from './modules/ai/entities/ai-api-key.entity';
+import { ContentManualUnlock } from './modules/subscriptions/entities/content-manual-unlock.entity';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { AiApiKey } from './modules/ai/entities/ai-api-key.entity';
           VideoProgress,
           VideoConfusionMark,
           AiApiKey,
+          ContentManualUnlock,
         ],
         synchronize: !config.get<boolean>('app.isProduction'), // Never synchronize on hosted production services
         migrations: [__dirname + '/migrations/*{.js,.ts}'],
