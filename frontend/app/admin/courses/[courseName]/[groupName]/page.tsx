@@ -55,6 +55,16 @@ export default function AdminCourseDetailPage() {
             </div>
           </div>
         </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link
+            href={`/teacher/courses/${encodeURIComponent(decoded)}/${encodeURIComponent(decodedGroup)}/stats`}
+            className="btn btn-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <BarChart2 size={16} /> إحصائيات ومتابعة الطلاب والفتح اليدوي
+          </Link>
+        </div>
       </div>
 
       {/* Main Content: Workflow Builder */}
