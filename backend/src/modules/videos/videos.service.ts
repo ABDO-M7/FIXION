@@ -95,9 +95,12 @@ export class VideosService implements OnModuleInit {
     const runner = this.confusionRepo || this.videosRepo;
     if (!runner?.query) return;
     try {
+      await runner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
+    } catch {}
+    try {
       await runner.query(`
         CREATE TABLE IF NOT EXISTS "video_confusion_marks" (
-          "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+          "id" uuid NOT NULL DEFAULT gen_random_uuid(),
           "video_id" uuid NOT NULL,
           "student_id" uuid NOT NULL,
           "startSeconds" integer NOT NULL DEFAULT 0,
@@ -117,7 +120,7 @@ export class VideosService implements OnModuleInit {
 
       await runner.query(`
         CREATE TABLE IF NOT EXISTS "content_manual_unlocks" (
-          "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+          "id" uuid NOT NULL DEFAULT gen_random_uuid(),
           "student_id" character varying NOT NULL,
           "course_name" character varying NOT NULL,
           "group_name" character varying NOT NULL,
@@ -134,8 +137,8 @@ export class VideosService implements OnModuleInit {
       await runner.query(`
         CREATE INDEX IF NOT EXISTS "IDX_content_manual_unlocks_item" ON "content_manual_unlocks" ("item_id");
       `);
-    } catch {
-      // ignore if table creation not supported in test mock
+    } catch (e) {
+      console.error('Error ensuring tables in VideosService onModuleInit:', e);
     }
   }
 
@@ -282,7 +285,7 @@ export class VideosService implements OnModuleInit {
             ? this.assignmentsRepo.find({ where: { id: In(assignmentIdList) } })
             : Promise.resolve([] as Assignment[]),
           this.manualUnlocksRepo?.find
-            ? this.manualUnlocksRepo.find({ where: { studentId, courseName, groupName } })
+            ? this.manualUnlocksRepo.find({ where: { studentId, courseName, groupName } }).catch(() => [] as ContentManualUnlock[])
             : Promise.resolve([] as ContentManualUnlock[]),
         ]);
 
@@ -338,6 +341,7 @@ export class VideosService implements OnModuleInit {
                 assignmentMap,
                 video,
                 videoMap,
+                enrollments,
               );
           return {
             ...this.publicVideo(video),
@@ -404,21 +408,34 @@ export class VideosService implements OnModuleInit {
     await this.assertEnrollment(video.courseName, video.groupName, student.id, video.chapterName, video.lessonName);
 
     let isManuallyUnlocked = false;
-    if (this.manualUnlocksRepo?.findOne) {
-      const manual = await this.manualUnlocksRepo.findOne({
-        where: {
-          studentId: student.id,
-          courseName: video.courseName,
-          groupName: video.groupName,
-          itemType: 'VIDEO',
-          itemId: video.id,
-        },
-      });
-      if (manual) isManuallyUnlocked = true;
-    }
+    try {
+      if (this.manualUnlocksRepo?.findOne) {
+        const manual = await this.manualUnlocksRepo.findOne({
+          where: {
+            studentId: student.id,
+            courseName: video.courseName,
+            groupName: video.groupName,
+            itemType: 'VIDEO',
+            itemId: video.id,
+          },
+        });
+        if (manual) isManuallyUnlocked = true;
+      }
+    } catch {}
 
     if (!isManuallyUnlocked) {
-      const unlock = await this.getUnlockState(video.unlockRule, video.unlockAssignmentId, video.unlockScore, video.unlockVideoId, video.unlockPercent, student.id, video.prerequisites, video);
+      const enrollments = await this.getStudentEnrollments(video.courseName, video.groupName, student.id);
+      const unlock = await this.getUnlockState(
+        video.unlockRule,
+        video.unlockAssignmentId,
+        video.unlockScore,
+        video.unlockVideoId,
+        video.unlockPercent,
+        student.id,
+        video.prerequisites,
+        video,
+        enrollments,
+      );
       if (unlock.isLocked) throw new ForbiddenException(unlock.lockReason);
     }
     if (this.progressRepo?.findOne && this.progressRepo?.save) {
@@ -445,7 +462,7 @@ export class VideosService implements OnModuleInit {
       ? await this.confusionRepo.find({
           where: { videoId, studentId: student.id },
           order: { startSeconds: 'ASC', createdAt: 'DESC' },
-        })
+        }).catch(() => [] as VideoConfusionMark[])
       : [];
     return {
       video: this.publicVideo(video),
@@ -1278,6 +1295,7 @@ export class VideosService implements OnModuleInit {
     assignmentMap: Map<string, Assignment>,
     currentVideo?: CourseVideo | null,
     videoMap?: Map<string, CourseVideo>,
+    enrollments?: CourseEnrollment[],
   ): { isLocked: boolean; lockReason: string | null } {
     if (!rule || rule === UnlockRuleType.NONE) return { isLocked: false, lockReason: null };
 
@@ -1290,8 +1308,17 @@ export class VideosService implements OnModuleInit {
             (pVideo.chapterName?.trim() || '') === (currentVideo.chapterName?.trim() || '') &&
             (pVideo.lessonName?.trim() || '') === (currentVideo.lessonName?.trim() || '');
           if (!isSameLesson && (pVideo.lessonName || currentVideo.lessonName)) {
-            // Prerequisite is from an earlier/different lesson; bypass it!
-            return { isLocked: false, lockReason: null };
+            if (enrollments) {
+              const canAccessPrereq = canAccessCourseContentAcrossEnrollments(
+                enrollments,
+                pVideo.chapterName,
+                pVideo.lessonName,
+              );
+              if (!canAccessPrereq) {
+                // Prerequisite belongs to a lesson the student does not have in their enrollment; bypass it!
+                return { isLocked: false, lockReason: null };
+              }
+            }
           }
         }
       }
@@ -1310,8 +1337,17 @@ export class VideosService implements OnModuleInit {
         (prerequisite.chapterName?.trim() || '') === (currentVideo.chapterName?.trim() || '') &&
         (prerequisite.lessonName?.trim() || '') === (currentVideo.lessonName?.trim() || '');
       if (!isSameLesson && (prerequisite.lessonName || currentVideo.lessonName)) {
-        // Prerequisite assignment is from an earlier/different lesson; bypass it!
-        return { isLocked: false, lockReason: null };
+        if (enrollments) {
+          const canAccessPrereq = canAccessCourseContentAcrossEnrollments(
+            enrollments,
+            prerequisite.chapterName,
+            prerequisite.lessonName,
+          );
+          if (!canAccessPrereq) {
+            // Prerequisite belongs to a lesson the student does not have in their enrollment; bypass it!
+            return { isLocked: false, lockReason: null };
+          }
+        }
       }
     }
     const submission = submissionMap.get(prerequisiteId);
@@ -1339,6 +1375,7 @@ export class VideosService implements OnModuleInit {
     assignmentMap: Map<string, Assignment>,
     currentVideo?: CourseVideo | null,
     videoMap?: Map<string, CourseVideo>,
+    enrollments?: CourseEnrollment[],
   ) {
     if (prerequisites && prerequisites.length > 0) {
       for (const p of prerequisites) {
@@ -1353,6 +1390,7 @@ export class VideosService implements OnModuleInit {
           assignmentMap,
           currentVideo,
           videoMap,
+          enrollments,
         );
         if (result.isLocked) return result;
       }
@@ -1369,6 +1407,7 @@ export class VideosService implements OnModuleInit {
       assignmentMap,
       currentVideo,
       videoMap,
+      enrollments,
     );
   }
 
@@ -1380,6 +1419,7 @@ export class VideosService implements OnModuleInit {
     requiredPercent: number | null | undefined,
     studentId: string,
     currentVideo?: CourseVideo | null,
+    enrollments?: CourseEnrollment[],
   ): Promise<{ isLocked: boolean; lockReason: string | null }> {
     if (!rule || rule === UnlockRuleType.NONE) return { isLocked: false, lockReason: null };
     if (rule === UnlockRuleType.WATCH_VIDEO) {
@@ -1391,8 +1431,11 @@ export class VideosService implements OnModuleInit {
             (pVideo.chapterName?.trim() || '') === (currentVideo.chapterName?.trim() || '') &&
             (pVideo.lessonName?.trim() || '') === (currentVideo.lessonName?.trim() || '');
           if (!isSameLesson && (pVideo.lessonName || currentVideo.lessonName)) {
-            // Prerequisite is from an earlier/different lesson; bypass it!
-            return { isLocked: false, lockReason: null };
+            const ens = enrollments || (await this.getStudentEnrollments(currentVideo.courseName, currentVideo.groupName, studentId));
+            const canAccessPrereq = canAccessCourseContentAcrossEnrollments(ens, pVideo.chapterName, pVideo.lessonName);
+            if (!canAccessPrereq) {
+              return { isLocked: false, lockReason: null };
+            }
           }
         }
       }
@@ -1410,8 +1453,11 @@ export class VideosService implements OnModuleInit {
         (prerequisite.chapterName?.trim() || '') === (currentVideo.chapterName?.trim() || '') &&
         (prerequisite.lessonName?.trim() || '') === (currentVideo.lessonName?.trim() || '');
       if (!isSameLesson && (prerequisite.lessonName || currentVideo.lessonName)) {
-        // Prerequisite assignment is from an earlier/different lesson; bypass it!
-        return { isLocked: false, lockReason: null };
+        const ens = enrollments || (await this.getStudentEnrollments(currentVideo.courseName, currentVideo.groupName, studentId));
+        const canAccessPrereq = canAccessCourseContentAcrossEnrollments(ens, prerequisite.chapterName, prerequisite.lessonName);
+        if (!canAccessPrereq) {
+          return { isLocked: false, lockReason: null };
+        }
       }
     }
     const submission = await this.submissionsRepo.findOne({ where: { assignmentId: prerequisiteId, studentId } });
@@ -1436,19 +1482,20 @@ export class VideosService implements OnModuleInit {
     studentId: string,
     prerequisites?: Array<{ unlockRule: string; unlockVideoId?: string | null; unlockPercent?: number | null; unlockAssignmentId?: string | null; unlockScore?: number | null }> | null,
     currentVideo?: CourseVideo | null,
+    enrollments?: CourseEnrollment[],
   ) {
     // Multi-prerequisite mode: evaluate ALL conditions (AND logic)
     if (prerequisites && prerequisites.length > 0) {
       for (const p of prerequisites) {
         const result = await this.evaluateSingleCondition(
-          p.unlockRule, p.unlockAssignmentId, p.unlockScore, p.unlockVideoId, p.unlockPercent, studentId, currentVideo,
+          p.unlockRule, p.unlockAssignmentId, p.unlockScore, p.unlockVideoId, p.unlockPercent, studentId, currentVideo, enrollments,
         );
         if (result.isLocked) return result;
       }
       return { isLocked: false, lockReason: null };
     }
     // Legacy single-condition fallback
-    return this.evaluateSingleCondition(rule, prerequisiteId, requiredScore, prerequisiteVideoId, requiredPercent, studentId, currentVideo);
+    return this.evaluateSingleCondition(rule, prerequisiteId, requiredScore, prerequisiteVideoId, requiredPercent, studentId, currentVideo, enrollments);
   }
 
   async toggleManualUnlock(dto: {
