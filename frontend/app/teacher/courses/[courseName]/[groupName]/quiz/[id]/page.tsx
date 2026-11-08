@@ -275,8 +275,8 @@ export default function QuizBuilderPage() {
       }
       toast.success('Quiz saved');
       return true;
-    } catch {
-      toast.error('Failed to save');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Failed to save');
       return false;
     } finally {
       setSaving(false);

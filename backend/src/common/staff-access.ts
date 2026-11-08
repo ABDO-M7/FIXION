@@ -40,9 +40,13 @@ export async function resolveStaffScope(usersRepo: Repository<User>, user: User)
 
   if (user.role === UserRole.ASSISTANT) {
     if (!user.assignedTeacherId) return { type: 'teacher', teacherId: '', teacherName: '' };
-    const teacher = await usersRepo.findOne({ where: { id: user.assignedTeacherId } });
-    if (!teacher) return { type: 'teacher', teacherId: '', teacherName: '' };
-    return { type: 'teacher', teacherId: teacher.id, teacherName: teacher.name };
+    try {
+      const teacher = await usersRepo.findOne({ where: { id: user.assignedTeacherId } });
+      if (!teacher) return { type: 'teacher', teacherId: '', teacherName: '' };
+      return { type: 'teacher', teacherId: teacher.id, teacherName: teacher.name };
+    } catch {
+      return { type: 'teacher', teacherId: '', teacherName: '' };
+    }
   }
 
   return { type: 'teacher', teacherId: user.id, teacherName: user.name };

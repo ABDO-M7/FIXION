@@ -2005,19 +2005,31 @@ export class AssignmentsService {
     correctAnswer?: string;
     points?: number;
   }, actor: User) {
-    const assignment = await this.assertCanManageAssignment(assignmentId, actor);
-    if (assignment.type !== AssignmentType.QUIZ) throw new BadRequestException('Questions can only be added to quizzes');
-    if (assignment.isPublished && actor.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Published quizzes cannot be edited');
+    try {
+      const assignment = await this.assertCanManageAssignment(assignmentId, actor);
+      if (assignment.type !== AssignmentType.QUIZ) throw new BadRequestException('Questions can only be added to quizzes');
+      if (assignment.isPublished && actor.role !== UserRole.ADMIN) {
+        throw new ForbiddenException('Published quizzes cannot be edited');
+      }
+      const count = await this.questionsRepo.count({ where: { assignmentId } });
+      const q = this.questionsRepo.create({
+        assignmentId,
+        questionText: (dto.questionText || '').trim(),
+        questionImageUrl: dto.questionImageUrl ? String(dto.questionImageUrl).trim() : null,
+        type: dto.type === QuizQuestionType.TEXT ? QuizQuestionType.TEXT : QuizQuestionType.MULTIPLE_CHOICE,
+        options: Array.isArray(dto.options) ? dto.options : [],
+        correctAnswer: dto.correctAnswer ? String(dto.correctAnswer).trim() : null,
+        orderIndex: count,
+        points: Number.isFinite(Number(dto.points)) ? Math.max(1, Math.floor(Number(dto.points))) : 1,
+      } as any);
+      return await this.questionsRepo.save(q);
+    } catch (err: any) {
+      console.error('[createQuestion] Error:', err);
+      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException || err?.status) {
+        throw err;
+      }
+      throw new BadRequestException(err?.message || 'Failed to create question');
     }
-    const count = await this.questionsRepo.count({ where: { assignmentId } });
-    const q = this.questionsRepo.create({
-      ...dto,
-      assignmentId,
-      orderIndex: count,
-      points: dto.points ?? 1,
-    });
-    return this.questionsRepo.save(q);
   }
 
   async updateQuestion(assignmentId: string, id: string, dto: Partial<{
@@ -2029,15 +2041,33 @@ export class AssignmentsService {
     points: number;
     orderIndex: number;
   }>, actor: User) {
-    const assignment = await this.assertCanManageAssignment(assignmentId, actor);
-    if (assignment.type !== AssignmentType.QUIZ) throw new BadRequestException('Questions can only be edited on quizzes');
-    if (assignment.isPublished && actor.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Published quizzes cannot be edited');
+    try {
+      const assignment = await this.assertCanManageAssignment(assignmentId, actor);
+      if (assignment.type !== AssignmentType.QUIZ) throw new BadRequestException('Questions can only be edited on quizzes');
+      if (assignment.isPublished && actor.role !== UserRole.ADMIN) {
+        throw new ForbiddenException('Published quizzes cannot be edited');
+      }
+      const q = await this.questionsRepo.findOne({ where: { id, assignmentId } });
+      if (!q) throw new NotFoundException('Question not found');
+
+      const patch: any = {};
+      if (dto.questionText !== undefined) patch.questionText = (dto.questionText || '').trim();
+      if (dto.questionImageUrl !== undefined) patch.questionImageUrl = dto.questionImageUrl ? String(dto.questionImageUrl).trim() : null;
+      if (dto.type !== undefined) patch.type = dto.type === QuizQuestionType.TEXT ? QuizQuestionType.TEXT : QuizQuestionType.MULTIPLE_CHOICE;
+      if (dto.options !== undefined) patch.options = Array.isArray(dto.options) ? dto.options : [];
+      if (dto.correctAnswer !== undefined) patch.correctAnswer = dto.correctAnswer ? String(dto.correctAnswer).trim() : null;
+      if (dto.points !== undefined) patch.points = Number.isFinite(Number(dto.points)) ? Math.max(1, Math.floor(Number(dto.points))) : 1;
+      if (dto.orderIndex !== undefined && Number.isFinite(Number(dto.orderIndex))) patch.orderIndex = Math.floor(Number(dto.orderIndex));
+
+      await this.questionsRepo.update(id, patch);
+      return await this.questionsRepo.findOne({ where: { id } });
+    } catch (err: any) {
+      console.error('[updateQuestion] Error:', err);
+      if (err instanceof NotFoundException || err instanceof ForbiddenException || err instanceof BadRequestException || err?.status) {
+        throw err;
+      }
+      throw new BadRequestException(err?.message || 'Failed to update question');
     }
-    const q = await this.questionsRepo.findOne({ where: { id, assignmentId } });
-    if (!q) throw new NotFoundException('Question not found');
-    await this.questionsRepo.update(id, dto);
-    return this.questionsRepo.findOne({ where: { id } });
   }
 
   async deleteQuestion(assignmentId: string, id: string, actor: User) {
