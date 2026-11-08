@@ -24,13 +24,15 @@ export function canAccessCourseContent(
 
   const scope = enrollment.accessScope;
   if (!scope) return false;
-  const chapter = chapterName?.trim() || '';
-  const lesson = lessonName?.trim() || '';
-  if (chapter && scope.chapters?.includes(chapter)) return true;
+  const chapter = chapterName?.trim().toLowerCase() || '';
+  const lesson = lessonName?.trim().toLowerCase() || '';
+  if (chapter && scope.chapters?.some(c => (c?.trim().toLowerCase() || '') === chapter)) return true;
 
   return (scope.lessons as LessonScope[] | undefined)?.some(item => {
-    if (typeof item === 'string') return item === lesson;
-    return item.chapterName === chapter && item.lessonName === lesson;
+    if (typeof item === 'string') return item.trim().toLowerCase() === lesson;
+    const itemChapter = item.chapterName?.trim().toLowerCase() || '';
+    const itemLesson = item.lessonName?.trim().toLowerCase() || '';
+    return itemChapter === chapter && itemLesson === lesson;
   }) ?? false;
 }
 
@@ -72,15 +74,17 @@ export function canAccessCourseContentAcrossEnrollments(
   }
 
   // 3. Otherwise, check across all active CHAPTER enrollments
-  const chapter = chapterName?.trim() || '';
-  const lesson = lessonName?.trim() || '';
+  const chapter = chapterName?.trim().toLowerCase() || '';
+  const lesson = lessonName?.trim().toLowerCase() || '';
 
   for (const e of active) {
     if (e.codeType === CodeType.CHAPTER && e.accessScope) {
-      if (chapter && e.accessScope.chapters?.includes(chapter)) return true;
+      if (chapter && e.accessScope.chapters?.some(c => (c?.trim().toLowerCase() || '') === chapter)) return true;
       const matchLesson = (e.accessScope.lessons as LessonScope[] | undefined)?.some(item => {
-        if (typeof item === 'string') return item === lesson;
-        return item.chapterName === chapter && item.lessonName === lesson;
+        if (typeof item === 'string') return item.trim().toLowerCase() === lesson;
+        const itemChapter = item.chapterName?.trim().toLowerCase() || '';
+        const itemLesson = item.lessonName?.trim().toLowerCase() || '';
+        return itemChapter === chapter && itemLesson === lesson;
       });
       if (matchLesson) return true;
     }
